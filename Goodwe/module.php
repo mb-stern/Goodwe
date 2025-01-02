@@ -47,25 +47,37 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        $registers = $this->GetRegisterList();
+        $registers = $this->GetRegisterMapping(); // Wir nutzen hier eine zentrale Mapping-Tabelle
         foreach ($registers as $register) {
-            $response = $this->SendDataToParent(json_encode([
+            // JSON-Anfrage zusammenstellen
+            $jsonRequest = json_encode([
                 "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,
-                "Address" => $register["Address"],
-                "Quantity" => 1
-            ]));
+                "Function" => 3, // Read Holding Register
+                "Address" => $register['Address'],
+                "Quantity" => $register['Length'] // Anzahl der zu lesenden Register
+            ]);
     
-            if ($response !== false) {
-                $data = unpack("n*", $response);
-                $value = $data[1] * $register["Factor"]; // Skalierung anwenden
-                SetValue($this->GetIDForIdent($this->GenerateIdent($register['Name'])), $value);
+            // Debug: Gesendete Anfrage
+            $this->SendDebug("Request for " . $register['Name'], $jsonRequest, 0);
+    
+            // Anfrage senden
+            $response = $this->SendDataToParent($jsonRequest);
+    
+            if ($response === false) {
+                // Debug: Fehlerhafte Antwort
+                $this->SendDebug("Response for " . $register['Name'], "No response received", 0);
             } else {
-                $this->SendDebug("Error", "No response for " . $register['Name'], 0);
+                // Debug: Empfangene Antwort
+                $this->SendDebug("Response for " . $register['Name'], bin2hex($response), 0);
+    
+                // Daten verarbeiten
+                $data = unpack("n*", $response);
+                $value = ($data[1] + ($data[2] << 16)) * $register['Factor']; // Skalierung anwenden
+                SetValue($this->GetIDForIdent($register['Name']), $value);
             }
         }
     }
-
+    
     private function GenerateIdent(string $name): string
     {
         return preg_replace('/[^a-zA-Z0-9]/', '_', $name);
