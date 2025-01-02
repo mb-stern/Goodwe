@@ -6,14 +6,6 @@ class Goodwe extends IPSModule
         // Never delete this line!
         parent::Create();
     
-        // Check if a Modbus Gateway exists; create one if it doesn't
-        $instanceID = @IPS_GetInstanceIDByName('GoodWe Modbus Gateway', 0);
-        if ($instanceID === false) {
-            $gatewayID = IPS_CreateInstance('{B43733D4-1A15-4ED6-B098-90FAAE9852DE}');
-            IPS_SetName($gatewayID, 'GoodWe Modbus Gateway');
-            IPS_SetParent($gatewayID, $this->InstanceID);
-        }
-    
         // Register properties
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
