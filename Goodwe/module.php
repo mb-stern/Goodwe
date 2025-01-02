@@ -5,31 +5,22 @@ class Goodwe extends IPSModule
     {
         // Never delete this line!
         parent::Create();
-
-        // Create a Modbus Gateway instance
-        $this->RegisterInstance('ModBus Gateway', '{B43733D4-1A15-4ED6-B098-90FAAE9852DE}');
-
+    
+        // Check if a Modbus Gateway exists; create one if it doesn't
+        $instanceID = @IPS_GetInstanceIDByName('GoodWe Modbus Gateway', 0);
+        if ($instanceID === false) {
+            $gatewayID = IPS_CreateInstance('{B43733D4-1A15-4ED6-B098-90FAAE9852DE}');
+            IPS_SetName($gatewayID, 'GoodWe Modbus Gateway');
+            IPS_SetParent($gatewayID, $this->InstanceID);
+        }
+    
         // Register properties
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
         $this->RegisterPropertyString('InverterIP', '');
         $this->RegisterPropertyInteger('PollingInterval', 60);
     }
-
-    public function ApplyChanges()
-    {
-        // Never delete this line!
-        parent::ApplyChanges();
-
-        // Validate properties
-        $ip = $this->ReadPropertyString('InverterIP');
-        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
-            $this->SetStatus(201); // Invalid IP Address
-            return;
-        }
-
-        $this->SetStatus(102); // Instance is active
-    }
+    
 
     public function RequestData()
     {

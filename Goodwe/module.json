@@ -6,7 +6,9 @@
     "aliases": [
         "Goodwe"
     ],
-    "parentRequirements": [],
+    "parentRequirements": [
+        "{B43733D4-1A15-4ED6-B098-90FAAE9852DE}"
+    ],
     "childRequirements": [],
     "implemented": [],
     "prefix": "GoodWe",
