@@ -21,18 +21,48 @@ class Goodwe extends IPSModule
 
     }
 
-    public function ApplyChanges() {
-        //Never delete this line!
+    public function ApplyChanges() 
+    {
+        
         parent::ApplyChanges();
         
-        $this->RegisterVariableFloat("Volt", "Volt", "Volt.230", 1);
-        $this->RegisterVariableFloat("Ampere", "Ampere", "Ampere.16", 2);
-        $this->RegisterVariableFloat("Watt", "Watt", "Watt.14490", 3);
-        $this->RegisterVariableFloat("kWh", "Total kWh", "Electricity", 4);
+        // Variablen für jedes Register erstellen
+        foreach ($this->Registers() as $register) {
+            // Prüfen, ob die Variable schreibgeschützt ist
+            $profile = $this->GetVariableProfile($register['unit'], $register['scale']);
+            $this->RegisterVariableFloat(
+                $register['name'],                           // Ident
+                $register['name'] . " (" . $register['unit'] . ")", // Name
+                $profile,                                   // Variablenprofil
+                0                                           // Position
+            );
+
+            // Falls Aktionen benötigt werden
+            if ($register['action']) {
+                $this->EnableAction($register['name']);
+            }
+        }
         
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
-        
     }
+
+    private function Registers()
+    {
+        return [
+            ["address" => 35100, "name" => "RTC",      "type" => "U16", "unit" => "N/A", "scale" => 1,   "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Hbyte-year/Lbyte-month: 13-99/1-12", "category" => "Wechselrichter"],
+            ["address" => 35103, "name" => "Vpv1",     "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "PV1 voltage",                        "category" => "Wechselrichter"],
+            ["address" => 35104, "name" => "Ipv1",     "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "PV1 current",                        "category" => "Wechselrichter"],
+            ["address" => 35105, "name" => "Ppv1",     "type" => "U32", "unit" => "W",   "scale" => 10,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "PV1 Power",                          "category" => "Wechselrichter"],
+            ["address" => 35107, "name" => "Vpv2",     "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "PV2 voltage",                        "category" => "Wechselrichter"],
+            ["address" => 35121, "name" => "Vgrid_R",  "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "R phase Grid voltage",               "category" => "Smartmeter"],
+            ["address" => 35122, "name" => "Igrid_R",  "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "R phase Grid current",               "category" => "Smartmeter"],
+            ["address" => 35123, "name" => "Fgrid_R",  "type" => "U16", "unit" => "Hz",  "scale" => 100, "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "R phase Grid Frequency",             "category" => "Smartmeter"],
+            ["address" => 35200, "name" => "SOC",      "type" => "U16", "unit" => "%",   "scale" => 1,   "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery state of charge",           "category" => "Batterie"],
+            ["address" => 35201, "name" => "BatteryV", "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery voltage",                   "category" => "Batterie"],
+            ["address" => 35202, "name" => "BatteryI", "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery current",                   "category" => "Batterie"]
+        ];
+    }
+    
 
     public function RequestRead()
     {
