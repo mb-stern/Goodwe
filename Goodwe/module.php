@@ -84,7 +84,6 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        // Alle Register aus der Registers()-Funktion abfragen
         foreach ($this->Registers() as $register) {
             // Modbus-Nachricht erstellen
             $response = $this->SendDataToParent(json_encode([
@@ -117,9 +116,15 @@ class Goodwe extends IPSModule
                 continue;
             }
     
-            // Daten auslesen und skalieren
+            // Daten auslesen und je nach Typ verarbeiten
             $data = unpack("n*", substr($response, 2));
-            $value = ($data[1] << 16 | ($data[2] ?? 0)) / $register['scale']; // 32-Bit kombinieren und skalieren
+            $value = 0;
+            if ($register['type'] === "U16") {
+                $value = $data[1] / $register['scale']; // Skalierung anwenden
+            } elseif ($register['type'] === "U32") {
+                $value = ($data[1] << 16 | $data[2]) / $register['scale']; // 32-Bit kombinieren und skalieren
+            }
+    
             $this->SendDebug("Parsed Value for {$register['name']}", $value, 0);
     
             // Wert in die Variable schreiben
