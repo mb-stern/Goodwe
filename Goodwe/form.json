@@ -29,7 +29,7 @@
 		{
 			"type": "Button",
 			"caption": "Read Values",
-			"onClick": "CGEM24_RequestRead($id);"
+			"onClick": "Goodwe_RequestRead($id);"
 		}
 	]
 }
