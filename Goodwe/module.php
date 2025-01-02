@@ -1,4 +1,5 @@
-class GoodWeModule extends IPSModule
+<?php
+class Goodwe extends IPSModule
 {
     public function Create()
     {
