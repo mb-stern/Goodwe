@@ -56,7 +56,8 @@ class Goodwe extends IPSModule
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,           // Modbus Read Holding Register
             "Address"  => $register,   // Register-Adresse
-            "Quantity" => $quantity    // Anzahl der Register
+            "Quantity" => $quantity,    // Anzahl der Register
+            "Data"     => ""            // Daten leer
         ]));
     
         // Debugging: Gesendete Anfrage
@@ -64,7 +65,8 @@ class Goodwe extends IPSModule
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,
             "Address"  => $register,
-            "Quantity" => $quantity
+            "Quantity" => $quantity,
+            "Data"     => ""
         ]), 0);
     
         // Fehlerprüfung
