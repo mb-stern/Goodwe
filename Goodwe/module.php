@@ -89,7 +89,7 @@ class Goodwe extends IPSModule
             case "Hz":
                 return ["profile" => "~Hertz", "type" => VARIABLETYPE_FLOAT];
             case "%":
-                return ["profile" => "~Humidity", "type" => VARIABLETYPE_FLOAT];
+                return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
             case "N/A": // Beispiel für Integer-Werte ohne Einheit
                 return ["profile" => "", "type" => VARIABLETYPE_INTEGER];
             default:
