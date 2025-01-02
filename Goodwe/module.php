@@ -11,60 +11,122 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("Poller", 0);
         $this->RegisterPropertyInteger("Phase", 1);
         
-        $this->RegisterTimer("Poller", 0, "CGEM24_RequestRead(\$_IPS['TARGET']);");
+        $this->RegisterTimer("Poller", 0, "Goodwe_RequestRead(\$_IPS['TARGET']);");
 
     }
 
-    public function ApplyChanges() {
-        //Never delete this line!
+    public function ApplyChanges()
+    {
+        // Never delete this line!
         parent::ApplyChanges();
-        
-        $this->RegisterVariableFloat("Volt", "Volt", "Volt.230", 1);
-        $this->RegisterVariableFloat("Ampere", "Ampere", "Ampere.16", 2);
-        $this->RegisterVariableFloat("Watt", "Watt", "Watt.14490", 3);
-        $this->RegisterVariableFloat("kWh", "Total kWh", "Electricity", 4);
-        
+    
+        // PV1 Variablen
+        $this->RegisterVariableFloat("PV1Voltage", "PV1 Voltage", "~Volt", 1);
+        $this->RegisterVariableFloat("PV1Current", "PV1 Current", "~Ampere", 2);
+        $this->RegisterVariableFloat("PV1Power", "PV1 Power", "~Watt.14490", 3);
+    
+        // PV2 Variablen
+        $this->RegisterVariableFloat("PV2Voltage", "PV2 Voltage", "~Volt", 4);
+        $this->RegisterVariableFloat("PV2Current", "PV2 Current", "~Ampere", 5);
+        $this->RegisterVariableFloat("PV2Power", "PV2 Power", "~Watt.14490", 6);
+    
+        // Timer-Intervall setzen
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
-        
     }
+    
 
-    public function RequestRead() {
-        
-        $Address = 0x00 + ($this->ReadPropertyInteger("Phase") - 1)*2;
-        $Volt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
-        if($Volt === false)
-            return;
-        $Volt = (unpack("n*", substr($Volt,2)));
-        
-        $Address = 0x0C + ($this->ReadPropertyInteger("Phase") - 1)*2;
-        $Ampere = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
-        if($Ampere === false)
-            return;
-        $Ampere = (unpack("n*", substr($Ampere,2)));
-        
-        $Address = 0x12 + ($this->ReadPropertyInteger("Phase") - 1)*2;
-        $Watt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
-        if($Watt === false)
-            return;
-        $Watt = (unpack("n*", substr($Watt,2)));
-        
-        $Address = 0x46 + ($this->ReadPropertyInteger("Phase") - 1)*2;
-        $KWh = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
-        if($KWh === false)
-            return;
-        $KWh = (unpack("n*", substr($KWh,2)));
-
-        if(IPS_GetProperty(IPS_GetInstance($this->InstanceID)['ConnectionID'], "SwapWords")) {
-            SetValue($this->GetIDForIdent("Volt"), ($Volt[1] + ($Volt[2] << 16))/10);
-            SetValue($this->GetIDForIdent("Ampere"), ($Ampere[1] + ($Ampere[2] << 16))/1000);
-            SetValue($this->GetIDForIdent("Watt"), ($Watt[1] + ($Watt[2] << 16))/10);
-            SetValue($this->GetIDForIdent("kWh"), ($KWh[1] + ($KWh[2] << 16))/10);
-        } else {
-            SetValue($this->GetIDForIdent("Volt"), ($Volt[2] + ($Volt[1] << 16))/10);
-            SetValue($this->GetIDForIdent("Ampere"), ($Ampere[2] + ($Ampere[1] << 16))/1000);
-            SetValue($this->GetIDForIdent("Watt"), ($Watt[2] + ($Watt[1] << 16))/10);
-            SetValue($this->GetIDForIdent("kWh"), ($KWh[2] + ($KWh[1] << 16))/10);
+    public function RequestRead()
+    {
+        // PV1-Spannung lesen
+        $addressPV1Voltage = 35103; // Register-Adresse für PV1-Spannung
+        $responsePV1Voltage = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV1Voltage,
+            "Quantity" => 1
+        ]));
+    
+        if ($responsePV1Voltage !== false) {
+            $data = unpack("n*", $responsePV1Voltage);
+            $voltage = $data[1] / 10; // Skalierung anwenden
+            SetValue($this->GetIDForIdent("PV1Voltage"), $voltage);
         }
-        
+    
+        // PV1-Strom lesen
+        $addressPV1Current = 35104; // Register-Adresse für PV1-Strom
+        $responsePV1Current = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV1Current,
+            "Quantity" => 1
+        ]));
+    
+        if ($responsePV1Current !== false) {
+            $data = unpack("n*", $responsePV1Current);
+            $current = $data[1] / 10; // Skalierung anwenden
+            SetValue($this->GetIDForIdent("PV1Current"), $current);
+        }
+    
+        // PV1-Leistung lesen
+        $addressPV1Power = 35105; // Register-Adresse für PV1-Leistung (32-Bit Wert)
+        $responsePV1Power = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV1Power,
+            "Quantity" => 2 // 32-Bit benötigt 2 Register
+        ]));
+    
+        if ($responsePV1Power !== false) {
+            $data = unpack("n*", $responsePV1Power);
+            $power = ($data[1] << 16 | $data[2]) / 10; // 32-Bit kombinieren und skalieren
+            SetValue($this->GetIDForIdent("PV1Power"), $power);
+        }
+    
+        // PV2-Spannung lesen
+        $addressPV2Voltage = 35107; // Register-Adresse für PV2-Spannung
+        $responsePV2Voltage = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV2Voltage,
+            "Quantity" => 1
+        ]));
+    
+        if ($responsePV2Voltage !== false) {
+            $data = unpack("n*", $responsePV2Voltage);
+            $voltage = $data[1] / 10; // Skalierung anwenden
+            SetValue($this->GetIDForIdent("PV2Voltage"), $voltage);
+        }
+    
+        // PV2-Strom lesen
+        $addressPV2Current = 35108; // Register-Adresse für PV2-Strom
+        $responsePV2Current = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV2Current,
+            "Quantity" => 1
+        ]));
+    
+        if ($responsePV2Current !== false) {
+            $data = unpack("n*", $responsePV2Current);
+            $current = $data[1] / 10; // Skalierung anwenden
+            SetValue($this->GetIDForIdent("PV2Current"), $current);
+        }
+    
+        // PV2-Leistung lesen
+        $addressPV2Power = 35109; // Register-Adresse für PV2-Leistung (32-Bit Wert)
+        $responsePV2Power = $this->SendDataToParent(json_encode([
+            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address" => $addressPV2Power,
+            "Quantity" => 2 // 32-Bit benötigt 2 Register
+        ]));
+    
+        if ($responsePV2Power !== false) {
+            $data = unpack("n*", $responsePV2Power);
+            $power = ($data[1] << 16 | $data[2]) / 10; // 32-Bit kombinieren und skalieren
+            SetValue($this->GetIDForIdent("PV2Power"), $power);
+        }
     }
+    
+    
 }
