@@ -1,0 +1,25 @@
+{
+    "elements": [
+      {
+        "type": "ValidationTextBox",
+        "name": "Username",
+        "caption": "Username"
+      },
+      {
+        "type": "PasswordTextBox",
+        "name": "Password",
+        "caption": "Password"
+      },
+      {
+        "type": "ValidationTextBox",
+        "name": "InverterIP",
+        "caption": "Inverter IP"
+      },
+      {
+        "type": "NumberSpinner",
+        "name": "PollingInterval",
+        "caption": "Polling Interval (seconds)"
+      }
+    ]
+  }
+  
