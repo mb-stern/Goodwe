@@ -65,7 +65,7 @@ class Goodwe extends IPSModule
     private function GetRegisterList()
     {
         return [
-            ["Name" => "Leistung Gesamt", "Address" => 35301, "Profile" => "Watt.I", "Factor" => 1],
+            ["Name" => "Leistung Gesamt", "Address" => 35301, "Profile" => "~Electricity", "Factor" => 1],
             ["Name" => "Wechselrichter Temperatur", "Address" => 35174, "Profile" => "~Temperature", "Factor" => 0.1],
             ["Name" => "Erzeugung Tag", "Address" => 35193, "Profile" => "~Electricity", "Factor" => 0.1],
             ["Name" => "Erzeugung Gesamt", "Address" => 35191, "Profile" => "~Electricity", "Factor" => 0.1],
