@@ -31,8 +31,6 @@ class Goodwe extends IPSModule
         $this->RegisterVariableFloat("kWh", "Total kWh", "Electricity", 4);
         
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
-
-        $this->RegisterVariableFloat("Volt", "Volt", "~Volt", 1);
         
     }
 
