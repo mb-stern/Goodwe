@@ -36,20 +36,31 @@ class Goodwe extends IPSModule
 
     public function RequestRead() {
         
-        $Ampere = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => 35104,
-            "Quantity" => 1
-        ]));
         
-        if ($Ampere === false) {
-            $this->SendDebug("Ampere Request", "No response received", 0);
-        } else {
-            $this->SendDebug("Ampere Response", bin2hex($Ampere), 0);
-            $data = unpack("n*", $Ampere);
-            $this->SendDebug("Ampere Parsed Data", print_r($data, true), 0);
-        }
+        $Volt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35107 , "Quantity" => 2, "Data" => "")));
+        if($Volt === false)
+            return;
+        $Volt = (unpack("n*", substr($Volt,2)));
+      
+        
+        $this->SendDebug("Adresse", $Address, 0);
+        $Ampere = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35104 , "Quantity" => 1, "Data" => "")));
+        $this->SendDebug("Prüfung", $Ampere, 0);
+        if($Ampere === false)
+            return;
+        $Ampere = (unpack("n*", substr($Ampere,2)));
+        
+   
+        $Watt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35301 , "Quantity" => 2, "Data" => "")));
+        if($Watt === false)
+            return;
+        $Watt = (unpack("n*", substr($Watt,2)));
+        
+        $KWh = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35191 , "Quantity" => 2, "Data" => "")));
+        if($KWh === false)
+            return;
+        $KWh = (unpack("n*", substr($KWh,2)));
+
 
         if(IPS_GetProperty(IPS_GetInstance($this->InstanceID)['ConnectionID'], "SwapWords")) {
             SetValue($this->GetIDForIdent("Volt"), ($Volt[1] + ($Volt[2] << 16))/10);
