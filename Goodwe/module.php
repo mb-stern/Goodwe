@@ -84,72 +84,47 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        // Spannung (Register 35107)
-        $volt = $this->ReadRegister(35107, "Volt", 2, 10);
+        // Alle Register aus der Registers()-Funktion abfragen
+        foreach ($this->Registers() as $register) {
+            // Modbus-Nachricht erstellen
+            $response = $this->SendDataToParent(json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,           // Modbus Read Holding Register
+                "Address"  => $register['address'], // Register-Adresse
+                "Quantity" => $register['quantity'], // Anzahl der Register
+                "Data"     => ""           // Daten leer
+            ]));
     
-        // Strom (Register 35104)
-        $ampere = $this->ReadRegister(35104, "Ampere", 2, 1000);
+            // Debugging: Gesendete Anfrage
+            $this->SendDebug("Request for {$register['name']}", json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address"  => $register['address'],
+                "Quantity" => $register['quantity'],
+                "Data"     => ""
+            ]), 0);
     
-        // Leistung (Register 35301)
-        $watt = $this->ReadRegister(35301, "Watt", 2, 10);
+            // Fehlerprüfung
+            if ($response === false) {
+                $this->SendDebug("Error", "No response received for {$register['name']}", 0);
+                continue;
+            }
     
-        // Energie (Register 35191)
-        $kWh = $this->ReadRegister(35191, "kWh", 2, 10);
-    }
+            $this->SendDebug("Raw Response for {$register['name']}", bin2hex($response), 0);
     
-    private function ReadRegister(int $register)
-    {
-        // Register-Definition aus der Zuordnungstabelle suchen
-        $registerInfo = array_filter($this->Registers(), function ($reg) use ($register) {
-            return $reg['address'] === $register;
-        });
+            if (strlen($response) < 5) {
+                $this->SendDebug("Error", "Incomplete response received for {$register['name']}", 0);
+                continue;
+            }
     
-        if (empty($registerInfo)) {
-            $this->SendDebug("ReadRegister", "Register $register not found in the table", 0);
-            return;
+            // Daten auslesen und skalieren
+            $data = unpack("n*", substr($response, 2));
+            $value = ($data[1] << 16 | ($data[2] ?? 0)) / $register['scale']; // 32-Bit kombinieren und skalieren
+            $this->SendDebug("Parsed Value for {$register['name']}", $value, 0);
+    
+            // Wert in die Variable schreiben
+            SetValue($this->GetIDForIdent($register['name']), $value);
         }
-    
-        // Nur das erste gefundene Register verwenden
-        $registerInfo = array_values($registerInfo)[0];
-    
-        // Modbus-Nachricht erstellen
-        $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,           // Modbus Read Holding Register
-            "Address"  => $registerInfo['address'],   // Register-Adresse
-            "Quantity" => $registerInfo['quantity'], // Anzahl der Register
-            "Data"     => ""            // Daten leer
-        ]));
-    
-        // Debugging: Gesendete Anfrage
-        $this->SendDebug("Request for {$registerInfo['name']}", json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $registerInfo['address'],
-            "Quantity" => $registerInfo['quantity'],
-            "Data"     => ""
-        ]), 0);
-    
-        // Fehlerprüfung
-        if ($response === false) {
-            $this->SendDebug("Error", "No response received for {$registerInfo['name']}", 0);
-            return;
-        }
-    
-        $this->SendDebug("Raw Response for {$registerInfo['name']}", bin2hex($response), 0);
-    
-        if (strlen($response) < 5) {
-            $this->SendDebug("Error", "Incomplete response received for {$registerInfo['name']}", 0);
-            return;
-        }
-    
-        // Daten auslesen und skalieren
-        $data = unpack("n*", substr($response, 2));
-        $value = ($data[1] << 16 | ($data[2] ?? 0)) / $registerInfo['scale']; // 32-Bit kombinieren und skalieren
-        $this->SendDebug("Parsed Value for {$registerInfo['name']}", $value, 0);
-    
-        // Wert in die Variable schreiben
-        SetValue($this->GetIDForIdent($registerInfo['name']), $value);
     }
     
 }
