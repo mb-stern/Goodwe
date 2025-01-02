@@ -6,7 +6,7 @@ class Goodwe extends IPSModule
         //Never delete this line!
         parent::Create();
         
-        $this->ConnectParent("{E310B701-4AE7-458E-B618-EC13A1A6F6A8}");
+        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         
         $this->RegisterPropertyInteger("Poller", 0);
         $this->RegisterPropertyInteger("Phase", 1);
