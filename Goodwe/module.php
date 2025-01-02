@@ -55,6 +55,7 @@ class Goodwe extends IPSModule
             SetValue($this->GetIDForIdent("Volt"), $volt);
         }
     
+       /*
         // Register für Strom (Ampere)
         $responseAmpere = $this->SendDataToParent(json_encode([
             "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
@@ -81,6 +82,7 @@ class Goodwe extends IPSModule
             "Address" => 35301,
             "Quantity" => 2
         ]));
+        */
     
         $this->SendDebug("Watt Raw Response", bin2hex($responseWatt), 0);
     
