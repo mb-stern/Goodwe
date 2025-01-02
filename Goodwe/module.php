@@ -5,6 +5,8 @@ class Goodwe extends IPSModule
     {
         // Never delete this line!
         parent::Create();
+
+        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
     
         // Register properties
         $this->RegisterPropertyString('Username', '');
