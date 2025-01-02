@@ -92,28 +92,16 @@ class Goodwe extends IPSModule
     
     private function ReadRegister(int $register, string $type, float $scale)
     {
-        // Bestimme die Anzahl der Register basierend auf dem Typ
         $quantity = ($type === "U32") ? 2 : 1;
     
-        // Anfrage senden
         $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,           // Modbus Read Holding Register
-            "Address"  => $register,   // Register-Adresse
-            "Quantity" => $quantity,   // Anzahl der Register
-            "Data"     => ""           // Daten leer
-        ]));
-    
-        // Debugging: Gesendete Anfrage
-        $this->SendDebug("Request for Register $register", json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,
             "Address"  => $register,
             "Quantity" => $quantity,
             "Data"     => ""
-        ]), 0);
+        ]));
     
-        // Fehlerprüfung
         if ($response === false) {
             $this->SendDebug("Error", "No response received for Register $register", 0);
             return 0;
@@ -127,14 +115,13 @@ class Goodwe extends IPSModule
     
         $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
     
-        // Daten extrahieren und verarbeiten
-        $data = unpack("n*", substr($response, 3)); // Ab Position 3, nach Header
+        $data = unpack("n*", substr($response, 3)); // Daten ab Position 3
         $value = 0;
     
         if ($type === "U16") {
-            $value = $data[1] / $scale; // Skalierung anwenden
+            $value = $data[1] / $scale;
         } elseif ($type === "U32") {
-            $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
+            $value = ($data[1] << 16 | $data[2]) / $scale;
         }
     
         $this->SendDebug("Parsed Value for Register $register", $value, 0);
