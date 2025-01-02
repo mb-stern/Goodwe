@@ -38,12 +38,12 @@ class Goodwe extends IPSModule
         
         
         $Volt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35107 , "Quantity" => 2, "Data" => "")));
+        $this->SendDebug("Prüfung", $Volt, 0);
         if($Volt === false)
             return;
         $Volt = (unpack("n*", substr($Volt,2)));
       
-        
-        $this->SendDebug("Adresse", $Address, 0);
+
         $Ampere = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35104 , "Quantity" => 1, "Data" => "")));
         $this->SendDebug("Prüfung", $Ampere, 0);
         if($Ampere === false)
@@ -53,11 +53,13 @@ class Goodwe extends IPSModule
    
         $Watt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35301 , "Quantity" => 2, "Data" => "")));
         if($Watt === false)
+        $this->SendDebug("Prüfung", $Watt, 0);
             return;
         $Watt = (unpack("n*", substr($Watt,2)));
         
         $KWh = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => 35191 , "Quantity" => 2, "Data" => "")));
         if($KWh === false)
+        $this->SendDebug("Prüfung", $kWh, 0);
             return;
         $KWh = (unpack("n*", substr($KWh,2)));
 
