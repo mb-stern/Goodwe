@@ -17,126 +17,53 @@ class Goodwe extends IPSModule
 
     public function ApplyChanges()
     {
-        // Never delete this line!
         parent::ApplyChanges();
     
-        // PV1 Variablen
-        $this->RegisterVariableFloat("PV1Voltage", "PV1 Voltage", "~Volt", 1);
-        $this->RegisterVariableFloat("PV1Current", "PV1 Current", "~Ampere", 2);
-        $this->RegisterVariableFloat("PV1Power", "PV1 Power", "~Watt.14490", 3);
-    
-        // PV2 Variablen
-        $this->RegisterVariableFloat("PV2Voltage", "PV2 Voltage", "~Volt", 4);
-        $this->RegisterVariableFloat("PV2Current", "PV2 Current", "~Ampere", 5);
-        $this->RegisterVariableFloat("PV2Power", "PV2 Power", "~Watt.14490", 6);
+        $registers = $this->GetRegisterList();
+        foreach ($registers as $index => $register) {
+            $this->RegisterVariableFloat(
+                $this->GenerateIdent($register['Name']),
+                $register['Name'] . " (" . $register['Unit'] . ")",
+                "",
+                $index + 1
+            );
+        }
     
         // Timer-Intervall setzen
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
     
 
+    private function GetRegisterList()
+    {
+        return [
+            ["Name" => "PV1 Voltage", "Address" => 35103, "Unit" => "V", "Factor" => 0.1],
+            ["Name" => "PV1 Current", "Address" => 35104, "Unit" => "A", "Factor" => 0.1],
+            ["Name" => "PV1 Power", "Address" => 35105, "Unit" => "W", "Factor" => 1],
+            ["Name" => "PV2 Voltage", "Address" => 35107, "Unit" => "V", "Factor" => 0.1],
+            // Weitere Register hinzufügen...
+        ];
+    }
+
     public function RequestRead()
     {
-        // PV1-Spannung lesen
-        $addressPV1Voltage = 35103;
-        $jsonRequest = json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV1Voltage,
-            "Quantity" => 1
-        ]);
+        $registers = $this->GetRegisterList();
+        foreach ($registers as $register) {
+            $response = $this->SendDataToParent(json_encode([
+                "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address" => $register["Address"],
+                "Quantity" => 1
+            ]));
     
-        // Debug: Anfrage anzeigen
-        $this->SendDebug("Request PV1 Voltage", $jsonRequest, 0);
-    
-        // Anfrage senden
-        $responsePV1Voltage = $this->SendDataToParent($jsonRequest);
-    
-        // Debug: Antwort anzeigen
-        if ($responsePV1Voltage !== false) {
-            $this->SendDebug("Response PV1 Voltage", bin2hex($responsePV1Voltage), 0);
-            $data = unpack("n*", $responsePV1Voltage);
-            $voltage = $data[1] / 10; // Skalierung anwenden
-            SetValue($this->GetIDForIdent("PV1Voltage"), $voltage);
-        } else {
-            $this->SendDebug("Response PV1 Voltage", "Failed to read data", 0);
-        }
-    
-        // PV1-Strom lesen
-        $addressPV1Current = 35104; // Register-Adresse für PV1-Strom
-        $responsePV1Current = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV1Current,
-            "Quantity" => 1
-        ]));
-    
-        if ($responsePV1Current !== false) {
-            $data = unpack("n*", $responsePV1Current);
-            $current = $data[1] / 10; // Skalierung anwenden
-            SetValue($this->GetIDForIdent("PV1Current"), $current);
-        }
-    
-        // PV1-Leistung lesen
-        $addressPV1Power = 35105; // Register-Adresse für PV1-Leistung (32-Bit Wert)
-        $responsePV1Power = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV1Power,
-            "Quantity" => 2 // 32-Bit benötigt 2 Register
-        ]));
-    
-        if ($responsePV1Power !== false) {
-            $data = unpack("n*", $responsePV1Power);
-            $power = ($data[1] << 16 | $data[2]) / 10; // 32-Bit kombinieren und skalieren
-            SetValue($this->GetIDForIdent("PV1Power"), $power);
-        }
-    
-        // PV2-Spannung lesen
-        $addressPV2Voltage = 35107; // Register-Adresse für PV2-Spannung
-        $responsePV2Voltage = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV2Voltage,
-            "Quantity" => 1
-        ]));
-    
-        if ($responsePV2Voltage !== false) {
-            $data = unpack("n*", $responsePV2Voltage);
-            $voltage = $data[1] / 10; // Skalierung anwenden
-            SetValue($this->GetIDForIdent("PV2Voltage"), $voltage);
-        }
-    
-        // PV2-Strom lesen
-        $addressPV2Current = 35108; // Register-Adresse für PV2-Strom
-        $responsePV2Current = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV2Current,
-            "Quantity" => 1
-        ]));
-    
-        if ($responsePV2Current !== false) {
-            $data = unpack("n*", $responsePV2Current);
-            $current = $data[1] / 10; // Skalierung anwenden
-            SetValue($this->GetIDForIdent("PV2Current"), $current);
-        }
-    
-        // PV2-Leistung lesen
-        $addressPV2Power = 35109; // Register-Adresse für PV2-Leistung (32-Bit Wert)
-        $responsePV2Power = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $addressPV2Power,
-            "Quantity" => 2 // 32-Bit benötigt 2 Register
-        ]));
-    
-        if ($responsePV2Power !== false) {
-            $data = unpack("n*", $responsePV2Power);
-            $power = ($data[1] << 16 | $data[2]) / 10; // 32-Bit kombinieren und skalieren
-            SetValue($this->GetIDForIdent("PV2Power"), $power);
+            if ($response !== false) {
+                $data = unpack("n*", $response);
+                $value = $data[1] * $register["Factor"]; // Skalierung anwenden
+                SetValue($this->GetIDForIdent($this->GenerateIdent($register['Name'])), $value);
+            } else {
+                $this->SendDebug("Error", "No response for " . $register['Name'], 0);
+            }
         }
     }
-    
     
 }
