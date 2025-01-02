@@ -96,8 +96,8 @@ class Goodwe extends IPSModule
     
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $register,
+            "Function" => 3,           
+            "Address"  => $register,   
             "Quantity" => $quantity,
             "Data"     => ""
         ]));
@@ -107,7 +107,8 @@ class Goodwe extends IPSModule
             return 0;
         }
     
-        if (strlen($response) !== (2 * $quantity + 3)) {
+        // Anpassung der Längenprüfung
+        if (strlen($response) < (2 * $quantity + 2)) {
             $this->SendDebug("Error", "Unexpected response length for Register $register: " . strlen($response), 0);
             $this->SendDebug("Response Hex", bin2hex($response), 0);
             return 0;
@@ -115,7 +116,7 @@ class Goodwe extends IPSModule
     
         $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
     
-        $data = unpack("n*", substr($response, 3)); // Daten ab Position 3
+        $data = unpack("n*", substr($response, 2)); // Daten nach Header extrahieren
         $value = 0;
     
         if ($type === "U16") {
