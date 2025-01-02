@@ -1,25 +1,36 @@
 {
-    "elements": [
-      {
-        "type": "ValidationTextBox",
-        "name": "Username",
-        "caption": "Username"
-      },
-      {
-        "type": "PasswordTextBox",
-        "name": "Password",
-        "caption": "Password"
-      },
-      {
-        "type": "ValidationTextBox",
-        "name": "InverterIP",
-        "caption": "Inverter IP"
-      },
-      {
-        "type": "NumberSpinner",
-        "name": "PollingInterval",
-        "caption": "Polling Interval (seconds)"
-      }
-    ]
-  }
+	"elements": [
+		{
+			"name": "Phase",
+			"type": "Select",
+			"caption": "Phase",
+			"options": [
+				{
+					"label": "L1",
+					"value": 1
+				},
+				{
+					"label": "L2",
+					"value": 2
+				},
+				{
+					"label": "L3",
+					"value": 3
+				}
+			]
+		},
+		{
+			"name": "Poller",
+			"type": "IntervalBox",
+			"caption": "milliseconds"
+		}
+	],
+	"actions": [
+		{
+			"type": "Button",
+			"caption": "Read Values",
+			"onClick": "CGEM24_RequestRead($id);"
+		}
+	]
+}
   
