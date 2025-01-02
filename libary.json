@@ -1,0 +1,14 @@
+{
+  "library": {
+    "name": "Goodwe",
+    "description": "An IP-Symcon module to integrate GoodWe inverters.",
+    "author": "Stefan Künzli",
+    "url": "https://github.com/mb-stern/goodwe-integration",
+    "compatibility": {
+        "version": "7.0"
+    },
+    "version": "1.0",
+    "build": 0,
+    "date": 0
+  }
+}
