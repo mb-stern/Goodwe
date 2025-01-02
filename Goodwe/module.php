@@ -46,6 +46,24 @@ class Goodwe extends IPSModule
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
 
+    private function GetVariableProfile(string $unit, float $scale)
+    {
+        switch ($unit) {
+            case "V":
+                return "~Volt";
+            case "A":
+                return "~Ampere";
+            case "W":
+                return "~Watt";
+            case "Hz":
+                return "~Frequency";
+            case "%":
+                return "~Humidity"; // Beispiel für Prozentangaben
+            default:
+                return ""; // Kein Profil
+        }
+    }
+
     private function Registers()
     {
         return [
