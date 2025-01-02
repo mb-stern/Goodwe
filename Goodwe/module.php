@@ -23,46 +23,80 @@ class Goodwe extends IPSModule
 
     public function ApplyChanges() 
     {
-        
         parent::ApplyChanges();
-        
+    
         // Variablen für jedes Register erstellen
         foreach ($this->Registers() as $register) {
-            // Prüfen, ob die Variable schreibgeschützt ist
-            $profile = $this->GetVariableProfile($register['unit'], $register['scale']);
-            $this->RegisterVariableFloat(
-                $register['name'],                           // Ident
-                $register['name'] . " (" . $register['unit'] . ")", // Name
-                $profile,                                   // Variablenprofil
-                0                                           // Position
-            );
-
+            $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
+    
+            // Variable registrieren basierend auf Typ
+            switch ($profileInfo['type']) {
+                case VARIABLETYPE_FLOAT:
+                    $this->RegisterVariableFloat(
+                        $register['name'],
+                        $register['name'] . " (" . $register['unit'] . ")",
+                        $profileInfo['profile'],
+                        0
+                    );
+                    break;
+    
+                case VARIABLETYPE_INTEGER:
+                    $this->RegisterVariableInteger(
+                        $register['name'],
+                        $register['name'] . " (" . $register['unit'] . ")",
+                        $profileInfo['profile'],
+                        0
+                    );
+                    break;
+    
+                case VARIABLETYPE_STRING:
+                    $this->RegisterVariableString(
+                        $register['name'],
+                        $register['name'] . " (" . $register['unit'] . ")",
+                        $profileInfo['profile'],
+                        0
+                    );
+                    break;
+    
+                case VARIABLETYPE_BOOLEAN:
+                    $this->RegisterVariableBoolean(
+                        $register['name'],
+                        $register['name'] . " (" . $register['unit'] . ")",
+                        $profileInfo['profile'],
+                        0
+                    );
+                    break;
+            }
+    
             // Falls Aktionen benötigt werden
             if ($register['action']) {
                 $this->EnableAction($register['name']);
             }
         }
-        
+    
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
-    }
+    }    
 
-    private function GetVariableProfile(string $unit, float $scale)
+    private function GetVariableProfile(string $unit, float $scale): array
     {
         switch ($unit) {
             case "V":
-                return "~Volt";
+                return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
             case "A":
-                return "~Ampere";
+                return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
             case "W":
-                return "~Watt";
+                return ["profile" => "~Watt", "type" => VARIABLETYPE_FLOAT];
             case "Hz":
-                return "~Hertz";
+                return ["profile" => "~Hertz", "type" => VARIABLETYPE_FLOAT];
             case "%":
-                return "~Humidity"; // Beispiel für Prozentangaben
+                return ["profile" => "~Humidity", "type" => VARIABLETYPE_FLOAT];
+            case "N/A": // Beispiel für Integer-Werte ohne Einheit
+                return ["profile" => "", "type" => VARIABLETYPE_INTEGER];
             default:
-                return ""; // Kein Profil
+                return ["profile" => "", "type" => VARIABLETYPE_FLOAT];
         }
     }
+    
 
     private function Registers()
     {
