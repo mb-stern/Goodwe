@@ -127,14 +127,14 @@ class Goodwe extends IPSModule
     
         $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
     
-        // Daten auslesen
+        // Daten extrahieren und verarbeiten
         $data = unpack("n*", substr($response, 2));
         $value = 0;
     
         if ($type === "U16") {
-            $value = $data[1] / $scale;
+            $value = $data[1] / $scale; // Skalierung anwenden
         } elseif ($type === "U32") {
-            $value = ($data[1] << 16 | $data[2]) / $scale;
+            $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
         }
     
         $this->SendDebug("Parsed Value for Register $register", $value, 0);
