@@ -17,31 +17,24 @@ class Goodwe extends IPSModule
 
     public function ApplyChanges()
     {
+        // Never delete this line!
         parent::ApplyChanges();
     
-        // Liste der Modbus-Adressen (aus der Vorlage übernommen)
-        $addresses = [
-            ["Name" => "Leistung Gesamt", "Address" => 35301, "Profile" => "Watt.I", "Factor" => 1],
-            ["Name" => "Wechselrichter Temperatur", "Address" => 35174, "Profile" => "~Temperature", "Factor" => 0.1],
-            ["Name" => "Erzeugung Tag", "Address" => 35193, "Profile" => "~Electricity", "Factor" => 0.1],
-            ["Name" => "Erzeugung Gesamt", "Address" => 35191, "Profile" => "~Electricity", "Factor" => 0.1],
-            // Weitere Einträge...
-        ];
+        // PV1 Variablen
+        $this->RegisterVariableFloat("PV1Voltage", "PV1 Voltage", "~Volt", 1);
+        $this->RegisterVariableFloat("PV1Current", "PV1 Current", "~Ampere", 2);
+        $this->RegisterVariableFloat("PV1Power", "PV1 Power", "~Watt.14490", 3);
     
-        // Variablen dynamisch registrieren
-        foreach ($addresses as $index => $address) {
-            $this->RegisterVariableFloat(
-                $this->GenerateIdent($address['Name']),
-                $address['Name'],
-                $address['Profile'],
-                $index + 1
-            );
-        }
+        // PV2 Variablen
+        $this->RegisterVariableFloat("PV2Voltage", "PV2 Voltage", "~Volt", 4);
+        $this->RegisterVariableFloat("PV2Current", "PV2 Current", "~Ampere", 5);
+        $this->RegisterVariableFloat("PV2Power", "PV2 Power", "~Watt.14490", 6);
     
         // Timer-Intervall setzen
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
     
+
     public function RequestRead()
     {
         // PV1-Spannung lesen
