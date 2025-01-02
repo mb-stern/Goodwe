@@ -38,76 +38,59 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        // Spannung (Volt) abfragen
-        $requestVolt = pack("C2n2", 1, 3, 35107, 2); // Unit ID = 1, Function Code = 3, Address = 35107, Quantity = 2
-        $responseVolt = $this->SendDataToParent(json_encode([
-            "DataID"  => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Payload" => bin2hex($requestVolt) // Binärdaten als Hex
-        ]));
+        // Spannung (Register 35107)
+        $volt = $this->ReadRegister(35107, "Volt", 2, 10);
     
-        $this->SendDebug("Volt Request", bin2hex($requestVolt), 0);
+        // Strom (Register 35104)
+        $ampere = $this->ReadRegister(35104, "Ampere", 2, 1000);
     
-        if ($responseVolt === false) {
-            $this->SendDebug("Volt Error", "No response received", 0);
-            return;
-        }
+        // Leistung (Register 35301)
+        $watt = $this->ReadRegister(35301, "Watt", 2, 10);
     
-        $this->SendDebug("Volt Raw Response", $responseVolt, 0);
-    
-        $responseDecoded = json_decode($responseVolt, true);
-        if (isset($responseDecoded['Payload'])) {
-            $responsePayload = hex2bin($responseDecoded['Payload']); // Hex zurück in Binärdaten umwandeln
-            if (strlen($responsePayload) < 5) {
-                $this->SendDebug("Volt Error", "Incomplete response received", 0);
-                return;
-            }
-    
-            $dataVolt = unpack("n2", substr($responsePayload, 2));
-            $volt = ($dataVolt[1] << 16 | $dataVolt[2]) / 10; // 32-Bit kombinieren und skalieren
-            $this->SendDebug("Volt Parsed", $volt, 0);
-            SetValue($this->GetIDForIdent("Volt"), $volt);
-        } else {
-            $this->SendDebug("Volt Error", "Invalid response format", 0);
-        }
-    
-        // Wiederhole für andere Register
-        $this->ProcessRegister("Ampere", 35104, 2, 1000);
-        $this->ProcessRegister("Watt", 35301, 2, 10);
-        $this->ProcessRegister("kWh", 35191, 2, 10);
+        // Energie (Register 35191)
+        $kWh = $this->ReadRegister(35191, "kWh", 2, 10);
     }
     
-    private function ProcessRegister(string $name, int $address, int $quantity, float $scale)
+    private function ReadRegister(int $register, string $ident, int $quantity, float $scale)
     {
-        $request = pack("C2n2", 1, 3, $address, $quantity);
+        // Modbus-Nachricht erstellen
         $response = $this->SendDataToParent(json_encode([
-            "DataID"  => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Payload" => bin2hex($request)
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,           // Modbus Read Holding Register
+            "Address"  => $register,   // Register-Adresse
+            "Quantity" => $quantity    // Anzahl der Register
         ]));
     
-        $this->SendDebug("$name Request", bin2hex($request), 0);
+        // Debugging: Gesendete Anfrage
+        $this->SendDebug("$ident Request", json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address"  => $register,
+            "Quantity" => $quantity
+        ]), 0);
     
+        // Fehlerprüfung
         if ($response === false) {
-            $this->SendDebug("$name Error", "No response received", 0);
-            return;
+            $this->SendDebug("$ident Error", "No response received", 0);
+            return [0, 0];
         }
     
-        $this->SendDebug("$name Raw Response", $response, 0);
+        $this->SendDebug("$ident Raw Response", bin2hex($response), 0);
     
-        $responseDecoded = json_decode($response, true);
-        if (isset($responseDecoded['Payload'])) {
-            $responsePayload = hex2bin($responseDecoded['Payload']);
-            if (strlen($responsePayload) < 5) {
-                $this->SendDebug("$name Error", "Incomplete response received", 0);
-                return;
-            }
-    
-            $data = unpack("n2", substr($responsePayload, 2));
-            $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
-            $this->SendDebug("$name Parsed", $value, 0);
-            SetValue($this->GetIDForIdent($name), $value);
-        } else {
-            $this->SendDebug("$name Error", "Invalid response format", 0);
+        if (strlen($response) < 5) {
+            $this->SendDebug("$ident Error", "Incomplete response received", 0);
+            return [0, 0];
         }
+    
+        // Daten auslesen und skalieren
+        $data = unpack("n2", substr($response, 2));
+        $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
+        $this->SendDebug("$ident Parsed", $value, 0);
+    
+        // Wert speichern
+        SetValue($this->GetIDForIdent($ident), $value);
+    
+        return $data; // Rückgabe des Rohdaten-Arrays
     }
     
 }
