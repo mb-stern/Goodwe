@@ -39,8 +39,10 @@ class Goodwe extends IPSModule
     public function RequestRead()
     {
         // Spannung (Volt) abfragen
-        $responseVolt = $this->SendDataToParent(pack("C2n2", 1, 3, 35107, 2)); // Unit ID = 1, Function Code = 3
-        $this->SendDebug("Volt Raw Request", bin2hex(pack("C2n2", 1, 3, 35107, 2)), 0);
+        $requestVolt = pack("C2n2", 1, 3, 35107, 2); // Unit ID = 1, Function Code = 3, Address = 35107, Quantity = 2
+        $responseVolt = $this->SendDataToParent($requestVolt);
+    
+        $this->SendDebug("Volt Raw Request", bin2hex($requestVolt), 0);
     
         if ($responseVolt === false) {
             $this->SendDebug("Volt Error", "No response received", 0);
@@ -59,7 +61,7 @@ class Goodwe extends IPSModule
         $this->SendDebug("Volt Parsed", $volt, 0);
         SetValue($this->GetIDForIdent("Volt"), $volt);
     
-        // Wiederhole für weitere Register (Ampere, Watt, kWh)
+        // Analog für andere Register
         $this->ProcessRegister("Ampere", 35104, 2, 1000);
         $this->ProcessRegister("Watt", 35301, 2, 10);
         $this->ProcessRegister("kWh", 35191, 2, 10);
@@ -67,7 +69,7 @@ class Goodwe extends IPSModule
     
     private function ProcessRegister(string $name, int $address, int $quantity, float $scale)
     {
-        $request = pack("C2n2", 1, 3, $address, $quantity);
+        $request = pack("C2n2", 1, 3, $address, $quantity); // Modbus-Binärnachricht erstellen
         $response = $this->SendDataToParent($request);
     
         $this->SendDebug("$name Raw Request", bin2hex($request), 0);
