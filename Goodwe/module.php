@@ -56,7 +56,7 @@ class Goodwe extends IPSModule
             case "W":
                 return "~Watt";
             case "Hz":
-                return "~Frequency";
+                return "~Hertz";
             case "%":
                 return "~Humidity"; // Beispiel für Prozentangaben
             default:
