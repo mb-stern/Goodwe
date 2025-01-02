@@ -34,15 +34,26 @@ class Goodwe extends IPSModule
     }
     
 
-    private function GetRegisterMapping()
+    private function GetRegisterList()
     {
         return [
-            ["Name" => "PV1 Voltage", "Address" => 35103, "Length" => 2, "Factor" => 0.1],
-            ["Name" => "PV1 Current", "Address" => 35104, "Length" => 2, "Factor" => 0.1],
-            ["Name" => "PV1 Power", "Address" => 35105, "Length" => 2, "Factor" => 1],
+            ["Name" => "PV1 Voltage", "Address" => 35103, "Unit" => "V", "Factor" => 0.1],
+            ["Name" => "PV1 Current", "Address" => 35104, "Unit" => "A", "Factor" => 0.1],
+            ["Name" => "PV1 Power", "Address" => 35105, "Unit" => "W", "Factor" => 1],
+            // Weitere Register hinzufügen...
         ];
     }
-    
+
+    private function GetRegisterMapping()
+{
+    return [
+        ["Name" => "PV1 Voltage", "Address" => 35103, "Length" => 2, "Factor" => 0.1],
+        ["Name" => "PV1 Current", "Address" => 35104, "Length" => 2, "Factor" => 0.1],
+        ["Name" => "PV1 Power", "Address" => 35105, "Length" => 2, "Factor" => 1],
+        // Weitere Register hinzufügen..
+    ];
+}
+
 
     public function RequestRead()
     {
