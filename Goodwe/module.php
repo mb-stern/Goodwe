@@ -90,7 +90,6 @@ class Goodwe extends IPSModule
         }
     }
     
-    
     private function ReadRegister(int $register, string $type, float $scale)
     {
         // Bestimme die Anzahl der Register basierend auf dem Typ
@@ -99,10 +98,10 @@ class Goodwe extends IPSModule
         // Anfrage senden
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $register,
-            "Quantity" => $quantity,
-            "Data"     => ""
+            "Function" => 3,           // Modbus Read Holding Register
+            "Address"  => $register,   // Register-Adresse
+            "Quantity" => $quantity,   // Anzahl der Register
+            "Data"     => ""           // Daten leer
         ]));
     
         // Debugging: Gesendete Anfrage
@@ -120,15 +119,16 @@ class Goodwe extends IPSModule
             return 0;
         }
     
-        if (strlen($response) < (2 * $quantity + 3)) {
-            $this->SendDebug("Error", "Incomplete response for Register $register", 0);
+        if (strlen($response) !== (2 * $quantity + 3)) {
+            $this->SendDebug("Error", "Unexpected response length for Register $register: " . strlen($response), 0);
+            $this->SendDebug("Response Hex", bin2hex($response), 0);
             return 0;
         }
     
         $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
     
         // Daten extrahieren und verarbeiten
-        $data = unpack("n*", substr($response, 2));
+        $data = unpack("n*", substr($response, 3)); // Ab Position 3, nach Header
         $value = 0;
     
         if ($type === "U16") {
