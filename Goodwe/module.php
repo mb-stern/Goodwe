@@ -31,25 +31,16 @@ class Goodwe extends IPSModule
         $this->RegisterVariableFloat("kWh", "Total kWh", "Electricity", 4);
         
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
+
+        $this->RegisterVariableFloat("Volt", "Volt", "~Volt", 1);
         
     }
 
     public function RequestRead()
     {
-        // Register für Spannung (Volt)
-        $responseVolt = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => 35107,
-            "Quantity" => 2
-        ]));
-    
-        $this->SendDebug("Volt Request", json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => 35107,
-            "Quantity" => 2
-        ]), 0);
+        // Spannung (Volt) abfragen
+        $responseVolt = $this->SendDataToParent(pack("C2n2", 1, 3, 35107, 2)); // Unit ID = 1, Function Code = 3
+        $this->SendDebug("Volt Raw Request", bin2hex(pack("C2n2", 1, 3, 35107, 2)), 0);
     
         if ($responseVolt === false) {
             $this->SendDebug("Volt Error", "No response received", 0);
@@ -68,7 +59,7 @@ class Goodwe extends IPSModule
         $this->SendDebug("Volt Parsed", $volt, 0);
         SetValue($this->GetIDForIdent("Volt"), $volt);
     
-        // Analog für weitere Register
+        // Wiederhole für weitere Register (Ampere, Watt, kWh)
         $this->ProcessRegister("Ampere", 35104, 2, 1000);
         $this->ProcessRegister("Watt", 35301, 2, 10);
         $this->ProcessRegister("kWh", 35191, 2, 10);
@@ -76,19 +67,10 @@ class Goodwe extends IPSModule
     
     private function ProcessRegister(string $name, int $address, int $quantity, float $scale)
     {
-        $response = $this->SendDataToParent(json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $address,
-            "Quantity" => $quantity
-        ]));
+        $request = pack("C2n2", 1, 3, $address, $quantity);
+        $response = $this->SendDataToParent($request);
     
-        $this->SendDebug("$name Request", json_encode([
-            "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address" => $address,
-            "Quantity" => $quantity
-        ]), 0);
+        $this->SendDebug("$name Raw Request", bin2hex($request), 0);
     
         if ($response === false) {
             $this->SendDebug("$name Error", "No response received", 0);
@@ -106,17 +88,6 @@ class Goodwe extends IPSModule
         $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
         $this->SendDebug("$name Parsed", $value, 0);
         SetValue($this->GetIDForIdent($name), $value);
-    
-        if(IPS_GetProperty(IPS_GetInstance($this->InstanceID)['ConnectionID'], "SwapWords")) {
-            SetValue($this->GetIDForIdent("Volt"), ($Volt[1] + ($Volt[2] << 16))/10);
-            SetValue($this->GetIDForIdent("Ampere"), ($Ampere[1] + ($Ampere[2] << 16))/1000);
-            SetValue($this->GetIDForIdent("Watt"), ($Watt[1] + ($Watt[2] << 16))/10);
-            SetValue($this->GetIDForIdent("kWh"), ($KWh[1] + ($KWh[2] << 16))/10);
-        } else {
-            SetValue($this->GetIDForIdent("Volt"), ($Volt[2] + ($Volt[1] << 16))/10);
-            SetValue($this->GetIDForIdent("Ampere"), ($Ampere[2] + ($Ampere[1] << 16))/1000);
-            SetValue($this->GetIDForIdent("Watt"), ($Watt[2] + ($Watt[1] << 16))/10);
-            SetValue($this->GetIDForIdent("kWh"), ($KWh[2] + ($KWh[1] << 16))/10);
-        } 
     }
+    
 }
