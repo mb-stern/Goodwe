@@ -19,61 +19,54 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Liste der Modbus-Adressen (aus der Vorlage übernommen)
-        $addresses = [
-            ["Name" => "Leistung Gesamt", "Address" => 35301, "Profile" => "", "Factor" => 1],
-            ["Name" => "Wechselrichter Temperatur", "Address" => 35174, "Profile" => "~Temperature", "Factor" => 0.1],
-            ["Name" => "Erzeugung Tag", "Address" => 35193, "Profile" => "~Electricity", "Factor" => 0.1],
-            ["Name" => "Erzeugung Gesamt", "Address" => 35191, "Profile" => "~Electricity", "Factor" => 0.1],
-            // Weitere Einträge...
-        ];
-    
-        // Variablen dynamisch registrieren
-        foreach ($addresses as $index => $address) {
+        // Register Variablen
+        $registers = $this->GetRegisterList();
+        foreach ($registers as $index => $register) {
             $this->RegisterVariableFloat(
-                $this->GenerateIdent($address['Name']),
-                $address['Name'],
-                $address['Profile'],
+                $this->GenerateIdent($register['Name']),
+                $register['Name'],
+                $register['Profile'],
                 $index + 1
             );
         }
     
-        // Timer-Intervall setzen
+        // Timer für Abfragen setzen
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
     
+    
     public function RequestRead()
     {
-        $addresses = [
-            ["Name" => "Leistung Gesamt", "Address" => 35301, "Factor" => 1],
-            ["Name" => "Wechselrichter Temperatur", "Address" => 35174, "Factor" => 0.1],
-            ["Name" => "Erzeugung Tag", "Address" => 35193, "Factor" => 0.1],
-            ["Name" => "Erzeugung Gesamt", "Address" => 35191, "Factor" => 0.1],
-            // Weitere Einträge...
-        ];
-    
-        foreach ($addresses as $address) {
+        $registers = $this->GetRegisterList();
+        foreach ($registers as $register) {
             $response = $this->SendDataToParent(json_encode([
                 "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
-                "Address" => $address["Address"],
+                "Address" => $register['Address'],
                 "Quantity" => 1
             ]));
     
             if ($response !== false) {
                 $data = unpack("n*", $response);
-                $value = $data[1] * $address["Factor"]; // Skalierung anwenden
-                SetValue($this->GetIDForIdent($this->GenerateIdent($address['Name'])), $value);
+                $value = $data[1] * $register['Factor']; // Skalierung anwenden
+                SetValue($this->GetIDForIdent($this->GenerateIdent($register['Name'])), $value);
             } else {
-                $this->SendDebug("Error", "No response for " . $address['Name'], 0);
+                $this->SendDebug("Error", "No response for " . $register['Name'], 0);
             }
         }
     }
-
-    private function GenerateIdent(string $name): string
-{
-    return preg_replace('/[^a-zA-Z0-9]/', '_', $name);
-}
-
     
+    private function GetRegisterList()
+    {
+        return [
+            ["Name" => "Leistung Gesamt", "Address" => 35301, "Profile" => "Watt.I", "Factor" => 1],
+            ["Name" => "Wechselrichter Temperatur", "Address" => 35174, "Profile" => "~Temperature", "Factor" => 0.1],
+            ["Name" => "Erzeugung Tag", "Address" => 35193, "Profile" => "~Electricity", "Factor" => 0.1],
+            ["Name" => "Erzeugung Gesamt", "Address" => 35191, "Profile" => "~Electricity", "Factor" => 0.1],
+            ["Name" => "Spannung String West", "Address" => 35103, "Profile" => "~Volt", "Factor" => 0.1],
+            ["Name" => "Strom String West", "Address" => 35104, "Profile" => "~Ampere", "Factor" => 0.1],
+            // Weitere Register hinzufügen...
+        ];
+    }
+        
 }
