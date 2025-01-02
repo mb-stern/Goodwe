@@ -85,51 +85,60 @@ class Goodwe extends IPSModule
     public function RequestRead()
     {
         foreach ($this->Registers() as $register) {
-            // Modbus-Nachricht erstellen
-            $response = $this->SendDataToParent(json_encode([
-                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,           // Modbus Read Holding Register
-                "Address"  => $register['address'], // Register-Adresse
-                "Quantity" => $register['quantity'], // Anzahl der Register
-                "Data"     => ""           // Daten leer
-            ]));
-    
-            // Debugging: Gesendete Anfrage
-            $this->SendDebug("Request for {$register['name']}", json_encode([
-                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,
-                "Address"  => $register['address'],
-                "Quantity" => $register['quantity'],
-                "Data"     => ""
-            ]), 0);
-    
-            // Fehlerprüfung
-            if ($response === false) {
-                $this->SendDebug("Error", "No response received for {$register['name']}", 0);
-                continue;
-            }
-    
-            $this->SendDebug("Raw Response for {$register['name']}", bin2hex($response), 0);
-    
-            if (strlen($response) < 5) {
-                $this->SendDebug("Error", "Incomplete response received for {$register['name']}", 0);
-                continue;
-            }
-    
-            // Daten auslesen und je nach Typ verarbeiten
-            $data = unpack("n*", substr($response, 2));
-            $value = 0;
-            if ($register['type'] === "U16") {
-                $value = $data[1] / $register['scale']; // Skalierung anwenden
-            } elseif ($register['type'] === "U32") {
-                $value = ($data[1] << 16 | $data[2]) / $register['scale']; // 32-Bit kombinieren und skalieren
-            }
-    
-            $this->SendDebug("Parsed Value for {$register['name']}", $value, 0);
-    
-            // Wert in die Variable schreiben
+            $value = $this->ReadRegister($register['address'], $register['type'], $register['scale']);
             SetValue($this->GetIDForIdent($register['name']), $value);
         }
     }
     
+    
+    private function ReadRegister(int $register, string $type, float $scale)
+    {
+        // Bestimme die Anzahl der Register basierend auf dem Typ
+        $quantity = ($type === "U32") ? 2 : 1;
+
+        // Anfrage senden
+        $response = $this->SendDataToParent(json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,           // Modbus Read Holding Register
+            "Address"  => $register,   // Register-Adresse
+            "Quantity" => $quantity,   // Anzahl der Register
+            "Data"     => ""           // Daten leer
+        ]));
+
+        // Debugging: Gesendete Anfrage
+        $this->SendDebug("Request for Register $register", json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address"  => $register,
+            "Quantity" => $quantity,
+            "Data"     => ""
+        ]), 0);
+
+        // Fehlerprüfung
+        if ($response === false) {
+            $this->SendDebug("Error", "No response received for Register $register", 0);
+            return 0;
+        }
+
+        $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
+
+        if (strlen($response) < ($quantity * 2) + 3) {
+            $this->SendDebug("Error", "Incomplete response for Register $register", 0);
+            return 0;
+        }
+
+        // Daten auslesen
+        $data = unpack("n*", substr($response, 2));
+        $value = 0;
+
+        if ($type === "U16") {
+            $value = $data[1] / $scale; // Skalierung anwenden
+        } elseif ($type === "U32") {
+            $value = ($data[1] << 16 | $data[2]) / $scale; // 32-Bit kombinieren und skalieren
+        }
+
+        $this->SendDebug("Parsed Value for Register $register", $value, 0);
+        return $value;
+    }
+
 }
