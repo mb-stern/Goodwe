@@ -38,18 +38,28 @@ class Goodwe extends IPSModule
     public function RequestRead()
     {
         // PV1-Spannung lesen
-        $addressPV1Voltage = 35103; // Register-Adresse für PV1-Spannung
-        $responsePV1Voltage = $this->SendDataToParent(json_encode([
+        $addressPV1Voltage = 35103;
+        $jsonRequest = json_encode([
             "DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,
             "Address" => $addressPV1Voltage,
             "Quantity" => 1
-        ]));
+        ]);
     
+        // Debug: Anfrage anzeigen
+        $this->SendDebug("Request PV1 Voltage", $jsonRequest, 0);
+    
+        // Anfrage senden
+        $responsePV1Voltage = $this->SendDataToParent($jsonRequest);
+    
+        // Debug: Antwort anzeigen
         if ($responsePV1Voltage !== false) {
+            $this->SendDebug("Response PV1 Voltage", bin2hex($responsePV1Voltage), 0);
             $data = unpack("n*", $responsePV1Voltage);
             $voltage = $data[1] / 10; // Skalierung anwenden
             SetValue($this->GetIDForIdent("PV1Voltage"), $voltage);
+        } else {
+            $this->SendDebug("Response PV1 Voltage", "Failed to read data", 0);
         }
     
         // PV1-Strom lesen
