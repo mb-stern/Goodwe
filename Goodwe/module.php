@@ -36,11 +36,13 @@ class Goodwe extends IPSModule
 
     public function RequestRead() {
         
+        /*
         $Address = 0x00 + ($this->ReadPropertyInteger("Phase") - 1)*2;
         $Volt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
         if($Volt === false)
             return;
         $Volt = (unpack("n*", substr($Volt,2)));
+        */
         
         $Address = 36025;
         $Ampere = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
