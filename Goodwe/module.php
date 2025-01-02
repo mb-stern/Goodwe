@@ -1,6 +1,12 @@
 <?php
 class Goodwe extends IPSModule
 {
+    public function __construct($InstanceID) {
+
+        //Never delete this line!
+        parent::__construct($InstanceID);
+
+        }
     public function Create() {
 		
         //Never delete this line!
