@@ -1,0 +1,15 @@
+{
+    "id": "{D1086D5A-8D52-4E19-AAAD-EFADC81633BD}",
+    "name": "Goodwe",
+    "type": 3,
+    "vendor": "",
+    "aliases": [
+        "Reolink"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "GoodWe",
+    "url": "https://github.com/mb-stern/Goodwe/tree/beta"
+  }
+  
