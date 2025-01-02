@@ -114,7 +114,7 @@ class Goodwe extends IPSModule
             ["address" => 47908, "name" => "SOC",      "type" => "U16", "unit" => "%",   "scale" => 1,   "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery state of charge",            "category" => "Batterie"],
             ["address" => 35201, "name" => "BatteryV", "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery voltage",                    "category" => "Batterie"],
             ["address" => 35202, "name" => "BatteryI", "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery current",                    "category" => "Batterie"],
-            ["address" => 35301, "name" => "Wrtemp",   "type" => "U16", "unit" => "°C",   "scale" => 10,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "Temperatur Inverter",                "category" => "Wechselrichter"]
+            ["address" => 35301, "name" => "Wrtemp",   "type" => "S16", "unit" => "°C",  "scale" => 10,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "Temperatur Inverter",                "category" => "Wechselrichter"]
         ];
     }
     
@@ -129,7 +129,7 @@ class Goodwe extends IPSModule
     
     private function ReadRegister(int $register, string $type, float $scale)
     {
-        $quantity = ($type === "U32") ? 2 : 1;
+        $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
     
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
@@ -144,7 +144,6 @@ class Goodwe extends IPSModule
             return 0;
         }
     
-        // Anpassung der Längenprüfung
         if (strlen($response) < (2 * $quantity + 2)) {
             $this->SendDebug("Error", "Unexpected response length for Register $register: " . strlen($response), 0);
             $this->SendDebug("Response Hex", bin2hex($response), 0);
@@ -156,14 +155,45 @@ class Goodwe extends IPSModule
         $data = unpack("n*", substr($response, 2));
         $value = 0;
     
-        if ($type === "U16") {
-            $value = $data[1] / $scale;
-        } elseif ($type === "U32") {
-            $value = ($data[1] << 16 | $data[2]) / $scale;
+        // Interpretation basierend auf Typ
+        switch ($type) {
+            case "U16":
+                $value = $data[1] / $scale;
+                break;
+            case "S16":
+                $value = $this->InterpretSigned16($data[1]) / $scale;
+                break;
+            case "U32":
+                $value = ($data[1] << 16 | $data[2]) / $scale;
+                break;
+            case "S32":
+                $value = $this->InterpretSigned32($data[1], $data[2]) / $scale;
+                break;
+            default:
+                $this->SendDebug("Error", "Unknown type for Register $register: $type", 0);
+                return 0;
         }
     
         $this->SendDebug("Parsed Value for Register $register", $value, 0);
         return $value;
     }
+  
+    private function InterpretSigned16(int $value): int
+    {
+        if ($value & 0x8000) { // Prüfen, ob Vorzeichenbit gesetzt ist
+            return -((~$value & 0xFFFF) + 1); // Zweierkomplement berechnen
+        }
+        return $value;
+    }
+
+    private function InterpretSigned32(int $highWord, int $lowWord): int
+    {
+        $unsignedValue = ($highWord << 16) | $lowWord;
+        if ($highWord & 0x8000) { // Prüfen, ob Vorzeichenbit gesetzt ist
+            return -((~$unsignedValue & 0xFFFFFFFF) + 1); // Zweierkomplement berechnen
+        }
+        return $unsignedValue;
+    }
+
     
 }
