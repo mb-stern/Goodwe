@@ -44,13 +44,14 @@ class Goodwe extends IPSModule
         $Volt = (unpack("n*", substr($Volt,2)));
         */
         
-        $Address = 36025;
+        $Address = 0;
         $Ampere = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
         $this->SendDebug("Prüfung", $Ampere, 0);
         if($Ampere === false)
             return;
         $Ampere = (unpack("n*", substr($Ampere,2)));
         
+        /*
         $Address = 0x12 + ($this->ReadPropertyInteger("Phase") - 1)*2;
         $Watt = $this->SendDataToParent(json_encode(Array("DataID" => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", "Function" => 3, "Address" => $Address , "Quantity" => 2, "Data" => "")));
         if($Watt === false)
@@ -62,6 +63,7 @@ class Goodwe extends IPSModule
         if($KWh === false)
             return;
         $KWh = (unpack("n*", substr($KWh,2)));
+        */
 
         if(IPS_GetProperty(IPS_GetInstance($this->InstanceID)['ConnectionID'], "SwapWords")) {
             SetValue($this->GetIDForIdent("Volt"), ($Volt[1] + ($Volt[2] << 16))/10);
