@@ -1,16 +1,16 @@
 {
     "elements": [
         {
+            "type": "Button",
+            "caption": "Reload Registers",
+            "onClick": "Goodwe_ReloadRegisters($id);"
+        },
+        {
             "type": "Select",
             "name": "SelectRegisters",
             "caption": "Select Registers",
             "options": [],
             "multiple": true
-        },
-        {
-            "type": "Button",
-            "caption": "Reload Registers",
-            "onClick": "Goodwe_ReloadRegisters($id);"
         }
     ]
 }
