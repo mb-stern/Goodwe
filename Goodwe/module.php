@@ -105,7 +105,6 @@ class Goodwe extends IPSModule
     public function ReloadRegisters()
     {
         $registers = $this->Registers();
-    
         $options = [];
         foreach ($registers as $register) {
             $options[] = [
@@ -114,6 +113,7 @@ class Goodwe extends IPSModule
             ];
         }
     
+        $this->SendDebug('Generated Options', json_encode($options), 0);
         $this->UpdateFormField('SelectRegisters', 'options', json_encode($options));
         $this->UpdateFormField('SelectRegisters', 'value', json_encode([]));
     }
