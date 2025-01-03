@@ -1,24 +1,22 @@
 {
     "elements": [
         {
-            "type": "List",
+            "type": "Button",
+            "caption": "Reload Registers",
+            "onClick": "Goodwe_ReloadRegisters($id);"
+        },
+        {
+            "type": "Select",
             "name": "SelectedRegisters",
-            "caption": "Registers",
-            "columns": [
-                { "caption": "Address", "name": "address", "width": "100px" },
-                { "caption": "Name", "name": "name", "width": "200px" }
+            "caption": "Select Registers",
+            "options": [
+                {
+                    "label": "No registers loaded",
+                    "value": "none"
+                }
             ],
-            "add": false,
-            "delete": false,
-            "edit": false,
-            "values": []
+            "multi": true
         }
     ],
-    "actions": [
-        {
-            "type": "Button",
-            "label": "Reload Registers",
-            "onClick": "Goodwe_ReloadRegisters($id);"
-        }
-    ]
+    "actions": []
 }

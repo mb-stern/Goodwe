@@ -21,31 +21,29 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Liste der ausgewählten Register laden
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        // Prüfen, ob Register ausgewählt wurden
-        if (!is_array($selectedRegisters) || empty($selectedRegisters)) {
-            $this->SendDebug("Error", "No registers selected.", 0);
-            return;
-        }
-
+    
+        // Ausgewählte Register aus den Eigenschaften abrufen
+        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+    
         // Variablen für die ausgewählten Register erstellen
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address']) || !isset($register['name'])) {
-                $this->SendDebug("Error", "Invalid register entry: " . json_encode($register), 0);
-                continue;
+        foreach ($this->Registers() as $register) {
+            if (in_array($register['address'], $selectedRegisters)) {
+                $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
+    
+                $this->RegisterVariableFloat(
+                    "Addr{$register['address']}",
+                    $register['name'],
+                    $profileInfo['profile'],
+                    0
+                );
+    
+                if ($register['action']) {
+                    $this->EnableAction("Addr{$register['address']}");
+                }
             }
-
-            $ident = "Addr" . $register['address'];
-            $this->RegisterVariableFloat($ident, $register['name'], "");
         }
-
-        // Timer-Intervall setzen
-        $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
-
+    
     public function RequestRead()
     {
         foreach ($this->Registers() as $register) {
@@ -106,16 +104,23 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = array_map(function ($register) {
-            return [
-                'address' => $register['address'],
-                'name'    => $register['name']
+        // Register aus der Funktion abrufen
+        $registers = $this->Registers();
+    
+        // Optionen für das Auswahlfeld vorbereiten
+        $options = [];
+        foreach ($registers as $register) {
+            $options[] = [
+                'label' => $register['name'] . " (Addr: {$register['address']})",
+                'value' => $register['address']
             ];
-        }, $this->Registers());
-
-        $this->UpdateFormField('SelectedRegisters', 'values', json_encode($registers));
+        }
+    
+        // Auswahlfeld aktualisieren
+        $this->UpdateFormField('SelectedRegisters', 'options', json_encode($options));
+        $this->UpdateFormField('SelectedRegisters', 'value', json_encode([])); // Standardmäßig leer
     }
-
+    
     private function Registers()
     {
         return [
