@@ -12,6 +12,8 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        $this->ReloadRegisters();
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
@@ -48,21 +50,19 @@ class Goodwe extends IPSModule
     
     public function SaveRegisters()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = $this->ReadPropertyString('SelectedRegisters');
+        $decodedRegisters = json_decode($selectedRegisters, true);
     
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
-        }
+        $this->SendDebug("SaveRegisters", "Selected: " . json_encode($decodedRegisters), 0);
     
-        $updatedRegisters = [];
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $updatedRegisters[] = $register;
-            }
-        }
+        // Filtere nur ausgewählte Register
+        $filteredRegisters = array_filter($decodedRegisters, fn($register) => $register['selected']);
     
-        $this->WritePropertyString("SelectedRegisters", json_encode($updatedRegisters));
-        $this->ApplyChanges(); // Variablen basierend auf Auswahl erstellen
+        // Speichere die ausgewählten Register als Property
+        IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($filteredRegisters));
+        IPS_ApplyChanges($this->InstanceID);
+    
+        $this->SendDebug("SaveRegisters", "Saved: " . json_encode($filteredRegisters), 0);
     }
     
     private function Registers()
