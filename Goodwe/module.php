@@ -12,7 +12,7 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->ReloadRegisters(); // Automatisches Laden der Register
 
         // Vorhandene Variablen entfernen
         foreach ($this->GetVariableList() as $variable) {
@@ -20,8 +20,9 @@ class Goodwe extends IPSModule
         }
 
         // Variablen für ausgewählte Register erstellen
-        foreach ($this->Registers() as $register) {
-            if (in_array($register['address'], array_column($selectedRegisters, 'address'))) {
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        foreach ($selectedRegisters as $register) {
+            if ($register['selected']) {
                 $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
                 $this->RegisterVariable($register, $profileInfo);
             }
@@ -38,11 +39,20 @@ class Goodwe extends IPSModule
                 "name" => $register['name'],
                 "type" => $register['type'],
                 "unit" => $register['unit'],
-                "scale" => $register['scale']
+                "scale" => $register['scale'],
+                "selected" => false // Standardmäßig nicht ausgewählt
             ];
         }
 
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
+    }
+
+    public function SaveRegisters()
+    {
+        $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($formValues));
+        $this->WritePropertyString("SelectedRegisters", json_encode($formValues));
+        $this->ApplyChanges(); // Variablen erstellen
     }
 
     private function Registers()
