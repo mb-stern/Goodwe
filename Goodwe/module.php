@@ -19,7 +19,7 @@ class Goodwe extends IPSModule
 
         // Bestehende Variablen entfernen
         foreach ($this->GetVariableList() as $variable) {
-            $this->UnregisterVariable($variable['Ident']);
+            $this->RemoveVariable($variable['Ident']);
         }
 
         // Neue Variablen erstellen
@@ -109,7 +109,7 @@ class Goodwe extends IPSModule
         return $variables;
     }
 
-    protected function UnregisterVariable(string $ident)
+    private function RemoveVariable(string $ident)
     {
         $variableID = @$this->GetIDForIdent($ident);
         if ($variableID) {
