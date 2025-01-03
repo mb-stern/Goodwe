@@ -117,7 +117,7 @@ class Goodwe extends IPSModule
             ["address" => 35201, "name" => "BatteryV", "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery voltage",                    "category" => "Batterie"],
             ["address" => 35202, "name" => "BatteryI", "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Battery current",                    "category" => "Batterie"],
             ["address" => 35174, "name" => "Air_Temperatur",   "type" => "S16", "unit" => "°C",  "scale" => 10,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "Temperatur",                "category" => "Wechselrichter"],
-            ["address" => 36025, "name" => "EVU_TOTAL",   "type" => "S32", "unit" => "W",  "scale" => 1,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "Leistung Smartmeter",                "category" => "Wechselrichter"]
+            ["address" => 36025, "name" => "EVU_TOTAL",   "type" => "S32", "unit" => "W",  "scale" => 1,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "Leistung Smartmeter",                "category" => "Smartmeter"]
         ];
     }
     
