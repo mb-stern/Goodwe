@@ -90,7 +90,7 @@ class Goodwe extends IPSModule
                     break;
                 default:
                     $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
-                    continue; // Springt zur nächsten Iteration der foreach-Schleife
+                    break; // Nur den Switch-Block verlassen
             }
     
             // Wert skalieren
@@ -102,8 +102,8 @@ class Goodwe extends IPSModule
             // Wert in die zugehörige Variable schreiben
             SetValue($this->GetIDForIdent("Addr" . $register['address']), $scaledValue);
         }
-    }    
-
+    }
+    
     public function ReloadRegisters()
     {
         $registers = array_map(function ($register) {
