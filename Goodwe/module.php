@@ -34,7 +34,7 @@ class Goodwe extends IPSModule
                 case VARIABLETYPE_FLOAT:
                     $this->RegisterVariableFloat(
                         $register['name'],
-                        $register['name'] . " (" . $register['unit'] . ")",
+                        $register['name'] . " (" . $register['address'] . ")",
                         $profileInfo['profile'],
                         0
                     );
@@ -43,7 +43,7 @@ class Goodwe extends IPSModule
                 case VARIABLETYPE_INTEGER:
                     $this->RegisterVariableInteger(
                         $register['name'],
-                        $register['name'] . " (" . $register['unit'] . ")",
+                        $register['name'] . " (" . $register['address'] . ")",
                         $profileInfo['profile'],
                         0
                     );
@@ -52,7 +52,7 @@ class Goodwe extends IPSModule
                 case VARIABLETYPE_STRING:
                     $this->RegisterVariableString(
                         $register['name'],
-                        $register['name'] . " (" . $register['unit'] . ")",
+                        $register['name'] . " (" . $register['address'] . ")",
                         $profileInfo['profile'],
                         0
                     );
@@ -61,7 +61,7 @@ class Goodwe extends IPSModule
                 case VARIABLETYPE_BOOLEAN:
                     $this->RegisterVariableBoolean(
                         $register['name'],
-                        $register['name'] . " (" . $register['unit'] . ")",
+                        $register['name'] . " (" . $register['address'] . ")",
                         $profileInfo['profile'],
                         0
                     );
@@ -105,7 +105,6 @@ class Goodwe extends IPSModule
     private function Registers()
     {
         return [
-            ["address" => 35100, "name" => "RTC",      "type" => "U16", "unit" => "N/A", "scale" => 1,   "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "Hbyte-year/Lbyte-month: 13-99/1-12", "category" => "Wechselrichter"],
             ["address" => 35103, "name" => "Vpv1",     "type" => "U16", "unit" => "V",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "PV1 voltage",                        "category" => "Wechselrichter"],
             ["address" => 35104, "name" => "Ipv1",     "type" => "U16", "unit" => "A",   "scale" => 10,  "quantity" => 1, "readOnly" => true, "action" => false, "remark" => "PV1 current",                        "category" => "Wechselrichter"],
             ["address" => 35191, "name" => "PV_E_Total",     "type" => "U32", "unit" => "kWh",   "scale" => 10,  "quantity" => 2, "readOnly" => true, "action" => false, "remark" => "PV1 Power",                          "category" => "Wechselrichter"],
