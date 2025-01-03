@@ -2,7 +2,7 @@
     "elements": [
         {
             "type": "List",
-            "name": "SelectedRegisters",
+            "name": "AvailableRegisters",
             "caption": "Verfügbare Register",
             "rowCount": 10,
             "add": false,
@@ -21,7 +21,7 @@
     "actions": [
         {
             "type": "Button",
-            "caption": "Reload Registers",
+            "caption": "Register neu laden",
             "onClick": "Goodwe_ReloadRegisters($id);"
         },
         {

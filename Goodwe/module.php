@@ -30,39 +30,47 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = $this->Registers();
+        // Beispielhafte Daten; ersetze dies mit dem tatsächlichen Abruf der Register
+        $registers = [
+            ["address" => "0x01", "name" => "Register 1", "type" => "INT", "unit" => "V", "scale" => "1"],
+            ["address" => "0x02", "name" => "Register 2", "type" => "FLOAT", "unit" => "A", "scale" => "0.1"],
+            // Weitere Register...
+        ];
     
+        // Aktuelle Auswahl aus den Modul-Properties laden
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true) ?? [];
+    
+        // Werte für die Liste vorbereiten
         $values = [];
         foreach ($registers as $register) {
-            $values[] = [
-                "address" => $register["address"],
-                "name" => $register["name"],
-                "type" => $register["type"],
-                "unit" => $register["unit"],
-                "scale" => $register["scale"],
-                "selected" => false
-            ];
+            $register['selected'] = in_array($register['address'], $selectedRegisters);
+            $values[] = $register;
         }
     
-        // Daten für das Formular aktualisieren
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
+        // Liste im Formular aktualisieren
+        $this->UpdateFormField("AvailableRegisters", "values", json_encode($values));
     }
     
     public function SaveRegisters()
     {
-        $selectedRegisters = $this->ReadPropertyString('SelectedRegisters');
-        $decodedRegisters = json_decode($selectedRegisters, true);
+        // Werte aus dem Formular lesen
+        $formData = json_decode($this->GetBuffer("FormData"), true);
+        $selectedRegisters = [];
     
-        $this->SendDebug("SaveRegisters", "Selected: " . json_encode($decodedRegisters), 0);
+        // Überprüfen, welche Register ausgewählt wurden
+        if (isset($formData['AvailableRegisters'])) {
+            foreach ($formData['AvailableRegisters'] as $register) {
+                if ($register['selected']) {
+                    $selectedRegisters[] = $register['address'];
+                }
+            }
+        }
     
-        // Filtere nur ausgewählte Register
-        $filteredRegisters = array_filter($decodedRegisters, fn($register) => $register['selected']);
+        // Ausgewählte Register in den Modul-Properties speichern
+        $this->WritePropertyString("SelectedRegisters", json_encode($selectedRegisters));
     
-        // Speichere die ausgewählten Register als Property
-        IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($filteredRegisters));
-        IPS_ApplyChanges($this->InstanceID);
-    
-        $this->SendDebug("SaveRegisters", "Saved: " . json_encode($filteredRegisters), 0);
+        // Änderungen anwenden
+        $this->ApplyChanges();
     }
     
     private function Registers()
