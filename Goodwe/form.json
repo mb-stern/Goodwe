@@ -1,25 +1,6 @@
 {
 	"elements": [
 		{
-			"name": "Phase",
-			"type": "Select",
-			"caption": "Phase",
-			"options": [
-				{
-					"label": "L1",
-					"value": 1
-				},
-				{
-					"label": "L2",
-					"value": 2
-				},
-				{
-					"label": "L3",
-					"value": 3
-				}
-			]
-		},
-		{
 			"name": "Poller",
 			"type": "IntervalBox",
 			"caption": "milliseconds"
@@ -28,8 +9,13 @@
 	"actions": [
 		{
 			"type": "Button",
-			"caption": "Read Values",
+			"caption": "Werte lesen",
 			"onClick": "Goodwe_RequestRead($id);"
+		},
+		{
+			"type": "Button",
+			"caption": "Änderungen anwenden",
+			"onClick": "Goodwe_ApplyChanges($id);"
 		}
 	]
 }
