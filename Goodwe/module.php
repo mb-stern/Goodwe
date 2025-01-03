@@ -4,13 +4,11 @@ class Goodwe extends IPSModule
 {
     public function __construct($InstanceID)
     {
-        //Never delete this line!
         parent::__construct($InstanceID);
     }
 
     public function Create()
     {
-        //Never delete this line!
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
