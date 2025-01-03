@@ -15,68 +15,66 @@ class Goodwe extends IPSModule
     public function ApplyChanges() 
     {
         parent::ApplyChanges();
-
+    
         // Variablen für jedes Register erstellen
         foreach ($this->Registers() as $register) {
-            $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
-
-            // Ident wird aus der Adresse generiert
             $ident = "Addr" . $register['address'];
-
-            // Prüfen, ob der Ident eindeutig ist
-            if ($this->GetIDForIdent($ident)) {
-                $this->SendDebug("Error", "Duplicate address detected: {$register['address']}", 0);
-                continue; // Überspringen, wenn doppelte Adresse
-            }
-
-            // Variable registrieren basierend auf Typ
-            switch ($profileInfo['type']) {
-                case VARIABLETYPE_FLOAT:
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'], // Frei definierbarer Name aus der Tabelle
-                        $profileInfo['profile'],
-                        0
-                    );
-                    break;
-
-                case VARIABLETYPE_INTEGER:
-                    $this->RegisterVariableInteger(
-                        $ident,
-                        $register['name'], // Frei definierbarer Name aus der Tabelle
-                        $profileInfo['profile'],
-                        0
-                    );
-                    break;
-
-                case VARIABLETYPE_STRING:
-                    $this->RegisterVariableString(
-                        $ident,
-                        $register['name'], // Frei definierbarer Name aus der Tabelle
-                        $profileInfo['profile'],
-                        0
-                    );
-                    break;
-
-                case VARIABLETYPE_BOOLEAN:
-                    $this->RegisterVariableBoolean(
-                        $ident,
-                        $register['name'], // Frei definierbarer Name aus der Tabelle
-                        $profileInfo['profile'],
-                        0
-                    );
-                    break;
-            }
-
-            // Falls Aktionen benötigt werden
-            if ($register['action']) {
-                $this->EnableAction($ident);
+    
+            // Prüfen, ob der Ident schon existiert
+            if (@$this->GetIDForIdent($ident) === false) {
+                $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
+    
+                // Variable registrieren basierend auf Typ
+                switch ($profileInfo['type']) {
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat(
+                            $ident,
+                            $register['name'], // Frei definierbarer Name aus der Tabelle
+                            $profileInfo['profile'],
+                            0
+                        );
+                        break;
+    
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger(
+                            $ident,
+                            $register['name'], // Frei definierbarer Name aus der Tabelle
+                            $profileInfo['profile'],
+                            0
+                        );
+                        break;
+    
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString(
+                            $ident,
+                            $register['name'], // Frei definierbarer Name aus der Tabelle
+                            $profileInfo['profile'],
+                            0
+                        );
+                        break;
+    
+                    case VARIABLETYPE_BOOLEAN:
+                        $this->RegisterVariableBoolean(
+                            $ident,
+                            $register['name'], // Frei definierbarer Name aus der Tabelle
+                            $profileInfo['profile'],
+                            0
+                        );
+                        break;
+                }
+    
+                // Falls Aktionen benötigt werden
+                if ($register['action']) {
+                    $this->EnableAction($ident);
+                }
+            } else {
+                $this->SendDebug("Info", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
-
+    
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
-
+    
     private function GetVariableProfile(string $unit, float $scale): array
     {
         switch ($unit) {
@@ -115,9 +113,11 @@ class Goodwe extends IPSModule
     public function RequestRead()
     {
         foreach ($this->Registers() as $register) {
+            $ident = "Addr" . $register['address'];
+    
             // Modbus-Anfrage senden
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-
+    
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
@@ -125,15 +125,17 @@ class Goodwe extends IPSModule
                 "Quantity" => $quantity,
                 "Data"     => ""
             ]));
-
+    
+            // Fehlerbehandlung
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                 $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
                 continue;
             }
-
+    
+            // Antwortdaten extrahieren
             $data = unpack("n*", substr($response, 2));
             $value = 0;
-
+    
             // Werte basierend auf Typ interpretieren
             switch ($register['type']) {
                 case "U16":
@@ -150,9 +152,19 @@ class Goodwe extends IPSModule
                     $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                     break;
             }
-
+    
             $scaledValue = $value / $register['scale'];
-            SetValue($this->GetIDForIdent("Addr" . $register['address']), $scaledValue);
+    
+            // Prüfen, ob Variable existiert, bevor der Wert geschrieben wird
+            $variableID = @$this->GetIDForIdent($ident);
+            if ($variableID === false) {
+                $this->SendDebug("Error", "Variable mit Ident $ident wurde nicht gefunden.", 0);
+                continue;
+            }
+    
+            SetValue($variableID, $scaledValue);
+            $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
         }
     }
+    
 }
