@@ -19,19 +19,22 @@ class Goodwe extends IPSModule
             $this->RemoveVariable($variable['Ident']);
         }
 
-        // Variablen für ausgewählte Register erstellen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        foreach ($selectedRegisters as $register) {
-            if ($register['selected']) {
-                $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
-                $this->RegisterVariable($register, $profileInfo);
-            }
-        }
+     // Variablen für ausgewählte Register erstellen
+     $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+     foreach ($selectedRegisters as $register) {
+         if (isset($register['selected']) && $register['selected']) {
+             $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
+             $this->RegisterVariable($register, $profileInfo);
+         }
+     }
     }
 
     public function ReloadRegisters()
     {
         $registers = $this->Registers();
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        // Standardmäßig alle Register initialisieren
         $options = [];
         foreach ($registers as $register) {
             $options[] = [
@@ -43,10 +46,19 @@ class Goodwe extends IPSModule
                 "selected" => false // Standardmäßig nicht ausgewählt
             ];
         }
-
+    
+        // Bereits gespeicherte Auswahl übernehmen
+        foreach ($options as &$option) {
+            foreach ($selectedRegisters as $selected) {
+                if ($option['address'] === $selected['address']) {
+                    $option['selected'] = $selected['selected'];
+                }
+            }
+        }
+    
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
     }
-
+    
     public function SaveRegisters()
     {
         $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
