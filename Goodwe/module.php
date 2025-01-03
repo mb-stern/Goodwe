@@ -106,30 +106,31 @@ class Goodwe extends IPSModule
     {
         $registers = $this->Registers();
     
+        // Optionen erstellen
         $options = [];
         foreach ($registers as $register) {
             $options[] = [
                 'label' => $register['name'] . " (Addr: {$register['address']})",
-                'value' => $register['address']
+                'value' => (string)$register['address'] // Adressen als String, um Typprobleme zu vermeiden
             ];
         }
     
-        // Debug-Ausgabe zur Kontrolle der Optionen
+        // Debug-Ausgabe zur Überprüfung der Optionen
         $this->SendDebug('Generated Options', json_encode($options), 0);
     
-        // Aktualisieren der Form-Felder
+        // Aktualisieren des Formulars
         $this->UpdateFormField('SelectRegisters', 'options', $options);
-        $this->UpdateFormField('SelectRegisters', 'value', []); // Zurücksetzen des Wertes
+        $this->UpdateFormField('SelectRegisters', 'value', []); // Leeren Wert als Array setzen
     }
     
     private function Registers()
     {
         return [
-            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10, "quantity" => 1],
-            ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10, "quantity" => 1],
-            ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10, "quantity" => 2],
-            ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10, "quantity" => 1],
-            ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1, "quantity" => 2]
+            ["address" => "35103", "name" => "PV1 Voltage",    "type" => "U16", "unit" => "V",   "scale" => 10, "quantity" => 1, "readOnly" => true, "action" => false],
+            ["address" => "35104", "name" => "PV1 Current",    "type" => "U16", "unit" => "A",   "scale" => 10, "quantity" => 1, "readOnly" => true, "action" => false],
+            ["address" => "35191", "name" => "Total PV Energy","type" => "U32", "unit" => "kWh", "scale" => 10, "quantity" => 2, "readOnly" => true, "action" => false],
+            ["address" => "35107", "name" => "PV2 Voltage",    "type" => "U16", "unit" => "V",   "scale" => 10, "quantity" => 1, "readOnly" => true, "action" => false],
+            ["address" => "36025", "name" => "Smartmeter Power","type" => "S32", "unit" => "W",  "scale" => 1,  "quantity" => 2, "readOnly" => true, "action" => false]
         ];
-    }
+    }    
 }
