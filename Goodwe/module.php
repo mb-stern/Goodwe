@@ -104,10 +104,8 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        // Register aus der Funktion abrufen
         $registers = $this->Registers();
     
-        // Optionen für das Auswahlfeld vorbereiten
         $options = [];
         foreach ($registers as $register) {
             $options[] = [
@@ -116,9 +114,8 @@ class Goodwe extends IPSModule
             ];
         }
     
-        // Auswahlfeld aktualisieren
-        $this->UpdateFormField('SelectedRegisters', 'options', json_encode($options));
-        $this->UpdateFormField('SelectedRegisters', 'value', json_encode([])); // Standardmäßig leer
+        $this->UpdateFormField('SelectRegisters', 'options', json_encode($options));
+        $this->UpdateFormField('SelectRegisters', 'value', json_encode([]));
     }
     
     private function Registers()

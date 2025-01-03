@@ -7,16 +7,10 @@
         },
         {
             "type": "Select",
-            "name": "SelectedRegisters",
+            "name": "SelectRegisters",
             "caption": "Select Registers",
-            "options": [
-                {
-                    "label": "No registers loaded",
-                    "value": "none"
-                }
-            ],
+            "options": [],
             "multi": true
         }
-    ],
-    "actions": []
+    ]
 }
