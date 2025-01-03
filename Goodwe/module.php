@@ -163,23 +163,5 @@ class Goodwe extends IPSModule
     
         return $value / $scale;
     }    
-  
-    private function InterpretSigned16(int $value): int
-    {
-        if ($value & 0x8000) { // Prüfen, ob Vorzeichenbit gesetzt ist
-            return -((~$value & 0xFFFF) + 1); // Zweierkomplement berechnen
-        }
-        return $value;
-    }
-
-    private function InterpretSigned32(int $highWord, int $lowWord): int
-    {
-        $unsignedValue = ($highWord << 16) | $lowWord;
-        if ($highWord & 0x8000) { // Prüfen, ob Vorzeichenbit gesetzt ist
-            return -((~$unsignedValue & 0xFFFFFFFF) + 1); // Zweierkomplement berechnen
-        }
-        return $unsignedValue;
-    }
-
     
 }
