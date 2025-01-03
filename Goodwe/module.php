@@ -109,7 +109,7 @@ class Goodwe extends IPSModule
         return $variables;
     }
 
-    private function UnregisterVariable(string $ident)
+    protected function UnregisterVariable(string $ident)
     {
         $variableID = @$this->GetIDForIdent($ident);
         if ($variableID) {
