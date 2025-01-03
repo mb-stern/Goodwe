@@ -125,44 +125,59 @@ class Goodwe extends IPSModule
     public function RequestRead()
     {
         foreach ($this->Registers() as $register) {
-            $value = $this->ReadRegister($register['address'], $register['type'], $register['scale']);
-            SetValue($this->GetIDForIdent($register['name']), $value);
+            // Modbus-Anfrage senden
+            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
+    
+            $response = $this->SendDataToParent(json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address"  => $register['address'],
+                "Quantity" => $quantity,
+                "Data"     => ""
+            ]));
+    
+            // Fehlerbehandlung
+            if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
+                continue;
+            }
+    
+            // Antwort debuggen
+            $this->SendDebug("Raw Response for Register {$register['address']}", bin2hex($response), 0);
+    
+            // Antwortdaten extrahieren
+            $data = unpack("n*", substr($response, 2));
+            $value = 0;
+    
+            // Werte basierend auf Typ interpretieren
+            switch ($register['type']) {
+                case "U16":
+                    $value = $data[1];
+                    break;
+                case "S16":
+                    $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                    break;
+                case "U32":
+                    $value = ($data[1] << 16) | $data[2];
+                    break;
+                case "S32":
+                    $combined = ($data[1] << 16) | $data[2];
+                    $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                    break;
+                default:
+                    $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
+                    continue;
+            }
+    
+            // Wert skalieren
+            $scaledValue = $value / $register['scale'];
+    
+            // Debugging des interpretierten Werts
+            $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
+    
+            // Wert in die zugehörige Variable schreiben
+            SetValue($this->GetIDForIdent($register['name']), $scaledValue);
         }
     }
-    
-    private function ReadRegister(int $address, string $type, float $scale)
-    {
-        $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
-    
-        $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $address,
-            "Quantity" => $quantity,
-            "Data"     => ""
-        ]));
-    
-        if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-            $this->SendDebug("Error", "No or incomplete response for Register $address", 0);
-            return 0;
-        }
-    
-        $this->SendDebug("Raw Response for Register $address", bin2hex($response), 0);
-        $data = unpack("n*", substr($response, 2));
-    
-        $value = 0;
-        if ($type === "U16") {
-            $value = $data[1];
-        } elseif ($type === "S16") {
-            $value = unpack("s", pack("n", $data[1]))[1]; // Umwandlung in SIGNED
-        } elseif ($type === "U32") {
-            $value = ($data[1] << 16) | $data[2];
-        } elseif ($type === "S32") {
-            $combined = ($data[1] << 16) | $data[2];
-            $value = unpack("l", pack("N", $combined))[1]; // SIGNED 32-Bit
-        }
-    
-        return $value / $scale;
-    }    
     
 }
