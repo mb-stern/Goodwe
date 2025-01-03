@@ -4,9 +4,7 @@ class Goodwe extends IPSModule
 {
     public function Create()
     {
-        // Never delete this line!
         parent::Create();
-
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyInteger("Poller", 0);
         $this->RegisterPropertyString("SelectedRegisters", json_encode([])); // Initial leer
@@ -15,10 +13,16 @@ class Goodwe extends IPSModule
 
     public function ApplyChanges()
     {
-        // Never delete this line!
         parent::ApplyChanges();
 
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
+        // Bestehende Variablen entfernen
+        foreach ($this->GetVariableList() as $variable) {
+            $this->UnregisterVariable($variable['Ident']);
+        }
+
+        // Neue Variablen erstellen
         foreach ($this->Registers() as $register) {
             if (in_array($register['address'], $selectedRegisters)) {
                 $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
@@ -39,9 +43,7 @@ class Goodwe extends IPSModule
             ];
         }
 
-        // Update the form
         $this->UpdateFormField("SelectRegisters", "options", json_encode($options));
-        $this->UpdateFormField("SelectRegisters", "value", json_encode([])); // Reset selection
     }
 
     private function Registers()
@@ -89,6 +91,29 @@ class Goodwe extends IPSModule
                     $profileInfo['profile']
                 );
                 break;
+        }
+    }
+
+    private function GetVariableList()
+    {
+        $variables = [];
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if ($object['ObjectType'] == 2) { // Nur Variablen berücksichtigen
+                $variables[] = [
+                    "ID" => $childID,
+                    "Ident" => $object['ObjectIdent']
+                ];
+            }
+        }
+        return $variables;
+    }
+
+    private function UnregisterVariable(string $ident)
+    {
+        $variableID = @$this->GetIDForIdent($ident);
+        if ($variableID) {
+            IPS_DeleteVariable($variableID);
         }
     }
 }
