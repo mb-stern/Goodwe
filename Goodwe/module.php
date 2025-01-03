@@ -129,56 +129,40 @@ class Goodwe extends IPSModule
         }
     }
     
-    private function ReadRegister(int $register, string $type, float $scale)
+    private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
     
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,           
-            "Address"  => $register,   
+            "Function" => 3,
+            "Address"  => $address,
             "Quantity" => $quantity,
             "Data"     => ""
         ]));
     
-        if ($response === false) {
-            $this->SendDebug("Error", "No response received for Register $register", 0);
+        if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+            $this->SendDebug("Error", "No or incomplete response for Register $address", 0);
             return 0;
         }
     
-        if (strlen($response) < (2 * $quantity + 2)) {
-            $this->SendDebug("Error", "Unexpected response length for Register $register: " . strlen($response), 0);
-            $this->SendDebug("Response Hex", bin2hex($response), 0);
-            return 0;
-        }
-    
-        $this->SendDebug("Raw Response for Register $register", bin2hex($response), 0);
-    
+        $this->SendDebug("Raw Response for Register $address", bin2hex($response), 0);
         $data = unpack("n*", substr($response, 2));
-        $value = 0;
     
-        // Interpretation basierend auf Typ
-        switch ($type) {
-            case "U16":
-                $value = $data[1] / $scale;
-                break;
-            case "S16":
-                $value = $this->InterpretSigned16($data[1]) / $scale;
-                break;
-            case "U32":
-                $value = ($data[1] << 16 | $data[2]) / $scale;
-                break;
-            case "S32":
-                $value = $this->InterpretSigned32($data[1], $data[2]) / $scale;
-                break;
-            default:
-                $this->SendDebug("Error", "Unknown type for Register $register: $type", 0);
-                return 0;
+        $value = 0;
+        if ($type === "U16") {
+            $value = $data[1];
+        } elseif ($type === "S16") {
+            $value = unpack("s", pack("n", $data[1]))[1]; // Umwandlung in SIGNED
+        } elseif ($type === "U32") {
+            $value = ($data[1] << 16) | $data[2];
+        } elseif ($type === "S32") {
+            $combined = ($data[1] << 16) | $data[2];
+            $value = unpack("l", pack("N", $combined))[1]; // SIGNED 32-Bit
         }
     
-        $this->SendDebug("Parsed Value for Register $register", $value, 0);
-        return $value;
-    }
+        return $value / $scale;
+    }    
   
     private function InterpretSigned16(int $value): int
     {
