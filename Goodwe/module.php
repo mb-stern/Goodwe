@@ -22,24 +22,19 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Ausgewählte Register aus den Eigenschaften abrufen
-        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+        // Lesen der ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true) ?? [];
     
-        // Variablen für die ausgewählten Register erstellen
+        // Variablen nur für die ausgewählten Register erstellen
         foreach ($this->Registers() as $register) {
             if (in_array($register['address'], $selectedRegisters)) {
                 $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
-    
                 $this->RegisterVariableFloat(
-                    "Addr{$register['address']}",
+                    "Addr" . $register['address'],
                     $register['name'],
                     $profileInfo['profile'],
                     0
                 );
-    
-                if ($register['action']) {
-                    $this->EnableAction("Addr{$register['address']}");
-                }
             }
         }
     }
@@ -111,16 +106,20 @@ class Goodwe extends IPSModule
         foreach ($registers as $register) {
             $options[] = [
                 'label' => $register['name'] . " (Addr: {$register['address']})",
-                'value' => (string)$register['address'] // Adressen als String, um Typprobleme zu vermeiden
+                'value' => (string)$register['address'] // Sicherstellen, dass die Adressen Strings sind
             ];
         }
     
-        // Debug-Ausgabe zur Überprüfung der Optionen
+        // Debugging der generierten Optionen
         $this->SendDebug('Generated Options', json_encode($options), 0);
     
-        // Aktualisieren des Formulars
-        $this->UpdateFormField('SelectRegisters', 'options', $options);
-        $this->UpdateFormField('SelectRegisters', 'value', []); // Leeren Wert als Array setzen
+        // Leeren Wert als leeres Array setzen, wenn nichts ausgewählt ist
+        $selectedValues = $this->ReadPropertyString('SelectedRegisters');
+        $selectedValues = json_decode($selectedValues, true) ?? []; // Sicherstellen, dass es ein Array ist
+    
+        // Formularfelder aktualisieren
+        $this->UpdateFormField('SelectRegisters', 'options', $options); // Optionen setzen
+        $this->UpdateFormField('SelectRegisters', 'value', $selectedValues); // Wert setzen
     }
     
     private function Registers()
