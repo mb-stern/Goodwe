@@ -1,33 +1,36 @@
 {
-    "elements": [
-        {
-            "type": "List",
-            "name": "SelectedRegisters",
-            "caption": "Verfügbare Register",
-            "rowCount": 10,
-            "add": false,
-            "delete": false,
-            "columns": [
-                { "caption": "Adresse", "name": "address", "width": "100px" },
-                { "caption": "Name", "name": "name", "width": "200px" },
-                { "caption": "Typ", "name": "type", "width": "80px" },
-                { "caption": "Einheit", "name": "unit", "width": "80px" },
-                { "caption": "Skalierung", "name": "scale", "width": "80px" },
-                { "caption": "Auswählen", "name": "selected", "width": "80px", "edit": "CheckBox" }
-            ],
-            "values": []
-        }
-    ],
-    "actions": [
-        {
-            "type": "Button",
-            "caption": "Register neu laden",
-            "onClick": "Goodwe_ReloadRegisters($id);"
-        },
-        {
-            "type": "Button",
-            "caption": "Änderungen speichern",
-            "onClick": "Goodwe_SaveRegisters($id);"
-        }
-    ]
+	"elements": [
+		{
+			"name": "Phase",
+			"type": "Select",
+			"caption": "Phase",
+			"options": [
+				{
+					"label": "L1",
+					"value": 1
+				},
+				{
+					"label": "L2",
+					"value": 2
+				},
+				{
+					"label": "L3",
+					"value": 3
+				}
+			]
+		},
+		{
+			"name": "Poller",
+			"type": "IntervalBox",
+			"caption": "milliseconds"
+		}
+	],
+	"actions": [
+		{
+			"type": "Button",
+			"caption": "Read Values",
+			"onClick": "Goodwe_RequestRead($id);"
+		}
+	]
 }
+  
