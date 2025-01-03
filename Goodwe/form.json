@@ -2,7 +2,7 @@
     "elements": [
         {
             "type": "List",
-            "name": "AvailableRegisters",
+            "name": "SelectedRegisters",
             "caption": "Verfügbare Register",
             "rowCount": 10,
             "add": false,
@@ -13,7 +13,7 @@
                 { "caption": "Typ", "name": "type", "width": "80px" },
                 { "caption": "Einheit", "name": "unit", "width": "80px" },
                 { "caption": "Skalierung", "name": "scale", "width": "80px" },
-                { "caption": "Auswählen", "name": "selected", "width": "80px", "edit": "CheckBox" }
+                { "caption": "Auswählen", "name": "selected", "width": "80px", "edit": "checkBox" }
             ],
             "values": []
         }

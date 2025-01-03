@@ -30,41 +30,38 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = $this->GetRegisters(); // Lade alle verfügbaren Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true) ?? [];
-    
+        $registers = $this->GetRegisters();
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
-                "address" => $register['address'],
-                "name" => $register['name'],
-                "type" => $register['type'],
-                "unit" => $register['unit'],
-                "scale" => $register['scale'],
-                "selected" => in_array($register['address'], $selectedRegisters) // Checkbox aktivieren, wenn ausgewählt
+                "address"  => $register["address"],
+                "name"     => $register["name"],
+                "type"     => $register["type"],
+                "unit"     => $register["unit"],
+                "scale"    => $register["scale"],
+                "selected" => false // Standardmäßig nicht ausgewählt
             ];
         }
-    
-        $this->UpdateFormField("AvailableRegisters", "values", json_encode($values));
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
     }
+    
     
     public function SaveRegisters()
     {
-        $formData = json_decode($this->GetBuffer("FormData"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        $selectedRegisters = [];
-        if (isset($formData['AvailableRegisters'])) {
-            foreach ($formData['AvailableRegisters'] as $register) {
-                if ($register['selected']) {
-                    $selectedRegisters[] = $register['address'];
-                }
+        foreach ($selectedRegisters as $register) {
+            if (isset($register["selected"]) && $register["selected"] === true) {
+                // Variable erstellen
+                $this->RegisterVariable(
+                    $register["address"],
+                    $register["name"],
+                    $register["unit"],
+                    $register["scale"]
+                );
             }
         }
-    
-        $this->WritePropertyString("SelectedRegisters", json_encode($selectedRegisters));
-        $this->ApplyChanges();
     }
-    
     
     private function GetRegisters()
     {
