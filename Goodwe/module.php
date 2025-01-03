@@ -30,34 +30,29 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        // Beispielhafte Daten; ersetze dies mit dem tatsächlichen Abruf der Register
-        $registers = [
-            ["address" => "0x01", "name" => "Register 1", "type" => "INT", "unit" => "V", "scale" => "1"],
-            ["address" => "0x02", "name" => "Register 2", "type" => "FLOAT", "unit" => "A", "scale" => "0.1"],
-            // Weitere Register...
-        ];
-    
-        // Aktuelle Auswahl aus den Modul-Properties laden
+        $registers = $this->GetRegisters(); // Lade alle verfügbaren Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true) ?? [];
     
-        // Werte für die Liste vorbereiten
         $values = [];
         foreach ($registers as $register) {
-            $register['selected'] = in_array($register['address'], $selectedRegisters);
-            $values[] = $register;
+            $values[] = [
+                "address" => $register['address'],
+                "name" => $register['name'],
+                "type" => $register['type'],
+                "unit" => $register['unit'],
+                "scale" => $register['scale'],
+                "selected" => in_array($register['address'], $selectedRegisters) // Checkbox aktivieren, wenn ausgewählt
+            ];
         }
     
-        // Liste im Formular aktualisieren
         $this->UpdateFormField("AvailableRegisters", "values", json_encode($values));
     }
     
     public function SaveRegisters()
     {
-        // Werte aus dem Formular lesen
         $formData = json_decode($this->GetBuffer("FormData"), true);
-        $selectedRegisters = [];
     
-        // Überprüfen, welche Register ausgewählt wurden
+        $selectedRegisters = [];
         if (isset($formData['AvailableRegisters'])) {
             foreach ($formData['AvailableRegisters'] as $register) {
                 if ($register['selected']) {
@@ -66,14 +61,12 @@ class Goodwe extends IPSModule
             }
         }
     
-        // Ausgewählte Register in den Modul-Properties speichern
         $this->WritePropertyString("SelectedRegisters", json_encode($selectedRegisters));
-    
-        // Änderungen anwenden
         $this->ApplyChanges();
     }
     
-    private function Registers()
+    
+    private function GetRegisters()
     {
         return [
             ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
@@ -83,6 +76,7 @@ class Goodwe extends IPSModule
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
         ];
     }
+    
 
     private function GetVariableProfile(string $unit, float $scale): array
     {
