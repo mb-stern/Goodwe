@@ -12,29 +12,25 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        $this->ReloadRegisters(); // Automatisches Laden der Register
-
-        // Vorhandene Variablen entfernen
-        foreach ($this->GetVariableList() as $variable) {
-            $this->RemoveVariable($variable['Ident']);
+    
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            return;
         }
-
-     // Variablen für ausgewählte Register erstellen
-     $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-     foreach ($selectedRegisters as $register) {
-         if (isset($register['selected']) && $register['selected']) {
-             $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
-             $this->RegisterVariable($register, $profileInfo);
-         }
-     }
+    
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
+                $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
+                $this->RegisterVariable($register, $profileInfo);
+            }
+        }
     }
-
+    
     public function ReloadRegisters()
     {
-        $registers = $this->Registers();
+        $registers = $this->Registers(); // Alle Register laden
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Standardmäßig alle Register initialisieren
         $options = [];
         foreach ($registers as $register) {
             $options[] = [
@@ -47,26 +43,41 @@ class Goodwe extends IPSModule
             ];
         }
     
-        // Bereits gespeicherte Auswahl übernehmen
+        // Überprüfen, welche Register bereits ausgewählt sind
         foreach ($options as &$option) {
             foreach ($selectedRegisters as $selected) {
-                if ($option['address'] === $selected['address']) {
-                    $option['selected'] = $selected['selected'];
+                if (isset($selected['address']) && $option['address'] === $selected['address']) {
+                    $option['selected'] = true;
                 }
             }
         }
+    
+        // Aktualisieren der Liste im Formular
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
+    }
     
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
     }
     
     public function SaveRegisters()
     {
-        $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($formValues));
-        $this->WritePropertyString("SelectedRegisters", json_encode($formValues));
-        $this->ApplyChanges(); // Variablen erstellen
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
+        }
+    
+        $updatedRegisters = [];
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
+                $updatedRegisters[] = $register;
+            }
+        }
+    
+        $this->WritePropertyString("SelectedRegisters", json_encode($updatedRegisters));
+        $this->ApplyChanges(); // Variablen basierend auf Auswahl erstellen
     }
-
+    
     private function Registers()
     {
         return [
