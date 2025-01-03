@@ -28,32 +28,22 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = $this->Registers(); // Alle Register laden
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $registers = $this->Registers();
     
-        $options = [];
+        $values = [];
         foreach ($registers as $register) {
-            $options[] = [
-                "address" => $register['address'],
-                "name" => $register['name'],
-                "type" => $register['type'],
-                "unit" => $register['unit'],
-                "scale" => $register['scale'],
-                "selected" => false // Standardmäßig nicht ausgewählt
+            $values[] = [
+                "address" => $register["address"],
+                "name" => $register["name"],
+                "type" => $register["type"],
+                "unit" => $register["unit"],
+                "scale" => $register["scale"],
+                "selected" => false
             ];
         }
     
-        // Überprüfen, welche Register bereits ausgewählt sind
-        foreach ($options as &$option) {
-            foreach ($selectedRegisters as $selected) {
-                if (isset($selected['address']) && $option['address'] === $selected['address']) {
-                    $option['selected'] = true;
-                }
-            }
-        }
-    
-        // Aktualisieren der Liste im Formular
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
+        // Daten für das Formular aktualisieren
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
     }
     
     public function SaveRegisters()
