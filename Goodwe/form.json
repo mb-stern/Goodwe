@@ -1,13 +1,24 @@
 {
     "elements": [
         {
-            "type": "SelectMultiple",
+            "type": "List",
             "name": "SelectedRegisters",
-            "caption": "Wählen Sie die Modbus-Register aus",
-            "options": [
-                { "caption": "PV1 Voltage (35103)", "value": { "address": 35103, "name": "PV1 Voltage", "type": "U16", "unit": "V", "scale": 10 } },
-                { "caption": "PV1 Current (35104)", "value": { "address": 35104, "name": "PV1 Current", "type": "U16", "unit": "A", "scale": 10 } }
-            ]
+            "caption": "Registers",
+            "columns": [
+                { "caption": "Address", "name": "address", "width": "100px" },
+                { "caption": "Name", "name": "name", "width": "200px" }
+            ],
+            "add": false,
+            "delete": false,
+            "edit": false,
+            "values": []
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "label": "Reload Registers",
+            "onClick": "Goodwe_ReloadRegisters($id);"
         }
     ]
 }

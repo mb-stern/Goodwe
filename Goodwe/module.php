@@ -1,13 +1,22 @@
 <?php
+
 class Goodwe extends IPSModule
 {
+    public function __construct($InstanceID)
+    {
+        //Never delete this line!
+        parent::__construct($InstanceID);
+    }
+
     public function Create()
     {
+        //Never delete this line!
         parent::Create();
+
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
+        $this->RegisterPropertyString("SelectedRegisters", "[]"); // Auswahl der Register
         $this->RegisterPropertyInteger("Poller", 0);
-        $this->RegisterPropertyInteger("Phase", 1);
-        $this->RegisterPropertyString("SelectedRegisters", "[]"); // JSON-Array für ausgewählte Register
+
         $this->RegisterTimer("Poller", 0, "Goodwe_RequestRead(\$_IPS['TARGET']);");
     }
 
@@ -15,42 +24,42 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
 
-        // Liste der ausgewählten Register
+        // Liste der ausgewählten Register laden
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-        // Alle Variablen löschen, die nicht mehr benötigt werden
-        foreach ($this->GetVariableList() as $variable) {
-            $ident = $variable['ObjectIdent'];
-            if (!in_array($ident, array_column($selectedRegisters, 'address'))) {
-                $this->UnregisterVariable($ident);
-            }
+        // Prüfen, ob Register ausgewählt wurden
+        if (!is_array($selectedRegisters) || empty($selectedRegisters)) {
+            $this->SendDebug("Error", "No registers selected.", 0);
+            return;
         }
 
-        // Variablen für ausgewählte Register erstellen
+        // Variablen für die ausgewählten Register erstellen
         foreach ($selectedRegisters as $register) {
-            $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
-            $ident = "Addr" . $register['address'];
-
-            // Variable registrieren
-            switch ($profileInfo['type']) {
-                case VARIABLETYPE_FLOAT:
-                    $this->RegisterVariableFloat($ident, $register['name'], $profileInfo['profile']);
-                    break;
-                case VARIABLETYPE_INTEGER:
-                    $this->RegisterVariableInteger($ident, $register['name'], $profileInfo['profile']);
-                    break;
+            if (!isset($register['address']) || !isset($register['name'])) {
+                $this->SendDebug("Error", "Invalid register entry: " . json_encode($register), 0);
+                continue;
             }
+
+            $ident = "Addr" . $register['address'];
+            $this->RegisterVariableFloat($ident, $register['name'], "");
         }
 
+        // Timer-Intervall setzen
         $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
 
     public function RequestRead()
     {
-        foreach ($this->Registers() as $register) {
-            // Modbus-Anfrage senden
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
+        foreach ($selectedRegisters as $register) {
+            if (!isset($register['address']) || !isset($register['name'])) {
+                $this->SendDebug("Error", "Invalid register entry in RequestRead: " . json_encode($register), 0);
+                continue;
+            }
+
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
+
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
@@ -58,18 +67,16 @@ class Goodwe extends IPSModule
                 "Quantity" => $quantity,
                 "Data"     => ""
             ]));
-    
-            // Fehlerbehandlung
+
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                 $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
                 continue;
             }
-    
-            // Antwortdaten extrahieren
+
+            $this->SendDebug("Raw Response for Register {$register['address']}", bin2hex($response), 0);
             $data = unpack("n*", substr($response, 2));
+
             $value = 0;
-    
-            // Werte basierend auf Typ interpretieren
             switch ($register['type']) {
                 case "U16":
                     $value = $data[1];
@@ -86,44 +93,36 @@ class Goodwe extends IPSModule
                     break;
                 default:
                     $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
-                    continue 2; // Gehe zur nächsten Iteration der foreach-Schleife
+                    continue;
             }
-    
-            // Wert skalieren
+
             $scaledValue = $value / $register['scale'];
-    
-            // Debugging des interpretierten Werts
             $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
-    
-            // Wert in die zugehörige Variable schreiben
+
             SetValue($this->GetIDForIdent("Addr" . $register['address']), $scaledValue);
         }
     }
-    
-    private function GetVariableProfile(string $unit, float $scale): array
+
+    public function ReloadRegisters()
     {
-        switch ($unit) {
-            case "V":
-                return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
-            case "A":
-                return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
-            case "W":
-                return ["profile" => "~Watt", "type" => VARIABLETYPE_FLOAT];
-            case "Hz":
-                return ["profile" => "~Hertz", "type" => VARIABLETYPE_FLOAT];
-            case "°C":
-                return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
-            case "kWh":
-                return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
-            case "%":
-                return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
-            default:
-                return ["profile" => "", "type" => VARIABLETYPE_FLOAT];
-        }
+        $registers = array_map(function ($register) {
+            return [
+                'address' => $register['address'],
+                'name'    => $register['name']
+            ];
+        }, $this->Registers());
+
+        $this->UpdateFormField('SelectedRegisters', 'values', json_encode($registers));
     }
 
-    private function GetVariableList()
+    private function Registers()
     {
-        return IPS_GetChildrenIDs($this->InstanceID);
+        return [
+            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10, "quantity" => 1],
+            ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10, "quantity" => 1],
+            ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10, "quantity" => 2],
+            ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10, "quantity" => 1],
+            ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1, "quantity" => 2]
+        ];
     }
 }
