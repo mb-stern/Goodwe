@@ -30,7 +30,7 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = $this->GetRegisters(); // Liste der verfügbaren Register
+        $registers = $this->GetRegisters();
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -39,7 +39,7 @@ class Goodwe extends IPSModule
                 "type"     => $register["type"],
                 "unit"     => $register["unit"],
                 "scale"    => $register["scale"],
-                "selected" => false // Standardmäßig nicht ausgewählt
+                "selected" => false // Checkbox standardmäßig auf false
             ];
         }
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
@@ -47,22 +47,17 @@ class Goodwe extends IPSModule
     
     public function SaveRegisters()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        if (!is_array($selectedRegisters)) {
+        if (!is_array($formValues)) {
             $this->SendDebug("Error", "Keine gültigen Daten in SelectedRegisters gefunden.", 0);
             return;
         }
     
-        foreach ($selectedRegisters as $register) {
-            if (isset($register["selected"]) && $register["selected"] === true) {
-                $this->SendDebug("Register", "Erstelle Variable für: " . $register["name"], 0);
-                $this->RegisterVariable(
-                    $register["address"],
-                    $register["name"],
-                    $register["unit"],
-                    $register["scale"]
-                );
+        foreach ($formValues as $register) {
+            if (isset($register["selected"]) && $register["selected"]) {
+                $this->SendDebug("Register", "Variable erstellen für: " . $register["name"], 0);
+                $this->RegisterVariable($register);
             }
         }
     }
@@ -78,7 +73,6 @@ class Goodwe extends IPSModule
         ];
     }
     
-
     private function GetVariableProfile(string $unit, float $scale): array
     {
         switch ($unit) {
@@ -95,15 +89,15 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function RegisterVariable($address, $name, $unit, $scale)
+    private function RegisterVariable(array $register)
     {
-        $ident = "Addr" . $address;
-        $profile = $this->GetVariableProfile($unit, $scale);
+        $ident = "Addr" . $register["address"];
+        $profile = $this->GetVariableProfile($register["unit"], $register["scale"]);
     
         if ($profile['type'] === VARIABLETYPE_FLOAT) {
-            $this->RegisterVariableFloat($ident, $name, $profile['profile'], 0);
+            $this->RegisterVariableFloat($ident, $register["name"], $profile['profile'], 0);
         } elseif ($profile['type'] === VARIABLETYPE_INTEGER) {
-            $this->RegisterVariableInteger($ident, $name, $profile['profile'], 0);
+            $this->RegisterVariableInteger($ident, $register["name"], $profile['profile'], 0);
         }
     }
     
