@@ -6,44 +6,43 @@ class Goodwe extends IPSModule
     {
         parent::Create();
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterPropertyInteger("Poller", 0);
-        $this->RegisterPropertyString("SelectedRegisters", json_encode([])); // Initial leer
-        $this->RegisterTimer("Poller", 0, "Goodwe_RequestRead(\$_IPS['TARGET']);");
+        $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-        // Bestehende Variablen entfernen
+        // Vorhandene Variablen entfernen
         foreach ($this->GetVariableList() as $variable) {
             $this->RemoveVariable($variable['Ident']);
         }
 
-        // Neue Variablen erstellen
+        // Variablen für ausgewählte Register erstellen
         foreach ($this->Registers() as $register) {
-            if (in_array($register['address'], $selectedRegisters)) {
+            if (in_array($register['address'], array_column($selectedRegisters, 'address'))) {
                 $profileInfo = $this->GetVariableProfile($register['unit'], $register['scale']);
                 $this->RegisterVariable($register, $profileInfo);
             }
         }
-
-        $this->SetTimerInterval("Poller", $this->ReadPropertyInteger("Poller"));
     }
 
     public function ReloadRegisters()
     {
+        $registers = $this->Registers();
         $options = [];
-        foreach ($this->Registers() as $register) {
+        foreach ($registers as $register) {
             $options[] = [
-                "label" => "{$register['name']} (Addr: {$register['address']})",
-                "value" => $register['address']
+                "address" => $register['address'],
+                "name" => $register['name'],
+                "type" => $register['type'],
+                "unit" => $register['unit'],
+                "scale" => $register['scale']
             ];
         }
 
-        $this->UpdateFormField("SelectRegisters", "options", json_encode($options));
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
     }
 
     private function Registers()
@@ -76,22 +75,11 @@ class Goodwe extends IPSModule
     private function RegisterVariable($register, $profileInfo)
     {
         $ident = "Addr" . $register['address'];
-        switch ($profileInfo['type']) {
-            case VARIABLETYPE_FLOAT:
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $profileInfo['profile']
-                );
-                break;
-            case VARIABLETYPE_INTEGER:
-                $this->RegisterVariableInteger(
-                    $ident,
-                    $register['name'],
-                    $profileInfo['profile']
-                );
-                break;
-        }
+        $this->RegisterVariableFloat(
+            $ident,
+            $register['name'],
+            $profileInfo['profile']
+        );
     }
 
     private function GetVariableList()
@@ -99,7 +87,7 @@ class Goodwe extends IPSModule
         $variables = [];
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] == 2) { // Nur Variablen berücksichtigen
+            if ($object['ObjectType'] == 2) { // Variablen
                 $variables[] = [
                     "ID" => $childID,
                     "Ident" => $object['ObjectIdent']

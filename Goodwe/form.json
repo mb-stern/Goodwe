@@ -1,16 +1,31 @@
 {
-    "elements": [
-        {
-            "type": "Button",
-            "caption": "Reload Registers",
-            "onClick": "Goodwe_ReloadRegisters($id);"
-        },
-        {
-            "type": "Select",
-            "name": "SelectRegisters",
-            "caption": "Select Registers",
-            "options": [],
-            "multiple": true
-        }
-    ]
-}
+	"elements": [
+	  {
+		"type": "ExpansionPanel",
+		"caption": "Register Auswahl",
+		"items": [
+		  {
+			"type": "List",
+			"name": "SelectedRegisters",
+			"caption": "Verfügbare Register",
+			"add": false,
+			"delete": false,
+			"columns": [
+			  { "caption": "Adresse", "name": "address", "width": "100px" },
+			  { "caption": "Name", "name": "name", "width": "200px" },
+			  { "caption": "Typ", "name": "type", "width": "80px" },
+			  { "caption": "Einheit", "name": "unit", "width": "80px" },
+			  { "caption": "Skalierung", "name": "scale", "width": "80px" }
+			],
+			"values": []
+		  },
+		  {
+			"type": "Button",
+			"caption": "Reload Registers",
+			"onClick": "Goodwe_ReloadRegisters($id);"
+		  }
+		]
+	  }
+	]
+  }
+  
