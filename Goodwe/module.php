@@ -56,9 +56,6 @@ class Goodwe extends IPSModule
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
     }
     
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($options));
-    }
-    
     public function SaveRegisters()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
