@@ -50,16 +50,10 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address']) || !isset($register['name'])) {
-                $this->SendDebug("Error", "Invalid register entry in RequestRead: " . json_encode($register), 0);
-                continue;
-            }
-
+        foreach ($this->Registers() as $register) {
+            // Modbus-Anfrage senden
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-
+    
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
@@ -67,16 +61,21 @@ class Goodwe extends IPSModule
                 "Quantity" => $quantity,
                 "Data"     => ""
             ]));
-
+    
+            // Fehlerbehandlung
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                 $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
-                continue;
+                continue; // Verbleibt in der foreach-Schleife
             }
-
+    
+            // Antwort debuggen
             $this->SendDebug("Raw Response for Register {$register['address']}", bin2hex($response), 0);
+    
+            // Antwortdaten extrahieren
             $data = unpack("n*", substr($response, 2));
-
             $value = 0;
+    
+            // Werte basierend auf Typ interpretieren
             switch ($register['type']) {
                 case "U16":
                     $value = $data[1];
@@ -93,15 +92,19 @@ class Goodwe extends IPSModule
                     break;
                 default:
                     $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
-                    continue;
+                    continue; // Springt zur nächsten Iteration der foreach-Schleife
             }
-
+    
+            // Wert skalieren
             $scaledValue = $value / $register['scale'];
+    
+            // Debugging des interpretierten Werts
             $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
-
+    
+            // Wert in die zugehörige Variable schreiben
             SetValue($this->GetIDForIdent("Addr" . $register['address']), $scaledValue);
         }
-    }
+    }    
 
     public function ReloadRegisters()
     {
