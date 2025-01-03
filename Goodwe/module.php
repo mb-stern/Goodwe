@@ -30,7 +30,7 @@ class Goodwe extends IPSModule
     
     public function ReloadRegisters()
     {
-        $registers = $this->GetRegisters();
+        $registers = $this->GetRegisters(); // Liste der verfügbaren Register
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -45,14 +45,18 @@ class Goodwe extends IPSModule
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
     }
     
-    
     public function SaveRegisters()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "Keine gültigen Daten in SelectedRegisters gefunden.", 0);
+            return;
+        }
+    
         foreach ($selectedRegisters as $register) {
             if (isset($register["selected"]) && $register["selected"] === true) {
-                // Variable erstellen
+                $this->SendDebug("Register", "Erstelle Variable für: " . $register["name"], 0);
                 $this->RegisterVariable(
                     $register["address"],
                     $register["name"],
@@ -91,16 +95,18 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function RegisterVariable($register, $profileInfo)
+    private function RegisterVariable($address, $name, $unit, $scale)
     {
-        $ident = "Addr" . $register['address'];
-        $this->RegisterVariableFloat(
-            $ident,
-            $register['name'],
-            $profileInfo['profile']
-        );
+        $ident = "Addr" . $address;
+        $profile = $this->GetVariableProfile($unit, $scale);
+    
+        if ($profile['type'] === VARIABLETYPE_FLOAT) {
+            $this->RegisterVariableFloat($ident, $name, $profile['profile'], 0);
+        } elseif ($profile['type'] === VARIABLETYPE_INTEGER) {
+            $this->RegisterVariableInteger($ident, $name, $profile['profile'], 0);
+        }
     }
-
+    
     private function GetVariableList()
     {
         $variables = [];
