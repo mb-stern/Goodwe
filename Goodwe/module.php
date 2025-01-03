@@ -121,7 +121,6 @@ class Goodwe extends IPSModule
         ];
     }
     
-
     public function RequestRead()
     {
         foreach ($this->Registers() as $register) {
@@ -139,7 +138,7 @@ class Goodwe extends IPSModule
             // Fehlerbehandlung
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                 $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
-                continue;
+                continue; // Verbleibt in der foreach-Schleife
             }
     
             // Antwort debuggen
@@ -166,7 +165,7 @@ class Goodwe extends IPSModule
                     break;
                 default:
                     $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
-                    continue;
+                    continue 2; // Überspringt zur nächsten Iteration der foreach-Schleife
             }
     
             // Wert skalieren
