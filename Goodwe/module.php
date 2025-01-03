@@ -47,26 +47,29 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        foreach ($selectedRegisters as $register) {
+        foreach ($this->Registers() as $register) {
+            // Modbus-Anfrage senden
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-
+    
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
                 "Address"  => $register['address'],
-                "Quantity" => $quantity
+                "Quantity" => $quantity,
+                "Data"     => ""
             ]));
-
+    
+            // Fehlerbehandlung
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                 $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
                 continue;
             }
-
+    
+            // Antwortdaten extrahieren
             $data = unpack("n*", substr($response, 2));
             $value = 0;
-
+    
+            // Werte basierend auf Typ interpretieren
             switch ($register['type']) {
                 case "U16":
                     $value = $data[1];
@@ -82,14 +85,21 @@ class Goodwe extends IPSModule
                     $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                     break;
                 default:
-                    continue;
+                    $this->SendDebug("Error", "Unknown type for Register {$register['address']}: {$register['type']}", 0);
+                    continue 2; // Gehe zur nächsten Iteration der foreach-Schleife
             }
-
+    
+            // Wert skalieren
             $scaledValue = $value / $register['scale'];
+    
+            // Debugging des interpretierten Werts
+            $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
+    
+            // Wert in die zugehörige Variable schreiben
             SetValue($this->GetIDForIdent("Addr" . $register['address']), $scaledValue);
         }
     }
-
+    
     private function GetVariableProfile(string $unit, float $scale): array
     {
         switch ($unit) {
