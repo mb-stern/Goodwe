@@ -1,36 +1,13 @@
 {
-	"elements": [
-		{
-			"name": "Phase",
-			"type": "Select",
-			"caption": "Phase",
-			"options": [
-				{
-					"label": "L1",
-					"value": 1
-				},
-				{
-					"label": "L2",
-					"value": 2
-				},
-				{
-					"label": "L3",
-					"value": 3
-				}
-			]
-		},
-		{
-			"name": "Poller",
-			"type": "IntervalBox",
-			"caption": "milliseconds"
-		}
-	],
-	"actions": [
-		{
-			"type": "Button",
-			"caption": "Read Values",
-			"onClick": "Goodwe_RequestRead($id);"
-		}
-	]
+    "elements": [
+        {
+            "type": "SelectMultiple",
+            "name": "SelectedRegisters",
+            "caption": "Wählen Sie die Modbus-Register aus",
+            "options": [
+                { "caption": "PV1 Voltage (35103)", "value": { "address": 35103, "name": "PV1 Voltage", "type": "U16", "unit": "V", "scale": 10 } },
+                { "caption": "PV1 Current (35104)", "value": { "address": 35104, "name": "PV1 Current", "type": "U16", "unit": "A", "scale": 10 } }
+            ]
+        }
+    ]
 }
-  
