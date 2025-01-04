@@ -11,6 +11,7 @@ class Goodwe extends IPSModule
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterAttributeString("SelectedRegisters", "[]");
 
+        // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
@@ -18,9 +19,10 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
 
+        // Register automatisch laden
         $this->LoadRegisters();
 
-        // Variablen basierend auf den ausgewählten Registern erstellen
+        // Variablen basierend auf Auswahl erstellen
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
 
         foreach ($selectedRegisters as $register) {
@@ -37,6 +39,52 @@ class Goodwe extends IPSModule
                 }
             }
         }
+    }
+
+    public function GetConfigurationForm()
+    {
+        $registers = $this->GetRegisters();
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
+
+        $values = [];
+        foreach ($registers as $register) {
+            $values[] = [
+                "address"  => $register['address'],
+                "name"     => $register['name'],
+                "type"     => $register['type'],
+                "unit"     => $register['unit'],
+                "scale"    => $register['scale'],
+                "selected" => $existingSelection[$register['address']] ?? false
+            ];
+        }
+
+        return json_encode([
+            "elements" => [
+                [
+                    "type"     => "List",
+                    "name"     => "SelectedRegisters",
+                    "caption"  => "Verfügbare Register",
+                    "rowCount" => 10,
+                    "add"      => false,
+                    "delete"   => false,
+                    "columns"  => [
+                        ["caption" => "Adresse", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Typ", "name" => "type", "width" => "80px"],
+                        ["caption" => "Einheit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Skalierung", "name" => "scale", "width" => "80px"],
+                        [
+                            "caption" => "Auswählen",
+                            "name"    => "selected",
+                            "width"   => "80px",
+                            "edit"    => ["type" => "CheckBox"]
+                        ]
+                    ],
+                    "values" => $values
+                ]
+            ]
+        ]);
     }
 
     public function RequestRead()
