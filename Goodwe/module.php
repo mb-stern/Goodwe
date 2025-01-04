@@ -81,19 +81,29 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
         $values = [];
         foreach ($registers as $register) {
-            // Erstelle das values-Array und füge Debug-Infos hinzu
-            $entry = [
+            $isSelected = false;
+        
+            // Prüfe, ob die Adresse in den gespeicherten Werten existiert und markiert ist
+            foreach ($selectedRegisters as $selectedRegister) {
+                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                    $isSelected = true;
+                    break;
+                }
+            }
+        
+            $values[] = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => in_array($register['address'], $selectedAddresses)
+                "selected" => $isSelected
             ];
+        
             $this->SendDebug("GetConfigurationForm: Entry", json_encode($entry), 0);
             $values[] = $entry;
         }
