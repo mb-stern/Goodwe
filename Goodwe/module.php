@@ -38,6 +38,7 @@ class Goodwe extends IPSModule
                     return $register;
                 }
             }
+            return null;
             if ($register === null) {
                 $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: " . json_encode($registerAddress), 0);
                 continue;
@@ -56,6 +57,17 @@ class Goodwe extends IPSModule
             }
         }
     }
+
+    private function FindRegisterByAddress(int $address)
+    {
+        foreach ($this->GetRegisters() as $register) {
+            if ($register['address'] === $address) {
+                return $register;
+            }
+        }
+        return null;
+    }
+
     
     public function RequestRead()
     {
