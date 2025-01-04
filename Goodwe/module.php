@@ -28,28 +28,30 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Zeige den Inhalt von SelectedRegisters
+        // Debugging: Zeige die gespeicherten Register
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         if (empty($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges: Issue", "SelectedRegisters ist leer!", 0);
-        } else {
-            foreach ($selectedRegisters as $register) {
-                if (!isset($register['address'], $register['selected']) || !$register['selected']) {
-                    continue;
-                }
+            $this->SendDebug("ApplyChanges: Issue", "Keine ausgewählten Register!", 0);
+            return;
+        }
     
-                $ident = "Addr" . $register['address'];
+        foreach ($selectedRegisters as $register) {
+            // Prüfen, ob die notwendigen Informationen vorhanden sind
+            if (!isset($register['address'], $register['selected']) || !$register['selected']) {
+                continue;
+            }
     
-                // Variable erstellen, falls nicht vorhanden
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        "Register " . $register['address'],
-                        "",
-                        0
-                    );
-                }
+            $ident = "Addr" . $register['address'];
+    
+            // Variable erstellen, falls nicht vorhanden
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    "Register " . $register['address'],
+                    "",
+                    0
+                );
             }
         }
     }
@@ -57,7 +59,7 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         $values = [];
         foreach ($registers as $register) {
@@ -67,7 +69,8 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => in_array($register['address'], $selectedAddresses)
+                "selected" => in_array($register['address'], array_column($selectedRegisters, 'address')) &&
+                              ($selectedRegisters[array_search($register['address'], array_column($selectedRegisters, 'address'))]['selected'] ?? false)
             ];
         }
     
@@ -85,13 +88,7 @@ class Goodwe extends IPSModule
                         ["caption" => "Type", "name" => "type", "width" => "80px"],
                         ["caption" => "Unit", "name" => "unit", "width" => "80px"],
                         ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                        [
-                            "caption" => "Selected", 
-                            "name" => "selected", 
-                            "width" => "80px", 
-                            "edit" => ["type" => "CheckBox"],
-                            "onChange" => "IPS_RequestAction(\$_IPS['INSTANCE'], 'SelectedRegisters', \$SelectedRegisters);"
-                        ]
+                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
                     ],
                     "values" => $values
                 ]
@@ -102,17 +99,26 @@ class Goodwe extends IPSModule
     public function RequestAction($ident, $value)
     {
         if ($ident === 'SelectedRegisters') {
-            // Debug: Zeige die eingehenden Daten
+            // Debug: Eingehende Daten aus dem Formular anzeigen
             $this->SendDebug("RequestAction: Raw Input", json_encode($value), 0);
-
-            // Speichere die Daten direkt in der Eigenschaft
+    
+            // Überprüfen, ob Werte gültig sind
+            if (!is_array($value)) {
+                $this->SendDebug("RequestAction: Error", "Ungültige Eingabedaten", 0);
+                return;
+            }
+    
+            // Speichere die gesamte Struktur in der Eigenschaft
             $this->WritePropertyString("SelectedRegisters", json_encode($value));
-
+    
+            // Debug: Gespeicherte Struktur ausgeben
+            $this->SendDebug("RequestAction: Saved Registers", json_encode($value), 0);
+    
             // Wende die Änderungen an
             $this->ApplyChanges();
         }
     }
-
+    
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
