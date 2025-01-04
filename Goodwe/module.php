@@ -26,83 +26,69 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
+        // Debug: Zeige den aktuellen Stand von SelectedRegisters
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Debugging: Zeige die gespeicherten Register
-        $this->SendDebug("ApplyChanges: SelectedRegisters (raw)", json_encode($selectedRegisters), 0);
-    
-        // Überprüfen, ob die Struktur korrekt ist
+        // Prüfen, ob die Struktur gültig ist
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . json_encode($selectedRegisters), 0);
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste.", 0);
             return;
         }
     
-        // Lade alle verfügbaren Register
-        $allRegisters = $this->GetRegisters();
-    
-        foreach ($allRegisters as $register) {
-            $this->SendDebug("ApplyChanges: Register", json_encode($register), 0);
-    
-            // Verarbeite nur die Register, die ausgewählt wurden
-            $isSelected = false;
-            foreach ($selectedRegisters as $selected) {
-                if (!isset($selected['address'])) {
-                    $this->SendDebug("Error", "Ein Eintrag in SelectedRegisters hat keine 'address': " . json_encode($selected), 0);
-                    continue;
-                }
-    
-                if ($selected['address'] === $register['address'] && $selected['selected'] === true) {
-                    $isSelected = true;
-                    break;
-                }
+        // Überprüfe jedes Register
+        foreach ($selectedRegisters as $register) {
+            if (!isset($register['address'])) {
+                $this->SendDebug("Error", "Register ohne 'address': " . json_encode($register), 0);
+                continue;
             }
     
-            if ($isSelected) {
-                // Validiere, ob alle notwendigen Felder vorhanden sind
-                if (!isset($register['address'], $register['name'], $register['unit'])) {
-                    $this->SendDebug("ApplyChanges: Missing Data", json_encode($register), 0);
-                    continue;
-                }
+            $this->SendDebug("ApplyChanges: Processing Register", json_encode($register), 0);
     
-                $ident = "Addr" . $register['address'];
+            // Variablen-Ident erstellen
+            $ident = "Addr" . $register['address'];
     
-                // Erstelle die Variable, falls sie noch nicht existiert
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                    $this->SendDebug("ApplyChanges: Variable Created", $ident, 0);
-                }
+            // Prüfen und erstellen
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'] ?? "Unknown",
+                    $this->GetVariableProfile($register['unit'] ?? ""),
+                    0
+                );
+                $this->SendDebug("ApplyChanges: Variable Created", $ident, 0);
             }
         }
     }
     
+    public function RequestAction($ident, $value)
+    {
+        if ($ident === 'SaveRegisters') {
+            $this->SendDebug("RequestAction: SaveRegisters", json_encode($value), 0);
+
+            // Speichere die Werte in die Property
+            $this->WritePropertyString("SelectedRegisters", json_encode($value));
+
+            // Übernehme die Änderungen
+            $this->ApplyChanges();
+        }
+    }
+
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true) ?? [];
+        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
     
-        // Alle Register mit den gespeicherten Auswahlzuständen kombinieren
         $values = [];
         foreach ($registers as $register) {
-            $selected = false;
-            foreach ($selectedRegisters as $selectedRegister) {
-                if ($selectedRegister['address'] === $register['address']) {
-                    $selected = $selectedRegister['selected'];
-                    break;
-                }
-            }
-    
             $values[] = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $selected
+                "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
     
@@ -127,15 +113,14 @@ class Goodwe extends IPSModule
             ],
             "actions" => [
                 [
-                    "type" => "Button",
+                    "type"    => "Button",
                     "caption" => "Speichern",
-                    "onClick" => "IPS_RequestAction(\$_IPS['TARGET'], 'SaveRegisters', json_encode(\$_IPS['values']['SelectedRegisters']));"
+                    "onClick" => 'IPS_RequestAction($_IPS["TARGET"], "SaveRegisters", json_encode($SelectedRegisters));'
                 ]
             ]
         ]);
     }
     
- 
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
