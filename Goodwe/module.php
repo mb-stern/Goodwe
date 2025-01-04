@@ -35,7 +35,7 @@ class Goodwe extends IPSModule
         foreach ($selectedRegisters as $registerAddress) {
             $register = $this->FindRegisterByAddress((int)$registerAddress);
             if ($register === null) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: $registerAddress", 0);
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: " . json_encode($registerAddress), 0);
                 continue;
             }
     
@@ -54,14 +54,14 @@ class Goodwe extends IPSModule
     }
 
     private function FindRegisterByAddress(int $address)
-{
-    foreach ($this->GetRegisters() as $register) {
-        if ($register['address'] === $address) {
-            return $register;
+    {
+        foreach ($this->GetRegisters() as $register) {
+            if ($register['address'] === $address) {
+                return $register;
+            }
         }
+        return null;
     }
-    return null;
-}
 
     
     public function RequestRead()
