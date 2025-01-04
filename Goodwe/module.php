@@ -26,10 +26,9 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten ausgewählten Adressen
+        // Lade die gespeicherten Adressen
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Zeige die Adressen an
         $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
     
         // Lade alle verfügbaren Register
@@ -52,6 +51,20 @@ class Goodwe extends IPSModule
         }
     }
     
+    public function RequestAction($ident, $value)
+    {
+        if ($ident === 'SelectedRegisters') {
+            // Extrahiere nur Adressen der ausgewählten Einträge
+            $selectedAddresses = array_column(array_filter($value, fn($reg) => $reg['selected']), 'address');
+
+            $this->SendDebug("RequestAction: Saving Addresses", json_encode($selectedAddresses), 0);
+            $this->WritePropertyString("SelectedRegisters", json_encode($selectedAddresses));
+
+            // ApplyChanges aufrufen, um Änderungen zu übernehmen
+            $this->ApplyChanges();
+        }
+    }
+
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
