@@ -52,7 +52,7 @@ class Goodwe extends IPSModule
         $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
     
         $registers = $this->GetRegisters();
-        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
+        $this->SendDebug("Registers", json_encode($registers), 0);
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
@@ -60,16 +60,24 @@ class Goodwe extends IPSModule
             $selectedRegisters = [];
         }
     
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
+        $this->SendDebug("SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
     
-        // Synchronisiere bestehende Register mit ausgewählten
+        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
+        $this->SendDebug("ExistingSelection", json_encode($existingSelection), 0);
+    
         $values = [];
         foreach ($registers as $register) {
-            $existingSelection = current(array_filter($selectedRegisters, fn($r) => $r['address'] === $register['address'])) ?? ['selected' => false];
-            $register['selected'] = $existingSelection['selected'];
-            $values[] = $register;
+            $entry = [
+                "address"  => $register['address'] ?? 0, // Fallback für fehlende Werte
+                "name"     => $register['name'] ?? "Unknown",
+                "type"     => $register['type'] ?? "U16",
+                "unit"     => $register['unit'] ?? "N/A",
+                "scale"    => $register['scale'] ?? 1,
+                "selected" => $existingSelection[$register['address']] ?? false
+            ];
+            $values[] = $entry;
     
-            $this->SendDebug("GetConfigurationForm: Register Entry", json_encode($register), 0);
+            $this->SendDebug("Register Entry", json_encode($entry), 0);
         }
     
         $form = [
@@ -93,10 +101,11 @@ class Goodwe extends IPSModule
             ]
         ];
     
-        $this->SendDebug("GetConfigurationForm: Form Output", json_encode($form), 0);
+        $this->SendDebug("Form Output", json_encode($form), 0);
     
         return json_encode($form);
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
