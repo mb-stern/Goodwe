@@ -20,7 +20,7 @@ class Goodwe extends IPSModule
         parent::ApplyChanges();
     
         // Änderungen der ausgewählten Register erfassen
-        $values = $this->GetFormField("SelectedRegisters", "values");
+        $values = $this->ReadAttributeString("SelectedRegisters", "values");
         if ($values !== null) {
             $this->WriteAttributeString("SelectedRegisters", json_encode($values));
         }
