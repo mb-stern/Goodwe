@@ -22,37 +22,14 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register aus der Property
+        // Debug: Aktuellen Zustand der Eigenschaft anzeigen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
-            return;
-        }
-    
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (!isset($selectedRegister['address'])) {
-                $this->SendDebug("Error", "Kein address-Schlüssel gefunden: " . json_encode($selectedRegister), 0);
-                continue;
-            }
-    
-            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
-                continue;
-            }
-    
-            if ($selectedRegister['selected']) {
-                $ident = "Addr" . $register['address'];
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+        // Prüfen, ob alle erforderlichen Felder vorhanden sind
+        foreach ($selectedRegisters as &$register) {
+            if (!isset($register['address'])) {
+                $this->SendDebug("Error", "Kein address-Schlüssel gefunden: " . json_encode($register), 0);
             }
         }
     }
