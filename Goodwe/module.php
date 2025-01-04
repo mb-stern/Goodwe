@@ -22,54 +22,28 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Eingelesene ausgewählte Register
+        // Debug: Zeige die gespeicherten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debug: Zeige den Inhalt von SelectedRegisters
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste!", 0);
-            return;
-        }
-    
-        // Verarbeite die Register
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
-                $this->SendDebug("Error", "Unvollständiger Registereintrag: " . json_encode($register), 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $register['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
-            }
-        }
-    }
-    
-    
-    public function RequestRead()
-    {
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("RequestRead: SelectedAddresses", json_encode($selectedAddresses), 0);
-
-        foreach ($selectedAddresses as $address) {
-            $register = $this->GetRegisterByAddress($address);
+        $allRegisters = $this->GetRegisters();
+        foreach ($selectedRegisters as $selectedRegister) {
+            $register = $this->FindRegisterByAddress($selectedRegister['address']);
             if (!$register) {
-                $this->SendDebug("RequestRead", "Register mit Adresse $address nicht gefunden", 0);
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
                 continue;
             }
-
-            $value = $this->ReadRegister((int)$register['address'], $register['type'], (float)$register['scale']);
-            $ident = "Addr" . $register['address'];
-
-            if ($this->GetIDForIdent($ident)) {
-                SetValue($this->GetIDForIdent($ident), $value);
+    
+            if ($selectedRegister['selected']) {
+                $ident = "Addr" . $register['address'];
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
     }
