@@ -114,10 +114,11 @@ class Goodwe extends IPSModule
             // Debug: Gespeicherte Struktur ausgeben
             $this->SendDebug("RequestAction: Saved Registers", json_encode($value), 0);
     
-            // Wende die Änderungen an
+            // Übernehme Änderungen
             $this->ApplyChanges();
         }
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
