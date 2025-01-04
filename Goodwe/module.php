@@ -22,26 +22,30 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        
-        $this->LoadRegisters();
     
         // Ausgewählte Register aus der Property lesen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Variablen erstellen basierend auf der Auswahl
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $ident = "Addr" . $register['address'];
+        // Debugging einfügen
+        $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
     
-                // Variable erstellen, falls sie nicht existiert
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+        foreach ($selectedRegisters as $register) {
+            // Sicherstellen, dass alle benötigten Keys vorhanden sind
+            if (!isset($register['address'], $register['name'], $register['unit'])) {
+                $this->SendDebug("Error", "Register fehlt ein notwendiger Key: " . json_encode($register), 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+    
+            // Variable erstellen, falls sie nicht existiert
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     
@@ -79,12 +83,12 @@ class Goodwe extends IPSModule
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
-                "address"  => $register['address'],
-                "name"     => $register['name'],
-                "type"     => $register['type'],
-                "unit"     => $register['unit'],
-                "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false // Standardmäßig nicht ausgewählt
+                "address"  => $register['address'] ?? 0, // Fallback für fehlende Werte
+                "name"     => $register['name'] ?? "Unknown",
+                "type"     => $register['type'] ?? "U16",
+                "unit"     => $register['unit'] ?? "N/A",
+                "scale"    => $register['scale'] ?? 1,
+                "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
     
@@ -94,7 +98,7 @@ class Goodwe extends IPSModule
         // Auswahl speichern
         $this->WriteAttributeString("SelectedRegisters", json_encode($values));
     }
-
+    
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
