@@ -9,10 +9,8 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterAttributeString("SelectedRegisters", "[]");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-
-        // Timer zur zyklischen Abfrage
+        $this->RegisterAttributeString("SavedRegisters", "[]");
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
@@ -20,47 +18,15 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
 
-        // Debug: Zeigt die aktuellen Attribute und Properties
-        $this->SendDebug("ApplyChanges", "Current SelectedRegisters: " . $this->ReadAttributeString("SelectedRegisters"), 0);
-        $this->SendDebug("ApplyChanges", "Form Property SelectedRegisters: " . $this->ReadPropertyString("SelectedRegisters"), 0);
-
-        $this->SyncSelectedRegisters();
-        $this->CreateVariablesFromSelection();
+        // Lädt alle Register und synchronisiert Auswahl
         $this->LoadRegisters();
-    }
 
-    private function SyncSelectedRegisters()
-    {
-        $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $registers = $this->GetRegisters();
-        $updatedRegisters = [];
-
-        $this->SendDebug("SyncSelectedRegisters", "Form Values: " . json_encode($formValues), 0);
-
-        foreach ($registers as $register) {
-            $updatedRegister = $register;
-            $updatedRegister['selected'] = false; // Standardmäßig nicht ausgewählt
-            foreach ($formValues as $formValue) {
-                if (isset($formValue['address']) && $formValue['address'] == $register['address']) {
-                    $updatedRegister['selected'] = $formValue['selected'];
-                }
-            }
-            $updatedRegisters[] = $updatedRegister;
-        }
-
-        $this->SendDebug("SyncSelectedRegisters", "Updated Registers: " . json_encode($updatedRegisters), 0);
-        $this->WriteAttributeString("SelectedRegisters", json_encode($updatedRegisters));
-    }
-
-    private function CreateVariablesFromSelection()
-    {
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
-
+        // Verarbeitet die ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadAttributeString("SavedRegisters"), true);
         foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
+            if ($register['selected'] ?? false) {
                 $ident = "Addr" . $register['address'];
                 if (!$this->GetIDForIdent($ident)) {
-                    $this->SendDebug("CreateVariablesFromSelection", "Creating variable for: " . json_encode($register), 0);
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
@@ -72,26 +38,33 @@ class Goodwe extends IPSModule
         }
     }
 
+    public function RequestAction($Ident, $Value)
+    {
+        $this->SetValue($Ident, $Value);
+    }
+
     private function LoadRegisters()
     {
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
-        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
+        $allRegisters = $this->GetRegisters();
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-        $values = [];
-        foreach ($registers as $register) {
-            $values[] = [
-                "address"  => $register['address'],
-                "name"     => $register['name'],
-                "type"     => $register['type'],
-                "unit"     => $register['unit'],
-                "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false
+        // Synchronisiere Auswahl mit existierenden Attributen
+        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
+        $updatedRegisters = [];
+        foreach ($allRegisters as $register) {
+            $updatedRegisters[] = [
+                'address'  => $register['address'],
+                'name'     => $register['name'],
+                'type'     => $register['type'],
+                'unit'     => $register['unit'],
+                'scale'    => $register['scale'],
+                'selected' => $existingSelection[$register['address']] ?? false
             ];
         }
 
-        $this->SendDebug("LoadRegisters", "Loaded Registers: " . json_encode($values), 0);
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
+        // Speichere aktualisierte Register
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($updatedRegisters));
+        $this->WriteAttributeString("SavedRegisters", json_encode($updatedRegisters));
     }
 
     private function GetRegisters()
