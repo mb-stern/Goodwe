@@ -29,15 +29,16 @@ class Goodwe extends IPSModule
         // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Zeige den Inhalt von SelectedRegisters an
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            return;
+        }
+    
+        // Debugging: Zeige den Inhalt von SelectedRegisters
         $this->SendDebug("ApplyChanges: Raw SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Prozessierte Register für spätere Nutzung speichern
-        $processedRegisters = [];
-    
         foreach ($selectedRegisters as $register) {
-            // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
-            $this->SendDebug("ApplyChanges: Current Register", json_encode($register), 0);
+            // Prüfen, ob die erforderlichen Schlüssel vorhanden sind
             if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
                 $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
                 continue;
@@ -53,15 +54,11 @@ class Goodwe extends IPSModule
                     $this->GetVariableProfile($register['unit']),
                     0
                 );
-                $this->SendDebug("Variable Created", "Ident: $ident, Name: " . $register['name'], 0);
+                $this->SendDebug("ApplyChanges", "Variable erstellt: " . $register['name'], 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable existiert bereits: " . $register['name'], 0);
             }
-    
-            $processedRegisters[] = $register;
         }
-    
-        // Speichere die Auswahl in einem Attribut
-        $this->WriteAttributeString("ProcessedRegisters", json_encode($processedRegisters));
-        $this->SendDebug("ProcessedRegisters", json_encode($processedRegisters), 0);
     }
     
     public function GetConfigurationForm()
@@ -79,12 +76,7 @@ class Goodwe extends IPSModule
     
         $this->SendDebug("SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
     
-        $existingSelection = [];
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (isset($selectedRegister['address'])) {
-                $existingSelection[$selectedRegister['address']] = $selectedRegister['selected'] ?? false;
-            }
-        }
+        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
         $this->SendDebug("ExistingSelection", json_encode($existingSelection), 0);
     
         $values = [];
