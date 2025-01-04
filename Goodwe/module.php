@@ -29,7 +29,7 @@ class Goodwe extends IPSModule
         // Lade die gespeicherten Adressen
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debug-Ausgabe
+        // Debug: Zeige die gespeicherten Adressen
         $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
     
         // Lade alle verfügbaren Register
@@ -56,13 +56,16 @@ class Goodwe extends IPSModule
     public function RequestAction($ident, $value)
     {
         if ($ident === 'SelectedRegisters') {
-            // Filtere die ausgewählten Register und extrahiere nur die Adressen
+            // Debug: Zeige den Input des Formulars
+            $this->SendDebug("RequestAction: Raw Input", json_encode($value), 0);
+    
+            // Filtere nur die ausgewählten Register und extrahiere deren Adressen
             $selectedAddresses = array_column(array_filter($value, fn($reg) => isset($reg['selected']) && $reg['selected']), 'address');
     
-            // Debug-Ausgabe
-            $this->SendDebug("RequestAction: Saving Addresses", json_encode($selectedAddresses), 0);
+            // Debug: Zeige die gefilterten Adressen
+            $this->SendDebug("RequestAction: Filtered Addresses", json_encode($selectedAddresses), 0);
     
-            // Speichere nur die Adressen
+            // Speichere die Adressen
             $this->WritePropertyString("SelectedRegisters", json_encode($selectedAddresses));
     
             // Übernehme Änderungen
@@ -70,7 +73,6 @@ class Goodwe extends IPSModule
         }
     }
     
-
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
