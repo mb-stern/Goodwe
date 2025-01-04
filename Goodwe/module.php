@@ -18,18 +18,21 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Register automatisch laden und persistente Auswahl beibehalten
-        $this->LoadRegisters();
-
-        // Variablen basierend auf Auswahl erstellen
+    
+        // Änderungen der ausgewählten Register erfassen
+        $values = $this->GetFormField("SelectedRegisters", "values");
+        if ($values !== null) {
+            $this->WriteAttributeString("SelectedRegisters", json_encode($values));
+        }
+    
+        // Variablen erstellen basierend auf Auswahl
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         foreach ($selectedRegisters as $register) {
-            if (!empty($register['selected']) && $register['selected']) {
+            if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
-
+    
                 // Variable erstellen, falls sie nicht existiert
-                if (!@$this->GetIDForIdent($ident)) {
+                if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
@@ -40,6 +43,7 @@ class Goodwe extends IPSModule
             }
         }
     }
+    
 
     public function RequestAction($ident, $value)
     {
