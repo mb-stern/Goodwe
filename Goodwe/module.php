@@ -104,7 +104,7 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $isSelected
+                "selected" => $register['selected'],
             ];
     
             // Debug: Zeige jeden Eintrag an
