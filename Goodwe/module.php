@@ -19,18 +19,17 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Register automatisch laden
-        $this->LoadRegisters();
-    
-        // Variablen erstellen basierend auf Auswahl
+
+        // Aktuelle Auswahl aus dem Formular übernehmen
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+
+        // Variablen erstellen basierend auf Auswahl
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
-    
+
                 // Variable erstellen, falls sie nicht existiert
-                if (!$this->GetIDForIdent($ident)) {
+                if (!@$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
@@ -41,10 +40,10 @@ class Goodwe extends IPSModule
             }
         }
     }
-    
+
     public function RequestRead()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
 
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
@@ -63,7 +62,7 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters(); // Holt alle verfügbaren Register
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-    
+
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -72,17 +71,14 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false // Standardmäßig nicht ausgewählt
+                "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
-    
-        // Formularfeld aktualisieren
-        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
-    
+
         // Auswahl speichern
         $this->WriteAttributeString("SelectedRegisters", json_encode($values));
     }
-    
+
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
