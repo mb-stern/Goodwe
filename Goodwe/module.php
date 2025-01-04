@@ -23,23 +23,38 @@ class Goodwe extends IPSModule
         parent::ApplyChanges();
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $ident = "Addr" . $register['address'];
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges: Fehler", "SelectedRegisters ist kein gültiges Array", 0);
+            return;
+        }
     
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+        foreach ($selectedRegisters as $register) {
+            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected'])) {
+                $this->SendDebug("ApplyChanges: Fehler", "Fehlende Schlüssel im Register: " . json_encode($register), 0);
+                continue;
+            }
+    
+            if (!$register['selected']) {
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+    
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
