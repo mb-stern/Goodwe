@@ -21,7 +21,7 @@ class Goodwe extends IPSModule
         parent::ApplyChanges();
 
         // Lade die gespeicherten ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
 
         // Debugging: Zeige den Inhalt von SelectedRegisters an
         $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
