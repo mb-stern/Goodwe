@@ -27,15 +27,13 @@ class Goodwe extends IPSModule
         $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
     
         foreach ($selectedRegisters as $register) {
-            // Prüfen, ob die erforderlichen Schlüssel vorhanden sind
-            if (
-                !isset($register['address']) || 
-                !isset($register['name']) || 
-                !isset($register['unit']) || 
-                !isset($register['selected']) || 
-                !$register['selected']
-            ) {
+            // Prüfe, ob alle benötigten Schlüssel existieren
+            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected'])) {
                 $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
+                continue;
+            }
+    
+            if (!$register['selected']) {
                 continue;
             }
     
@@ -72,10 +70,10 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
-        $registers = $this->GetRegisters(); // Holt alle verfügbaren Register
+        $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-
+    
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -87,7 +85,7 @@ class Goodwe extends IPSModule
                 "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
-
+    
         return json_encode([
             "elements" => [
                 [
@@ -109,7 +107,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
-
+    
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
