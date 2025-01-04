@@ -85,6 +85,7 @@ class Goodwe extends IPSModule
                     "caption" => "Register",
                     "add"   => false,
                     "delete" => false,
+                    "onChange" => "IPS_ApplyChanges(\$_IPS['INSTANCE']);",
                     "columns" => [
                         ["caption" => "Address", "name" => "address", "width" => "100px"],
                         ["caption" => "Name", "name" => "name", "width" => "200px"],
