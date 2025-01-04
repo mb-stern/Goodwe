@@ -22,13 +22,22 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Debug: Zeige die gespeicherten Register
+        // Lese die ausgewählten Register aus der Property
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        $allRegisters = $this->GetRegisters();
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            return;
+        }
+    
         foreach ($selectedRegisters as $selectedRegister) {
-            $register = $this->FindRegisterByAddress($selectedRegister['address']);
+            if (!isset($selectedRegister['address'])) {
+                $this->SendDebug("Error", "Kein address-Schlüssel gefunden: " . json_encode($selectedRegister), 0);
+                continue;
+            }
+    
+            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
             if (!$register) {
                 $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
                 continue;
@@ -47,18 +56,23 @@ class Goodwe extends IPSModule
             }
         }
     }
+    
 
-    private function FindRegisterByAddress(int $address)
+    private function FindRegisterByAddress($address)
     {
+        if (!is_int($address)) {
+            $this->SendDebug("Error", "FindRegisterByAddress erwartet int, erhielt: " . json_encode($address), 0);
+            return null;
+        }
+    
         foreach ($this->GetRegisters() as $register) {
             if ($register['address'] === $address) {
                 return $register;
             }
         }
-        return null; // Falls das Register nicht gefunden wird
+        return null;
     }
-
-
+    
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
@@ -149,16 +163,6 @@ class Goodwe extends IPSModule
         }
 
         return $value / $scale;
-    }
-
-    private function GetRegisterByAddress(int $address)
-    {
-        foreach ($this->GetRegisters() as $register) {
-            if ($register['address'] === $address) {
-                return $register;
-            }
-        }
-        return null;
     }
 
     private function GetRegisters()
