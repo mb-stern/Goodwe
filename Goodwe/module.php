@@ -26,39 +26,33 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debug: Zeige die gespeicherten Register
+        // Debugging: Zeige den Inhalt von SelectedRegisters
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Extrahiere die Adressen der ausgewählten Register
-        $selectedAddresses = array_column(array_filter($selectedRegisters, fn($reg) => isset($reg['selected']) && $reg['selected']), 'address');
+        if (empty($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges: Issue", "SelectedRegisters ist leer!", 0);
+        } else {
+            foreach ($selectedRegisters as $register) {
+                if (!isset($register['address'], $register['selected']) || !$register['selected']) {
+                    continue;
+                }
     
-        // Debug: Zeige die gefilterten Adressen
-        $this->SendDebug("ApplyChanges: Filtered Addresses", json_encode($selectedAddresses), 0);
-    
-        // Lade alle verfügbaren Register
-        $allRegisters = $this->GetRegisters();
-    
-        foreach ($allRegisters as $register) {
-            // Verarbeite nur die ausgewählten Adressen
-            if (in_array($register['address'], $selectedAddresses)) {
                 $ident = "Addr" . $register['address'];
     
-                // Prüfen, ob die Variable existiert, und falls nicht, erstellen
+                // Variable erstellen, falls nicht vorhanden
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
+                        "Register " . $register['address'],
+                        "",
                         0
                     );
-                    $this->SendDebug("ApplyChanges: Variable Created", "Variable for {$register['address']} created.", 0);
                 }
             }
         }
-    }    
+    }
     
     public function GetConfigurationForm()
     {
@@ -85,14 +79,19 @@ class Goodwe extends IPSModule
                     "caption" => "Register",
                     "add"   => false,
                     "delete" => false,
-                    "onChange" => "IPS_ApplyChanges(\$_IPS['INSTANCE']);",
                     "columns" => [
                         ["caption" => "Address", "name" => "address", "width" => "100px"],
                         ["caption" => "Name", "name" => "name", "width" => "200px"],
                         ["caption" => "Type", "name" => "type", "width" => "80px"],
                         ["caption" => "Unit", "name" => "unit", "width" => "80px"],
                         ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
+                        [
+                            "caption" => "Selected", 
+                            "name" => "selected", 
+                            "width" => "80px", 
+                            "edit" => ["type" => "CheckBox"],
+                            "onChange" => "IPS_RequestAction(\$_IPS['INSTANCE'], 'SelectedRegisters', \$SelectedRegisters);"
+                        ]
                     ],
                     "values" => $values
                 ]
@@ -100,6 +99,20 @@ class Goodwe extends IPSModule
         ]);
     }
     
+    public function RequestAction($ident, $value)
+    {
+        if ($ident === 'SelectedRegisters') {
+            // Debug: Zeige die eingehenden Daten
+            $this->SendDebug("RequestAction: Raw Input", json_encode($value), 0);
+
+            // Speichere die Daten direkt in der Eigenschaft
+            $this->WritePropertyString("SelectedRegisters", json_encode($value));
+
+            // Wende die Änderungen an
+            $this->ApplyChanges();
+        }
+    }
+
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
