@@ -120,6 +120,7 @@ class Goodwe extends IPSModule
             ]
         ];
         $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
+        $this->SendDebug("Values Array", json_encode($values), 0);
     
         return json_encode($form);
     }
