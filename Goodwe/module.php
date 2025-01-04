@@ -19,14 +19,10 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Änderungen der ausgewählten Register erfassen
-        $values = $this->GetFormField("SelectedRegisters", "values");
-        if ($values !== null) {
-            $this->WriteAttributeString("SelectedRegisters", json_encode($values));
-        }
-    
-        // Variablen erstellen basierend auf Auswahl
+        // Aktuelle Auswahl der Register laden
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+    
+        // Variablen erstellen basierend auf der Auswahl
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
@@ -42,9 +38,11 @@ class Goodwe extends IPSModule
                 }
             }
         }
+    
+        // Die Registerliste wird in der UI geladen
+        $this->LoadRegisters();
     }
     
-
     public function RequestAction($ident, $value)
     {
         // Änderungen in den Checkboxen in der Liste verarbeiten
