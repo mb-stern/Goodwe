@@ -66,7 +66,7 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters(); // Holt alle verfügbaren Register
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
 
         $values = [];
