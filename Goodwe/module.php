@@ -6,80 +6,73 @@ class Goodwe extends IPSModule
 {
     public function Create()
     {
-        // Never delete this line!
         parent::Create();
-    
-        // Verknüpfe mit dem übergeordneten Modbus-Gateway
+
+        // Verknüpfe mit dem Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-    
+
         // Eigenschaft für die ausgewählten Register
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-    
-        // Attribut für die verarbeiteten Register
-        $this->RegisterAttributeString("ProcessedRegisters", "[]");
-    
+
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
-    
+
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Debug: Zeige den aktuellen Stand von SelectedRegisters
+
+        // Lade die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
+        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        // Prüfen, ob die Struktur gültig ist
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste.", 0);
-            return;
-        }
-    
-        // Überprüfe jedes Register
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address'])) {
-                $this->SendDebug("Error", "Register ohne 'address': " . json_encode($register), 0);
-                continue;
-            }
-    
-            $this->SendDebug("ApplyChanges: Processing Register", json_encode($register), 0);
-    
-            // Variablen-Ident erstellen
-            $ident = "Addr" . $register['address'];
-    
-            // Prüfen und erstellen
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'] ?? "Unknown",
-                    $this->GetVariableProfile($register['unit'] ?? ""),
-                    0
-                );
-                $this->SendDebug("ApplyChanges: Variable Created", $ident, 0);
+
+        // Lade alle verfügbaren Register
+        $allRegisters = $this->GetRegisters();
+
+        foreach ($allRegisters as $register) {
+            if (in_array($register['address'], $selectedRegisters)) {
+                $ident = "Addr" . $register['address'];
+
+                // Falls Variable noch nicht existiert, erstellen
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
     }
-    
-    public function RequestAction($ident, $value)
+
+    public function RequestRead()
     {
-        if ($ident === 'SaveRegisters') {
-            $this->SendDebug("RequestAction: SaveRegisters", json_encode($value), 0);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-            // Speichere die Werte in die Property
-            $this->WritePropertyString("SelectedRegisters", json_encode($value));
+        foreach ($selectedRegisters as $address) {
+            $register = $this->FindRegisterByAddress($address);
+            if (!$register) {
+                $this->SendDebug("RequestRead", "Register mit Adresse $address nicht gefunden", 0);
+                continue;
+            }
 
-            // Übernehme die Änderungen
-            $this->ApplyChanges();
+            $value = $this->ReadRegister((int)$register['address'], $register['type'], (float)$register['scale']);
+            $ident = "Addr" . $register['address'];
+
+            if ($this->GetIDForIdent($ident)) {
+                SetValue($this->GetIDForIdent($ident), $value);
+            }
         }
     }
 
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true) ?? [];
-        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-    
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -88,10 +81,10 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false
+                "selected" => in_array($register['address'], $selectedRegisters)
             ];
         }
-    
+
         return json_encode([
             "elements" => [
                 [
@@ -110,17 +103,10 @@ class Goodwe extends IPSModule
                     ],
                     "values" => $values
                 ]
-            ],
-            "actions" => [
-                [
-                    "type"    => "Button",
-                    "caption" => "Speichern",
-                    "onClick" => 'IPS_RequestAction($_IPS["TARGET"], "SaveRegisters", json_encode($SelectedRegisters));'
-                ]
             ]
         ]);
     }
-    
+
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
@@ -172,6 +158,16 @@ class Goodwe extends IPSModule
         ];
     }
 
+    private function FindRegisterByAddress(int $address)
+    {
+        foreach ($this->GetRegisters() as $register) {
+            if ($register['address'] === $address) {
+                return $register;
+            }
+        }
+        return null;
+    }
+
     private function GetVariableProfile(string $unit)
     {
         switch ($unit) {
@@ -184,7 +180,7 @@ class Goodwe extends IPSModule
             case "kWh":
                 return "~Electricity";
             default:
-                return ""; // Rückgabe eines Standardwerts, falls die Einheit nicht bekannt ist
+                return ""; // Fallback
         }
     }
 }
