@@ -106,8 +106,9 @@ class Goodwe extends IPSModule
                     
                 ]
             ]
+            $this->SendDebug("GetConfigurationForm", "Ausgabe $values ...", 0);
         ]);
-        $this->SendDebug("GetConfigurationForm", "Ausgabe $values ...", 0);
+        
     }
 
     private function ReadRegister(int $address, string $type, float $scale)
