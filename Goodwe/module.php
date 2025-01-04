@@ -73,7 +73,7 @@ class Goodwe extends IPSModule
     {
         $registers = $this->GetRegisters();
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
+    
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -85,7 +85,11 @@ class Goodwe extends IPSModule
                 "selected" => in_array($register['address'], $selectedAddresses)
             ];
         }
-
+    
+        // Debugging: Ausgabe der Werte
+        $this->SendDebug("GetConfigurationForm", "Values: " . json_encode($values), 0);
+    
+        // Rückgabe des Formulars
         return json_encode([
             "elements" => [
                 [
@@ -103,13 +107,11 @@ class Goodwe extends IPSModule
                         ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
                     ],
                     "values" => $values
-                    
                 ]
             ]
-            $this->SendDebug("GetConfigurationForm", "Ausgabe $values ...", 0);
         ]);
-        
     }
+    
 
     private function ReadRegister(int $address, string $type, float $scale)
     {
