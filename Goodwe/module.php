@@ -20,17 +20,16 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Register automatisch laden
-        $this->LoadRegisters();
+        // Aktuelle Auswahl aus dem Formular übernehmen
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
     
         // Variablen erstellen basierend auf Auswahl
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
     
                 // Variable erstellen, falls sie nicht existiert
-                if (!$this->GetIDForIdent($ident)) {
+                if (!@$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
@@ -72,7 +71,7 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false // Standardmäßig nicht ausgewählt
+                "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
     
