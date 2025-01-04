@@ -26,48 +26,39 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten Adressen
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Lade die gespeicherten ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debug: Zeige die gespeicherten Adressen
-        $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
+        // Debug: Zeige die gespeicherten Register
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Überprüfe, ob die Datenstruktur korrekt ist
-        if (is_array($selectedAddresses)) {
-            $this->SendDebug("ApplyChanges: SelectedAddresses is an array", "", 0);
-        } else {
-            $this->SendDebug("ApplyChanges: SelectedAddresses is NOT an array", "", 0);
-        }
+        // Extrahiere die Adressen der ausgewählten Register
+        $selectedAddresses = array_column(array_filter($selectedRegisters, fn($reg) => isset($reg['selected']) && $reg['selected']), 'address');
+    
+        // Debug: Zeige die gefilterten Adressen
+        $this->SendDebug("ApplyChanges: Filtered Addresses", json_encode($selectedAddresses), 0);
     
         // Lade alle verfügbaren Register
         $allRegisters = $this->GetRegisters();
     
         foreach ($allRegisters as $register) {
-            // Debug: Zeige die aktuelle Registeradresse
-            $this->SendDebug("ApplyChanges: Checking register address", $register['address'], 0);
-    
             // Verarbeite nur die ausgewählten Adressen
             if (in_array($register['address'], $selectedAddresses)) {
-                $this->SendDebug("ApplyChanges: Register address is selected", $register['address'], 0);
                 $ident = "Addr" . $register['address'];
     
                 // Prüfen, ob die Variable existiert, und falls nicht, erstellen
                 if (!$this->GetIDForIdent($ident)) {
-                    $this->SendDebug("ApplyChanges: Registering variable for address", $register['address'], 0);
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
                         $this->GetVariableProfile($register['unit']),
                         0
                     );
-                } else {
-                    $this->SendDebug("ApplyChanges: Variable already exists for address", $register['address'], 0);
+                    $this->SendDebug("ApplyChanges: Variable Created", "Variable for {$register['address']} created.", 0);
                 }
-            } else {
-                $this->SendDebug("ApplyChanges: Register address is NOT selected", $register['address'], 0);
             }
         }
-    }
+    }    
     
     public function GetConfigurationForm()
     {
