@@ -22,37 +22,106 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
+        // Lese die ausgewählten Register aus der Property
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges: Fehler", "SelectedRegisters ist kein gültiges Array", 0);
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
             return;
         }
     
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected'])) {
-                $this->SendDebug("ApplyChanges: Fehler", "Fehlende Schlüssel im Register: " . json_encode($register), 0);
+        foreach ($selectedRegisters as $selectedRegister) {
+            if (!isset($selectedRegister['address'])) {
+                $this->SendDebug("Error", "Kein address-Schlüssel gefunden: " . json_encode($selectedRegister), 0);
                 continue;
             }
     
-            if (!$register['selected']) {
+            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
+            if (!$register) {
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
                 continue;
             }
     
-            $ident = "Addr" . $register['address'];
-    
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
+            if ($selectedRegister['selected']) {
+                $ident = "Addr" . $register['address'];
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
+    }
+    
+
+    private function FindRegisterByAddress($address)
+    {
+        if (!is_int($address)) {
+            $this->SendDebug("Error", "FindRegisterByAddress erwartet int, erhielt: " . json_encode($address), 0);
+            return null;
+        }
+    
+        foreach ($this->GetRegisters() as $register) {
+            if ($register['address'] === $address) {
+                return $register;
+            }
+        }
+        return null;
+    }
+    
+    public function GetConfigurationForm()
+    {
+        $registers = $this->GetRegisters();
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        // Debugging
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
+        $values = [];
+        foreach ($registers as $register) {
+            $isSelected = false;
+    
+            foreach ($selectedRegisters as $selectedRegister) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                    $isSelected = true;
+                    break;
+                }
+            }
+    
+            $values[] = [
+                "address"  => $register['address'],
+                "name"     => $register['name'],
+                "type"     => $register['type'],
+                "unit"     => $register['unit'],
+                "scale"    => $register['scale'],
+                "selected" => $isSelected
+            ];
+        }
+    
+        return json_encode([
+            "elements" => [
+                [
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Register",
+                    "add"   => false,
+                    "delete" => false,
+                    "columns" => [
+                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Type", "name" => "type", "width" => "80px"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
+                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "save" => true, "add" => false, "edit" => ["type" => "CheckBox"]]
+                    ],
+                    "values" => $values
+                ]
+            ]
+        ]);
     }
     
     
