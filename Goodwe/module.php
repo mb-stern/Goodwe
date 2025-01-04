@@ -10,7 +10,7 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterAttributeString("SelectedRegisters", "[]");
+        $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
@@ -21,7 +21,7 @@ class Goodwe extends IPSModule
         parent::ApplyChanges();
 
         // Lade die gespeicherten ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
         // Debugging: Zeige den Inhalt von SelectedRegisters an
         $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
