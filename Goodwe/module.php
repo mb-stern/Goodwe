@@ -24,7 +24,7 @@ class Goodwe extends IPSModule
         $this->LoadRegisters();
     
         // Variablen erstellen basierend auf Auswahl
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
