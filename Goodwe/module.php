@@ -60,10 +60,10 @@ class Goodwe extends IPSModule
 
     private function LoadRegisters()
     {
-        $registers = $this->GetRegisters();
+        $registers = $this->GetRegisters(); // Holt alle verfügbaren Register
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-
+    
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -72,14 +72,17 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false
+                "selected" => $existingSelection[$register['address']] ?? false // Standardmäßig nicht ausgewählt
             ];
         }
-
+    
+        // Formularfeld aktualisieren
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
+    
+        // Auswahl speichern
         $this->WriteAttributeString("SelectedRegisters", json_encode($values));
     }
-
+    
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
