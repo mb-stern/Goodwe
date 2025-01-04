@@ -103,10 +103,11 @@ class Goodwe extends IPSModule
                         ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
                     ],
                     "values" => $values
-                    $this->SendDebug("GetConfigurationForm", "Ausgabe $values ...", 0);
+                    
                 ]
             ]
         ]);
+        $this->SendDebug("GetConfigurationForm", "Ausgabe $values ...", 0);
     }
 
     private function ReadRegister(int $address, string $type, float $scale)
