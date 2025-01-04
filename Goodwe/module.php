@@ -29,26 +29,19 @@ class Goodwe extends IPSModule
         // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Zeige den Inhalt von SelectedRegisters an
+        // Debug: Zeige die gespeicherten Register an
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges: Error", "SelectedRegisters ist keine gültige Liste: " . json_encode($selectedRegisters), 0);
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
     
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
         foreach ($selectedRegisters as $register) {
-            // Debug: Zeige den aktuellen Register-Eintrag
-            $this->SendDebug("ApplyChanges: Processing Register", json_encode($register), 0);
-    
-            // Prüfe, ob alle notwendigen Keys vorhanden sind
-            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected'])) {
-                $this->SendDebug("ApplyChanges: Error", "Ein Register hat fehlende Keys: " . json_encode($register), 0);
+            // Prüfe, ob alle erforderlichen Schlüssel vorhanden sind
+            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
+                $this->SendDebug("ApplyChanges: Skipping Register", json_encode($register), 0);
                 continue;
-            }
-    
-            if (!$register['selected']) {
-                continue; // Überspringe nicht ausgewählte Register
             }
     
             $ident = "Addr" . $register['address'];
@@ -65,18 +58,7 @@ class Goodwe extends IPSModule
             }
         }
     }
-
-    public function RequestAction($Ident, $Value)
-    {
-        $this->SendDebug("RequestAction", "Ident: $Ident, Value: " . json_encode($Value), 0);
-
-        if ($Ident === "SelectedRegisters") {
-            $this->WritePropertyString("SelectedRegisters", json_encode($Value));
-            $this->SendDebug("RequestAction: Saved SelectedRegisters", json_encode($Value), 0);
-            $this->ApplyChanges();
-        }
-    }
-
+    
     public function GetConfigurationForm()
     {
         $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
@@ -86,7 +68,7 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste", 0);
             $selectedRegisters = [];
         }
     
