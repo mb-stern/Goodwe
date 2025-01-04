@@ -22,6 +22,8 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+        
+        $this->LoadRegisters();
     
         // Ausgewählte Register aus der Property lesen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
