@@ -82,20 +82,23 @@ class Goodwe extends IPSModule
     {
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
+    
+        // Debug: Zeige die gespeicherten Register
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
         $values = [];
         foreach ($registers as $register) {
             $isSelected = false;
-        
+    
             // Prüfe, ob die Adresse in den gespeicherten Werten existiert und markiert ist
             foreach ($selectedRegisters as $selectedRegister) {
-                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && isset($selectedRegister['selected']) && $selectedRegister['selected']) {
                     $isSelected = true;
                     break;
                 }
             }
-        
-            $values[] = [
+    
+            $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
@@ -103,12 +106,12 @@ class Goodwe extends IPSModule
                 "scale"    => $register['scale'],
                 "selected" => $isSelected
             ];
-        
+    
+            // Debug: Zeige jeden Eintrag an
             $this->SendDebug("GetConfigurationForm: Entry", json_encode($entry), 0);
             $values[] = $entry;
         }
     
-        // Debug die gesamte Ausgabe des Formulars
         $form = [
             "elements" => [
                 [
@@ -129,12 +132,12 @@ class Goodwe extends IPSModule
                 ]
             ]
         ];
+    
+        // Debug die gesamte Ausgabe des Formulars
         $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
-        $this->SendDebug("Values Array", json_encode($values), 0);
     
         return json_encode($form);
     }
-    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
