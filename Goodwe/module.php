@@ -90,21 +90,13 @@ class Goodwe extends IPSModule
         foreach ($registers as $register) {
             $isSelected = false;
     
-            // Prüfe, ob die Adresse in den gespeicherten Werten existiert und markiert ist
-            foreach ($selectedRegisters as $selectedRegister) {
-                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && isset($selectedRegister['selected']) && $selectedRegister['selected']) {
-                    $isSelected = true;
-                    break;
-                }
-            }
-    
             $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => $register['selected'],
+                "selected" => $isSelected
             ];
     
             // Debug: Zeige jeden Eintrag an
