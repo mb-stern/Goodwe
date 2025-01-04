@@ -28,17 +28,32 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Debugging: Überprüfe die gespeicherten Register
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (empty($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges: Issue", "Keine ausgewählten Register!", 0);
-            return;
-        }
+        // Lade alle verfügbaren Register
+        $allRegisters = $this->GetRegisters();
     
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
+        foreach ($allRegisters as $register) {
+            // Verarbeite nur die Register, die ausgewählt wurden
+            $isSelected = false;
+            foreach ($selectedRegisters as $selected) {
+                if ($selected['address'] === $register['address'] && $selected['selected'] === true) {
+                    $isSelected = true;
+                    break;
+                }
+            }
+    
+            if ($isSelected) {
+                // Validiere, ob alle notwendigen Felder vorhanden sind
+                if (!isset($register['address'], $register['name'], $register['unit'])) {
+                    $this->SendDebug("ApplyChanges: Missing Data", json_encode($register), 0);
+                    continue;
+                }
+    
                 $ident = "Addr" . $register['address'];
     
+                // Erstelle die Variable, falls sie noch nicht existiert
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -46,6 +61,7 @@ class Goodwe extends IPSModule
                         $this->GetVariableProfile($register['unit']),
                         0
                     );
+                    $this->SendDebug("ApplyChanges: Variable Created", $ident, 0);
                 }
             }
         }
