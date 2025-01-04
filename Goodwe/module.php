@@ -24,12 +24,12 @@ class Goodwe extends IPSModule
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         // Debugging: Zeige den Inhalt von SelectedRegisters an
-        $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         foreach ($selectedRegisters as $register) {
             // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
             if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
-                $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
+                $this->SendDebug("ApplyChanges: Skipping Register", json_encode($register), 0);
                 continue;
             }
     
@@ -37,6 +37,7 @@ class Goodwe extends IPSModule
     
             // Prüfen, ob die Variable existiert, und falls nicht, erstellen
             if (!$this->GetIDForIdent($ident)) {
+                $this->SendDebug("ApplyChanges: Creating Variable", json_encode($register), 0);
                 $this->RegisterVariableFloat(
                     $ident,
                     $register['name'],
@@ -69,18 +70,18 @@ class Goodwe extends IPSModule
         $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
     
         $registers = $this->GetRegisters();
-        $this->SendDebug("Registers", json_encode($registers), 0);
+        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            $this->SendDebug("GetConfigurationForm: Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
             $selectedRegisters = [];
         }
     
-        $this->SendDebug("SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
     
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-        $this->SendDebug("ExistingSelection", json_encode($existingSelection), 0);
+        $this->SendDebug("GetConfigurationForm: ExistingSelection", json_encode($existingSelection), 0);
     
         $values = [];
         foreach ($registers as $register) {
@@ -94,7 +95,7 @@ class Goodwe extends IPSModule
             ];
             $values[] = $entry;
     
-            $this->SendDebug("Register Entry", json_encode($entry), 0);
+            $this->SendDebug("GetConfigurationForm: Register Entry", json_encode($entry), 0);
         }
     
         $form = [
@@ -118,11 +119,10 @@ class Goodwe extends IPSModule
             ]
         ];
     
-        $this->SendDebug("Form Output", json_encode($form), 0);
+        $this->SendDebug("GetConfigurationForm: Form Output", json_encode($form), 0);
     
         return json_encode($form);
     }
-    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
