@@ -20,7 +20,7 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Register automatisch laden und persistente Auswahl beibehalten
+        // Register automatisch laden
         $this->LoadRegisters();
     
         // Variablen erstellen basierend auf Auswahl
