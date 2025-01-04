@@ -19,21 +19,28 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
+    
         // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
+    
         // Debugging: Zeige den Inhalt von SelectedRegisters an
         $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
-
+    
         foreach ($selectedRegisters as $register) {
-            // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
-            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
+            // Prüfen, ob die erforderlichen Schlüssel vorhanden sind
+            if (
+                !isset($register['address']) || 
+                !isset($register['name']) || 
+                !isset($register['unit']) || 
+                !isset($register['selected']) || 
+                !$register['selected']
+            ) {
+                $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
                 continue;
             }
-
+    
             $ident = "Addr" . $register['address'];
-
+    
             // Prüfen, ob die Variable existiert, und falls nicht, erstellen
             if (!$this->GetIDForIdent($ident)) {
                 $this->RegisterVariableFloat(
@@ -45,7 +52,7 @@ class Goodwe extends IPSModule
             }
         }
     }
-
+    
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
