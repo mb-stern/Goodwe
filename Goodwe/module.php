@@ -28,7 +28,6 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Zeige die gespeicherten Register
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         if (empty($selectedRegisters)) {
@@ -37,21 +36,17 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as $register) {
-            // Prüfen, ob die notwendigen Informationen vorhanden sind
-            if (!isset($register['address'], $register['selected']) || !$register['selected']) {
-                continue;
-            }
+            if (isset($register['selected']) && $register['selected']) {
+                $ident = "Addr" . $register['address'];
     
-            $ident = "Addr" . $register['address'];
-    
-            // Variable erstellen, falls nicht vorhanden
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    "Register " . $register['address'],
-                    "",
-                    0
-                );
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
     }
@@ -61,16 +56,24 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Alle Register mit den gespeicherten Auswahlzuständen kombinieren
         $values = [];
         foreach ($registers as $register) {
+            $selected = false;
+            foreach ($selectedRegisters as $selectedRegister) {
+                if ($selectedRegister['address'] === $register['address']) {
+                    $selected = $selectedRegister['selected'];
+                    break;
+                }
+            }
+    
             $values[] = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => in_array($register['address'], array_column($selectedRegisters, 'address')) &&
-                              ($selectedRegisters[array_search($register['address'], array_column($selectedRegisters, 'address'))]['selected'] ?? false)
+                "selected" => $selected
             ];
         }
     
@@ -92,34 +95,18 @@ class Goodwe extends IPSModule
                     ],
                     "values" => $values
                 ]
+            ],
+            "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Speichern",
+                    "onClick" => "IPS_RequestAction(\$_IPS['TARGET'], 'SaveRegisters', json_encode(\$_IPS['values']['SelectedRegisters']));"
+                ]
             ]
         ]);
     }
     
-    public function RequestAction($ident, $value)
-    {
-        if ($ident === 'SelectedRegisters') {
-            // Debug: Eingehende Daten aus dem Formular anzeigen
-            $this->SendDebug("RequestAction: Raw Input", json_encode($value), 0);
-    
-            // Überprüfen, ob Werte gültig sind
-            if (!is_array($value)) {
-                $this->SendDebug("RequestAction: Error", "Ungültige Eingabedaten", 0);
-                return;
-            }
-    
-            // Speichere die gesamte Struktur in der Eigenschaft
-            $this->WritePropertyString("SelectedRegisters", json_encode($value));
-    
-            // Debug: Gespeicherte Struktur ausgeben
-            $this->SendDebug("RequestAction: Saved Registers", json_encode($value), 0);
-    
-            // Übernehme Änderungen
-            $this->ApplyChanges();
-        }
-    }
-    
-    
+ 
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
