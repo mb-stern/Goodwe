@@ -18,26 +18,50 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Verarbeite die gespeicherten ausgewählten Register
+    
+        // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
+    
+        // Debugging: Zeige den Inhalt von SelectedRegisters an
+        $this->SendDebug("SelectedRegisters", json_encode($selectedRegisters), 0);
+    
         foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $ident = "Addr" . $register['address'];
-
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+            // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
+            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
+                $this->SendDebug("Error", "Ein Register hat fehlende Schlüssel: " . json_encode($register), 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+    
+            // Prüfen, ob die Variable existiert, und falls nicht, erstellen
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     }
-
+    
+    private function GetVariableProfile(string $unit)
+    {
+        switch ($unit) {
+            case "V":
+                return "~Volt";
+            case "A":
+                return "~Ampere";
+            case "W":
+                return "~Watt";
+            case "kWh":
+                return "~Electricity";
+            default:
+                return ""; // Rückgabe eines Standardwerts, falls die Einheit nicht bekannt ist
+        }
+    }
+    
     public function GetConfigurationForm()
     {
         // Lade die Register dynamisch
@@ -93,21 +117,5 @@ class Goodwe extends IPSModule
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
         ];
-    }
-
-    private function GetVariableProfile(string $unit)
-    {
-        switch ($unit) {
-            case "V":
-                return "~Volt";
-            case "A":
-                return "~Ampere";
-            case "W":
-                return "~Watt";
-            case "kWh":
-                return "~Electricity";
-            default:
-                return "";
-        }
     }
 }
