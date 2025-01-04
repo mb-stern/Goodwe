@@ -89,12 +89,21 @@ class Goodwe extends IPSModule
         $values = [];
         foreach ($registers as $register) {
             $isSelected = false;
+        
+            // Sicherstellen, dass alle erwarteten Schlüssel vorhanden sind
+            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
+                $this->SendDebug("GetConfigurationForm: Invalid Register", json_encode($register), 0);
+                continue;
+            }
+        
+            // Auswahl überprüfen
             foreach ($selectedRegisters as $selectedRegister) {
-                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
                     $isSelected = true;
                     break;
                 }
             }
+        
             $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
@@ -106,6 +115,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("GetConfigurationForm: Entry", json_encode($entry), 0);
             $values[] = $entry;
         }
+        
         
     
         $form = [
@@ -128,11 +138,9 @@ class Goodwe extends IPSModule
                 ]
             ]
         ];
-    
-        // Debug die gesamte Ausgabe des Formulars
         $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
-    
         return json_encode($form);
+        
     }
     
     private function ReadRegister(int $address, string $type, float $scale)
