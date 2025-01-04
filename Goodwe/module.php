@@ -28,16 +28,29 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Überprüfe die gespeicherten Register
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+        // Debugging: Zeige die gespeicherten Register
+        $this->SendDebug("ApplyChanges: SelectedRegisters (raw)", json_encode($selectedRegisters), 0);
+    
+        // Überprüfen, ob die Struktur korrekt ist
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . json_encode($selectedRegisters), 0);
+            return;
+        }
     
         // Lade alle verfügbaren Register
         $allRegisters = $this->GetRegisters();
     
         foreach ($allRegisters as $register) {
+            $this->SendDebug("ApplyChanges: Register", json_encode($register), 0);
+    
             // Verarbeite nur die Register, die ausgewählt wurden
             $isSelected = false;
             foreach ($selectedRegisters as $selected) {
+                if (!isset($selected['address'])) {
+                    $this->SendDebug("Error", "Ein Eintrag in SelectedRegisters hat keine 'address': " . json_encode($selected), 0);
+                    continue;
+                }
+    
                 if ($selected['address'] === $register['address'] && $selected['selected'] === true) {
                     $isSelected = true;
                     break;
