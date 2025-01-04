@@ -26,21 +26,23 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die ausgewählten Adressen
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Debug: Zeige die gespeicherten Daten vor Verarbeitung
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters Raw", json_encode($selectedRegisters), 0);
     
-        // Debugging: Zeige die Adressen an
-        $this->SendDebug("SelectedAddresses", json_encode($selectedAddresses), 0);
+        // Sicherheitsprüfung
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges: Error", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
     
-        // Hole alle Register
-        $allRegisters = $this->GetRegisters();
+        foreach ($selectedRegisters as $register) {
+            // Debug: Zeige jeden Register-Eintrag
+            $this->SendDebug("ApplyChanges: Processing Register", json_encode($register), 0);
     
-        // Erstelle Variablen für die ausgewählten Adressen
-        foreach ($allRegisters as $register) {
-            if (in_array($register['address'], $selectedAddresses)) {
+            if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
-    
-                // Prüfen, ob die Variable existiert, und falls nicht, erstellen
+                
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -48,6 +50,7 @@ class Goodwe extends IPSModule
                         $this->GetVariableProfile($register['unit']),
                         0
                     );
+                    $this->SendDebug("ApplyChanges: Variable Created", $ident, 0);
                 }
             }
         }
@@ -55,24 +58,35 @@ class Goodwe extends IPSModule
     
     public function GetConfigurationForm()
     {
-        $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
+        $this->SendDebug("GetConfigurationForm", "Start", 0);
     
         $registers = $this->GetRegisters();
         $this->SendDebug("Registers", json_encode($registers), 0);
     
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("SelectedAddresses", json_encode($selectedAddresses), 0);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("SelectedRegisters Raw", json_encode($selectedRegisters), 0);
     
         $values = [];
         foreach ($registers as $register) {
-            $values[] = [
+            $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
                 "unit"     => $register['unit'],
                 "scale"    => $register['scale'],
-                "selected" => in_array($register['address'], $selectedAddresses)
+                "selected" => false // Standardwert
             ];
+    
+            if (is_array($selectedRegisters)) {
+                foreach ($selectedRegisters as $selectedRegister) {
+                    if ($selectedRegister['address'] == $register['address']) {
+                        $entry['selected'] = $selectedRegister['selected'];
+                        break;
+                    }
+                }
+            }
+            $values[] = $entry;
+            $this->SendDebug("Form Register Entry", json_encode($entry), 0);
         }
     
         $form = [
@@ -96,10 +110,9 @@ class Goodwe extends IPSModule
             ]
         ];
     
-        $this->SendDebug("Form Output", json_encode($form), 0);
-    
+        $this->SendDebug("GetConfigurationForm: Form Output", json_encode($form), 0);
         return json_encode($form);
-    }    
+    }
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
