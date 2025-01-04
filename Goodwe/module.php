@@ -22,12 +22,27 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
+        $this->SendDebug("ApplyChanges", "Aufruf", 0);
+    
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
+        // Debugging für die gespeicherten Werte
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedAddresses), 0);
     
-        $allRegisters = $this->GetRegisters();
-        foreach ($allRegisters as $register) {
+        // Lösche alle Variablen, die nicht mehr benötigt werden
+        $existingVars = IPS_GetChildrenIDs($this->InstanceID);
+        foreach ($existingVars as $varID) {
+            $varIdent = IPS_GetObject($varID)['ObjectIdent'];
+            if (strpos($varIdent, 'Addr') === 0) {
+                $address = (int)substr($varIdent, 4);
+                if (!in_array($address, $selectedAddresses)) {
+                    IPS_DeleteVariable($varID);
+                }
+            }
+        }
+    
+        // Erstelle oder aktualisiere die ausgewählten Register
+        foreach ($this->GetRegisters() as $register) {
             if (in_array($register['address'], $selectedAddresses)) {
                 $ident = "Addr" . $register['address'];
     
@@ -66,6 +81,8 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
+        $this->SendDebug("GetConfigurationForm", "Aufruf", 0);
+    
         $registers = $this->GetRegisters();
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
@@ -80,6 +97,8 @@ class Goodwe extends IPSModule
                 "selected" => in_array($register['address'], $selectedAddresses)
             ];
         }
+    
+        $this->SendDebug("GetConfigurationForm: Values", json_encode($values), 0);
     
         return json_encode([
             "elements" => [
@@ -102,6 +121,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
