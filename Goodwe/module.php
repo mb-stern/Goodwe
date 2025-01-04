@@ -12,7 +12,7 @@ class Goodwe extends IPSModule
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
 
         // Eigenschaft für die ausgewählten Register
-        $this->RegisterPropertyString("SelectedRegisters", "[]");
+        $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
 
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
@@ -89,7 +89,12 @@ class Goodwe extends IPSModule
         $values = [];
         foreach ($registers as $register) {
             $isSelected = false;
-    
+            foreach ($selectedRegisters as $selectedRegister) {
+                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                    $isSelected = true;
+                    break;
+                }
+            }
             $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
@@ -98,11 +103,10 @@ class Goodwe extends IPSModule
                 "scale"    => $register['scale'],
                 "selected" => $isSelected
             ];
-    
-            // Debug: Zeige jeden Eintrag an
             $this->SendDebug("GetConfigurationForm: Entry", json_encode($entry), 0);
             $values[] = $entry;
         }
+        
     
         $form = [
             "elements" => [
