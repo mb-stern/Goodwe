@@ -28,7 +28,7 @@ class Goodwe extends IPSModule
     
         foreach ($selectedRegisters as $register) {
             // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
-            if (!isset($register['address'])) {
+            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
                 $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
                 continue;
             }
@@ -66,13 +66,25 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
+        $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
+    
         $registers = $this->GetRegisters();
+        $this->SendDebug("Registers", json_encode($registers), 0);
+    
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            $selectedRegisters = [];
+        }
+    
+        $this->SendDebug("SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
+    
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
+        $this->SendDebug("ExistingSelection", json_encode($existingSelection), 0);
     
         $values = [];
         foreach ($registers as $register) {
-            $values[] = [
+            $entry = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
@@ -80,9 +92,12 @@ class Goodwe extends IPSModule
                 "scale"    => $register['scale'],
                 "selected" => $existingSelection[$register['address']] ?? false
             ];
+            $values[] = $entry;
+    
+            $this->SendDebug("Register Entry", json_encode($entry), 0);
         }
     
-        return json_encode([
+        $form = [
             "elements" => [
                 [
                     "type"  => "List",
@@ -101,8 +116,13 @@ class Goodwe extends IPSModule
                     "values" => $values
                 ]
             ]
-        ]);
+        ];
+    
+        $this->SendDebug("Form Output", json_encode($form), 0);
+    
+        return json_encode($form);
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
