@@ -22,40 +22,27 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten ausgewählten Register
+        // Eingelesene ausgewählte Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist ungültig: " . $this->ReadPropertyString("SelectedRegisters"), 0);
-            $selectedRegisters = [];
-        }
     
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        foreach ($selectedRegisters as $registerAddress) {
-            foreach ($this->GetRegisters() as $register) {
-                if ($register['address']) {
-                    return $register;
+        // Verarbeite die Register
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
+                $ident = "Addr" . $register['address'];
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
                 }
-            }
-            if ($register === null) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: " . json_encode($registerAddress), 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $register['address'];
-    
-            // Prüfen, ob die Variable existiert, und falls nicht, erstellen
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
             }
         }
     }
+    
     
     public function RequestRead()
     {
@@ -83,28 +70,19 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debug: Zeige die gespeicherten Register
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
         $values = [];
         foreach ($registers as $register) {
             $isSelected = false;
-        
-            // Sicherstellen, dass alle erwarteten Schlüssel vorhanden sind
-            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
-                $this->SendDebug("GetConfigurationForm: Invalid Register", json_encode($register), 0);
-                continue;
-            }
-        
-            // Auswahl überprüfen
+    
+            // Prüfe, ob das Register bereits ausgewählt ist
             foreach ($selectedRegisters as $selectedRegister) {
-                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
                     $isSelected = true;
                     break;
                 }
             }
-        
-            $entry = [
+    
+            $values[] = [
                 "address"  => $register['address'],
                 "name"     => $register['name'],
                 "type"     => $register['type'],
@@ -112,11 +90,7 @@ class Goodwe extends IPSModule
                 "scale"    => $register['scale'],
                 "selected" => $isSelected
             ];
-            $this->SendDebug("GetConfigurationForm: Entry", json_encode($entry), 0);
-            $values[] = $entry;
         }
-        
-        
     
         $form = [
             "elements" => [
@@ -138,10 +112,11 @@ class Goodwe extends IPSModule
                 ]
             ]
         ];
+    
         $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
         return json_encode($form);
-        
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
