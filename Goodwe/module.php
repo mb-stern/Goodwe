@@ -26,21 +26,19 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten Adressen
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Lade die gespeicherten Register aus der Eigenschaft
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        
+        // Debugging: Zeige die gespeicherten Register
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Debug: Zeige die gespeicherten Adressen
-        $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
-    
-        // Lade alle verfügbaren Register
+        // Erstelle Variablen basierend auf den ausgewählten Registern
         $allRegisters = $this->GetRegisters();
-    
         foreach ($allRegisters as $register) {
-            // Verarbeite nur die ausgewählten Adressen
-            if (in_array($register['address'], $selectedAddresses)) {
+            if (in_array($register['address'], $selectedRegisters)) {
                 $ident = "Addr" . $register['address'];
     
-                // Prüfen, ob die Variable existiert, und falls nicht, erstellen
+                // Variable erstellen, falls sie nicht existiert
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -50,26 +48,6 @@ class Goodwe extends IPSModule
                     );
                 }
             }
-        }
-    }
-    
-    public function RequestAction($ident, $value)
-    {
-        if ($ident === 'SelectedRegisters') {
-            // Debug: Zeige den Input des Formulars
-            $this->SendDebug("RequestAction: Raw Input", json_encode($value), 0);
-    
-            // Filtere nur die ausgewählten Register und extrahiere deren Adressen
-            $selectedAddresses = array_column(array_filter($value, fn($reg) => isset($reg['selected']) && $reg['selected']), 'address');
-    
-            // Debug: Zeige die gefilterten Adressen
-            $this->SendDebug("RequestAction: Filtered Addresses", json_encode($selectedAddresses), 0);
-    
-            // Speichere die Adressen
-            $this->WritePropertyString("SelectedRegisters", json_encode($selectedAddresses));
-    
-            // Übernehme Änderungen
-            $this->ApplyChanges();
         }
     }
     
