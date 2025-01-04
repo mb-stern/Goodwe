@@ -37,7 +37,6 @@ class Goodwe extends IPSModule
     
             // Prüfen, ob die Variable existiert, und falls nicht, erstellen
             if (!$this->GetIDForIdent($ident)) {
-                $this->SendDebug("ApplyChanges: Creating Variable", json_encode($register), 0);
                 $this->RegisterVariableFloat(
                     $ident,
                     $register['name'],
@@ -48,23 +47,6 @@ class Goodwe extends IPSModule
         }
     }
     
-    public function RequestRead()
-    {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $value = $this->ReadRegister((int)$register['address'], $register['type'], (float)$register['scale']);
-                $ident = "Addr" . $register['address'];
-
-                // Setze den Wert, falls die Variable existiert
-                if ($this->GetIDForIdent($ident)) {
-                    SetValue($this->GetIDForIdent($ident), $value);
-                }
-            }
-        }
-    }
-
     public function GetConfigurationForm()
     {
         $this->SendDebug("GetConfigurationForm", "Start loading configuration form", 0);
@@ -74,28 +56,20 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("GetConfigurationForm: Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
             $selectedRegisters = [];
         }
     
         $this->SendDebug("GetConfigurationForm: SelectedRegisters (decoded)", json_encode($selectedRegisters), 0);
     
-        $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-        $this->SendDebug("GetConfigurationForm: ExistingSelection", json_encode($existingSelection), 0);
-    
+        // Synchronisiere bestehende Register mit ausgewählten
         $values = [];
         foreach ($registers as $register) {
-            $entry = [
-                "address"  => $register['address'],
-                "name"     => $register['name'],
-                "type"     => $register['type'],
-                "unit"     => $register['unit'],
-                "scale"    => $register['scale'],
-                "selected" => $existingSelection[$register['address']] ?? false
-            ];
-            $values[] = $entry;
+            $existingSelection = current(array_filter($selectedRegisters, fn($r) => $r['address'] === $register['address'])) ?? ['selected' => false];
+            $register['selected'] = $existingSelection['selected'];
+            $values[] = $register;
     
-            $this->SendDebug("GetConfigurationForm: Register Entry", json_encode($entry), 0);
+            $this->SendDebug("GetConfigurationForm: Register Entry", json_encode($register), 0);
         }
     
         $form = [
