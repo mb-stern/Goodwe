@@ -8,20 +8,31 @@ class Goodwe extends IPSModule
     {
         // Never delete this line!
         parent::Create();
-
+    
+        // Verknüpfe mit dem übergeordneten Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
+    
+        // Eigenschaft für die ausgewählten Register
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-
+    
+        // Attribut für die verarbeiteten Register
+        $this->RegisterAttributeString("ProcessedRegisters", "[]");
+    
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
-
+    
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
         // Lade die gespeicherten ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste.", 0);
+            $selectedRegisters = [];
+        }
+    
         $this->SendDebug("ApplyChanges: Raw SelectedRegisters", json_encode($selectedRegisters), 0);
     
         $allRegisters = $this->GetRegisters();
@@ -33,7 +44,7 @@ class Goodwe extends IPSModule
     
             // Suche nach entsprechender Auswahl
             foreach ($selectedRegisters as $selectedRegister) {
-                if ($selectedRegister['address'] == $address && $selectedRegister['selected']) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] == $address && isset($selectedRegister['selected']) && $selectedRegister['selected']) {
                     $selected = true;
                     break;
                 }
@@ -59,8 +70,8 @@ class Goodwe extends IPSModule
         // Debugging
         $this->SendDebug("ApplyChanges: Processed Registers", json_encode($processedRegisters), 0);
     
-        // Speichere die aktualisierten Register mit Auswahlstatus
-        $this->WritePropertyString("SelectedRegisters", json_encode($processedRegisters));
+        // Speichere die Auswahl in einem Attribut
+        $this->WriteAttributeString("ProcessedRegisters", json_encode($processedRegisters));
     }
     
     public function GetConfigurationForm()
