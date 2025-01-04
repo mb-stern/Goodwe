@@ -6,28 +6,52 @@ class Goodwe extends IPSModule
 {
     public function Create()
     {
-        // Never delete this line!
         parent::Create();
-    
+
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterAttributeString("SelectedRegisters", "[]");
-    
-        // Diese Zeile ermöglicht das Speichern der Checkbox-Änderungen in der form.json
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-    
+
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
-    
+
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Formularwerte mit den Original-Registern synchronisieren
+
+        // Synchronisiert Formularwerte mit Registers
+        $this->SyncSelectedRegisters();
+
+        // Variablen basierend auf Auswahl erstellen
+        $this->CreateVariablesFromSelection();
+
+        // Registerliste in der UI aktualisieren
+        $this->LoadRegisters();
+    }
+
+    public function RequestRead()
+    {
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
+                $value = $this->ReadRegister((int)$register['address'], $register['type'], (float)$register['scale']);
+                $ident = "Addr" . $register['address'];
+
+                if ($this->GetIDForIdent($ident)) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+            }
+        }
+    }
+
+    private function SyncSelectedRegisters()
+    {
         $formValues = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registers = $this->GetRegisters();
-    
         $updatedRegisters = [];
+
         foreach ($registers as $register) {
             $updatedRegister = $register;
             $updatedRegister['selected'] = false; // Standardmäßig nicht ausgewählt
@@ -38,15 +62,17 @@ class Goodwe extends IPSModule
             }
             $updatedRegisters[] = $updatedRegister;
         }
-    
-        // Speichern der synchronisierten Daten
+
         $this->WriteAttributeString("SelectedRegisters", json_encode($updatedRegisters));
-    
-        // Variablen erstellen basierend auf Auswahl
-        foreach ($updatedRegisters as $register) {
-            if ($register['selected']) {
+    }
+
+    private function CreateVariablesFromSelection()
+    {
+        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
-                // Variable erstellen, falls sie nicht existiert
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -57,27 +83,6 @@ class Goodwe extends IPSModule
                 }
             }
         }
-    
-        // Registerliste in der UI aktualisieren
-        $this->LoadRegisters();
-    }
-    
-    public function RequestAction($ident, $value)
-    {
-        // Änderungen in den Checkboxen in der Liste verarbeiten
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
-
-        foreach ($selectedRegisters as &$register) {
-            if ("Addr" . $register['address'] === $ident) {
-                $register['selected'] = $value;
-            }
-        }
-
-        // Geänderte Auswahl speichern
-        $this->WriteAttributeString("SelectedRegisters", json_encode($selectedRegisters));
-
-        // Änderungen anwenden
-        $this->ApplyChanges();
     }
 
     private function LoadRegisters()
@@ -85,7 +90,7 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
-    
+
         $values = [];
         foreach ($registers as $register) {
             $values[] = [
@@ -97,11 +102,10 @@ class Goodwe extends IPSModule
                 "selected" => $existingSelection[$register['address']] ?? false
             ];
         }
-    
-        // Formularwerte aktualisieren
+
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
     }
-     
+
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
