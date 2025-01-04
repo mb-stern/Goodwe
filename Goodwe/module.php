@@ -72,18 +72,23 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
-                    "type"    => "List",
-                    "name"    => "SelectedRegisters",
-                    "caption" => "Verfügbare Register",
-                    "add"     => false,
-                    "delete"  => false,
+                    "type"   => "List",
+                    "name"   => "SelectedRegisters",
+                    "caption" => "Register auswählen",
+                    "add"    => false,
+                    "delete" => false,
                     "columns" => [
                         ["caption" => "Adresse", "name" => "address", "width" => "100px"],
                         ["caption" => "Name", "name" => "name", "width" => "200px"],
-                        ["caption" => "Typ", "name" => "type", "width" => "80px"],
+                        ["caption" => "Typ", "name" => "type", "width" => "100px"],
                         ["caption" => "Einheit", "name" => "unit", "width" => "80px"],
                         ["caption" => "Skalierung", "name" => "scale", "width" => "80px"],
-                        ["caption" => "Auswählen", "name" => "selected", "width" => "100px", "edit" => "CheckBox"]
+                        [
+                            "caption" => "Auswählen",
+                            "name"    => "selected",
+                            "width"   => "100px",
+                            "edit"    => ["type" => "CheckBox"]
+                        ]
                     ],
                     "values" => $values
                 ]
