@@ -4,7 +4,6 @@
             "type": "List",
             "name": "SelectedRegisters",
             "caption": "Verfügbare Register",
-            "rowCount": 10,
             "add": false,
             "delete": false,
             "columns": [
@@ -13,13 +12,11 @@
                 { "caption": "Typ", "name": "type", "width": "80px" },
                 { "caption": "Einheit", "name": "unit", "width": "80px" },
                 { "caption": "Skalierung", "name": "scale", "width": "80px" },
-                {
-                    "caption": "Auswählen",
-                    "name": "selected",
-                    "width": "80px",
-                    "edit": {
-                        "type": "CheckBox"
-                    }
+                { 
+                    "caption": "Auswählen", 
+                    "name": "selected", 
+                    "width": "80px", 
+                    "edit": { "type": "CheckBox" }
                 }
             ],
             "values": []

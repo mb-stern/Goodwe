@@ -6,24 +6,25 @@ class Goodwe extends IPSModule
 {
     public function Create()
     {
+        // Never delete this line!
         parent::Create();
-
+    
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterAttributeString("SelectedRegisters", "[]");
-
+    
+        // Diese Zeile ermöglicht das Speichern der Checkbox-Änderungen in der form.json
+        $this->RegisterPropertyString("SelectedRegisters", "[]");
+    
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
-
+    
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Register automatisch laden
-        $this->LoadRegisters();
     
-        // Aktuelle Auswahl der Register laden
-        $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
+        // Ausgewählte Register aus der Property lesen
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         // Variablen erstellen basierend auf der Auswahl
         foreach ($selectedRegisters as $register) {
@@ -42,8 +43,11 @@ class Goodwe extends IPSModule
             }
         }
     
-        // Die Registerliste wird in der UI geladen
+        // Registerliste aktualisieren
         $this->LoadRegisters();
+    
+        // Auswahl im Attribut speichern
+        $this->WriteAttributeString("SelectedRegisters", json_encode($selectedRegisters));
     }
     
     public function RequestAction($ident, $value)
