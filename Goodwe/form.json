@@ -1,11 +1,6 @@
 {
     "elements": [
         {
-            "type": "Button",
-            "caption": "Register neu laden",
-            "onClick": "Goodwe_ReloadRegisters($id);"
-        },
-        {
             "type": "List",
             "name": "SelectedRegisters",
             "caption": "Verfügbare Register",
@@ -13,31 +8,11 @@
             "add": false,
             "delete": false,
             "columns": [
-                {
-                    "caption": "Adresse",
-                    "name": "address",
-                    "width": "100px"
-                },
-                {
-                    "caption": "Name",
-                    "name": "name",
-                    "width": "200px"
-                },
-                {
-                    "caption": "Typ",
-                    "name": "type",
-                    "width": "80px"
-                },
-                {
-                    "caption": "Einheit",
-                    "name": "unit",
-                    "width": "80px"
-                },
-                {
-                    "caption": "Skalierung",
-                    "name": "scale",
-                    "width": "80px"
-                },
+                { "caption": "Adresse", "name": "address", "width": "100px" },
+                { "caption": "Name", "name": "name", "width": "200px" },
+                { "caption": "Typ", "name": "type", "width": "80px" },
+                { "caption": "Einheit", "name": "unit", "width": "80px" },
+                { "caption": "Skalierung", "name": "scale", "width": "80px" },
                 {
                     "caption": "Auswählen",
                     "name": "selected",
@@ -48,13 +23,6 @@
                 }
             ],
             "values": []
-        }
-    ],
-    "actions": [
-        {
-            "type": "Button",
-            "caption": "Änderungen speichern",
-            "onClick": "Goodwe_SaveRegisters($id);"
         }
     ]
 }
