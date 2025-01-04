@@ -6,13 +6,11 @@ class Goodwe extends IPSModule
 {
     public function Create()
     {
-        // Never delete this line!
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterAttributeString("SelectedRegisters", "[]");
 
-        // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
@@ -20,10 +18,10 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
 
-        // Aktuelle Auswahl aus dem Formular übernehmen
+        // Aktualisierte Register aus dem Formular übernehmen
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
 
-        // Variablen erstellen basierend auf Auswahl
+        // Variablen basierend auf Auswahl erstellen
         foreach ($selectedRegisters as $register) {
             if (isset($register['selected']) && $register['selected']) {
                 $ident = "Addr" . $register['address'];
@@ -57,9 +55,14 @@ class Goodwe extends IPSModule
         }
     }
 
+    public function ReloadRegisters()
+    {
+        $this->LoadRegisters();
+    }
+
     private function LoadRegisters()
     {
-        $registers = $this->GetRegisters(); // Holt alle verfügbaren Register
+        $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
         $existingSelection = array_column($selectedRegisters, 'selected', 'address');
 
@@ -75,7 +78,8 @@ class Goodwe extends IPSModule
             ];
         }
 
-        // Auswahl speichern
+        // Formular aktualisieren
+        $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
         $this->WriteAttributeString("SelectedRegisters", json_encode($values));
     }
 
