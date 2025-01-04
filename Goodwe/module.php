@@ -20,14 +20,25 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lade die gespeicherten ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Debug: Zeige an, was in die Property geschrieben wurde
+        $rawPropertyString = $this->ReadPropertyString("SelectedRegisters");
+        $this->SendDebug("ApplyChanges: Raw SelectedRegisters", $rawPropertyString, 0);
     
-        // Debugging: Zeige den Inhalt von SelectedRegisters an
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+        $selectedRegisters = json_decode($rawPropertyString, true);
+    
+        // Debug: Überprüfen, ob die JSON-Daten korrekt geparst wurden
+        if ($selectedRegisters === null) {
+            $this->SendDebug("ApplyChanges: JSON Error", json_last_error_msg(), 0);
+            return;
+        }
+    
+        $this->SendDebug("ApplyChanges: Parsed SelectedRegisters", json_encode($selectedRegisters, JSON_PRETTY_PRINT), 0);
     
         foreach ($selectedRegisters as $register) {
-            // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
+            // Debug: Zeige die Daten jedes Registers
+            $this->SendDebug("ApplyChanges: Processing Register", json_encode($register), 0);
+    
+            // Prüfe, ob alle nötigen Felder existieren und die Checkbox aktiviert ist
             if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
                 $this->SendDebug("ApplyChanges: Skipping Register", json_encode($register), 0);
                 continue;
@@ -43,6 +54,9 @@ class Goodwe extends IPSModule
                     $this->GetVariableProfile($register['unit']),
                     0
                 );
+                $this->SendDebug("ApplyChanges: Variable erstellt", $register['name'], 0);
+            } else {
+                $this->SendDebug("ApplyChanges: Variable existiert bereits", $register['name'], 0);
             }
         }
     }
