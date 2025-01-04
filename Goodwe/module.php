@@ -53,6 +53,7 @@ class Goodwe extends IPSModule
         }
     }
     
+    
     public function RequestRead()
     {
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -74,52 +75,52 @@ class Goodwe extends IPSModule
         }
     }
 
-public function GetConfigurationForm()
-{
-    $registers = $this->GetRegisters();
-    $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-    if (!is_array($selectedAddresses)) {
-        $this->SendDebug("GetConfigurationForm", "SelectedAddresses ist ungültig: " . $this->ReadPropertyString("SelectedRegisters"), 0);
-        $selectedAddresses = [];
-    }
-
-    $values = [];
-    foreach ($registers as $register) {
-        $values[] = [
-            "address"  => $register['address'],
-            "name"     => $register['name'],
-            "type"     => $register['type'],
-            "unit"     => $register['unit'],
-            "scale"    => $register['scale'],
-            "selected" => in_array($register['address'], $selectedAddresses)
-        ];
-    }
-
-    $this->SendDebug("GetConfigurationForm", "Values: " . json_encode($values), 0);
-
-    return json_encode([
-        "elements" => [
-            [
-                "type"  => "List",
-                "name"  => "SelectedRegisters",
-                "caption" => "Register",
-                "add"   => false,
-                "delete" => false,
-                "columns" => [
-                    ["caption" => "Address", "name" => "address", "width" => "100px"],
-                    ["caption" => "Name", "name" => "name", "width" => "200px"],
-                    ["caption" => "Type", "name" => "type", "width" => "80px"],
-                    ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                    ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                    ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
-                ],
-                "values" => $values
+    public function GetConfigurationForm()
+    {
+        $registers = $this->GetRegisters();
+        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        if (!is_array($selectedAddresses)) {
+            $this->SendDebug("GetConfigurationForm", "SelectedAddresses ist ungültig: " . $this->ReadPropertyString("SelectedRegisters"), 0);
+            $selectedAddresses = [];
+        }
+    
+        $values = [];
+        foreach ($registers as $register) {
+            $values[] = [
+                "address"  => $register['address'],
+                "name"     => $register['name'],
+                "type"     => $register['type'],
+                "unit"     => $register['unit'],
+                "scale"    => $register['scale'],
+                "selected" => in_array($register['address'], $selectedAddresses)
+            ];
+        }
+    
+        $this->SendDebug("GetConfigurationForm", "Values: " . json_encode($values), 0);
+    
+        return json_encode([
+            "elements" => [
+                [
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Register",
+                    "add"   => false,
+                    "delete" => false,
+                    "columns" => [
+                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Type", "name" => "type", "width" => "80px"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
+                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
+                    ],
+                    "values" => $values
+                ]
             ]
-        ]
-    ]);
-}
-
+        ]);
+    }
+    
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
