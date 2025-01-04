@@ -22,85 +22,24 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Debug: Aktuellen Zustand der Eigenschaft anzeigen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Prüfen, ob alle erforderlichen Felder vorhanden sind
-        foreach ($selectedRegisters as &$register) {
-            if (!isset($register['address'])) {
-                $this->SendDebug("Error", "Kein address-Schlüssel gefunden: " . json_encode($register), 0);
-            }
-        }
-    }
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['selected']) && $register['selected']) {
+                $ident = "Addr" . $register['address'];
     
-
-    private function FindRegisterByAddress($address)
-    {
-        if (!is_int($address)) {
-            $this->SendDebug("Error", "FindRegisterByAddress erwartet int, erhielt: " . json_encode($address), 0);
-            return null;
-        }
-    
-        foreach ($this->GetRegisters() as $register) {
-            if ($register['address'] === $address) {
-                return $register;
-            }
-        }
-        return null;
-    }
-    
-    public function GetConfigurationForm()
-    {
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        $values = [];
-        foreach ($registers as $register) {
-            $isSelected = false;
-    
-            foreach ($selectedRegisters as $selectedRegister) {
-                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
-                    $isSelected = true;
-                    break;
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
                 }
             }
-    
-            $values[] = [
-                "address"  => $register['address'],
-                "name"     => $register['name'],
-                "type"     => $register['type'],
-                "unit"     => $register['unit'],
-                "scale"    => $register['scale'],
-                "selected" => $isSelected
-            ];
         }
-    
-        return json_encode([
-            "elements" => [
-                [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Register",
-                    "add"   => false,
-                    "delete" => false,
-                    "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px"],
-                        ["caption" => "Name", "name" => "name", "width" => "200px"],
-                        ["caption" => "Type", "name" => "type", "width" => "80px"],
-                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
-                    ],
-                    "values" => $values
-                ]
-            ]
-        ]);
     }
-    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
