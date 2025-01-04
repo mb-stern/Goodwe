@@ -22,22 +22,13 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Debug: Property prüfen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("ApplyChanges: SelectedRegisters (Property)", json_encode($selectedRegisters), 0);
+        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges: Error", "SelectedRegisters ist keine gültige Liste.", 0);
-            return;
-        }
+        $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
     
-        // Lade alle verfügbaren Register
         $allRegisters = $this->GetRegisters();
-        $this->SendDebug("ApplyChanges: AllRegisters", json_encode($allRegisters), 0);
-    
-        // Erstelle Variablen für ausgewählte Register
         foreach ($allRegisters as $register) {
-            if (in_array($register['address'], $selectedRegisters)) {
+            if (in_array($register['address'], $selectedAddresses)) {
                 $ident = "Addr" . $register['address'];
     
                 if (!$this->GetIDForIdent($ident)) {
@@ -47,7 +38,6 @@ class Goodwe extends IPSModule
                         $this->GetVariableProfile($register['unit']),
                         0
                     );
-                    $this->SendDebug("ApplyChanges", "Variable erstellt: " . $register['name'], 0);
                 }
             }
         }
@@ -91,10 +81,6 @@ class Goodwe extends IPSModule
             ];
         }
     
-        // Debugging: Ausgabe der Werte
-        $this->SendDebug("GetConfigurationForm", "Values: " . json_encode($values), 0);
-    
-        // Rückgabe des Formulars
         return json_encode([
             "elements" => [
                 [
@@ -117,7 +103,6 @@ class Goodwe extends IPSModule
         ]);
     }
     
-
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
