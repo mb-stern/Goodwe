@@ -18,6 +18,9 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        // Register automatisch laden
+        $this->LoadRegisters();
     
         // Aktuelle Auswahl der Register laden
         $selectedRegisters = json_decode($this->ReadAttributeString("SelectedRegisters"), true);
