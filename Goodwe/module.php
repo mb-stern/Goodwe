@@ -25,20 +25,29 @@ class Goodwe extends IPSModule
         // Eingelesene ausgewählte Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Debug: Zeige den Inhalt von SelectedRegisters
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste!", 0);
+            return;
+        }
     
         // Verarbeite die Register
         foreach ($selectedRegisters as $register) {
-            if (isset($register['selected']) && $register['selected']) {
-                $ident = "Addr" . $register['address'];
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
+                $this->SendDebug("Error", "Unvollständiger Registereintrag: " . json_encode($register), 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     }
@@ -70,13 +79,15 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Debugging
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
         $values = [];
         foreach ($registers as $register) {
             $isSelected = false;
     
-            // Prüfe, ob das Register bereits ausgewählt ist
             foreach ($selectedRegisters as $selectedRegister) {
-                if ($selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
                     $isSelected = true;
                     break;
                 }
@@ -92,7 +103,7 @@ class Goodwe extends IPSModule
             ];
         }
     
-        $form = [
+        return json_encode([
             "elements" => [
                 [
                     "type"  => "List",
@@ -111,10 +122,7 @@ class Goodwe extends IPSModule
                     "values" => $values
                 ]
             ]
-        ];
-    
-        $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
-        return json_encode($form);
+        ]);
     }
     
     
