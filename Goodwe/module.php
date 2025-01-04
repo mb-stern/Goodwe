@@ -28,7 +28,7 @@ class Goodwe extends IPSModule
     
         foreach ($selectedRegisters as $register) {
             // Prüfe, ob die erforderlichen Schlüssel vorhanden sind
-            if (!isset($register['address'], $register['name'], $register['unit'], $register['selected']) || !$register['selected']) {
+            if (!isset($register['address'])) {
                 $this->SendDebug("Error", "Ein Register hat fehlende oder falsche Schlüssel: " . json_encode($register), 0);
                 continue;
             }
