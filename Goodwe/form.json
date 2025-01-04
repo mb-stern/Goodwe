@@ -12,7 +12,7 @@
                 { "caption": "Type", "name": "type", "width": "80px" },
                 { "caption": "Unit", "name": "unit", "width": "80px" },
                 { "caption": "Scale", "name": "scale", "width": "80px" },
-                { "caption": "Selected", "name": "selected", "width": "80px", "edit": { "type": "CheckBox" } }
+                { "caption": "Selected", "name": "selected", "width": "80px", "save": true, "add": false, "edit": { "type": "CheckBox" } }
             ]
         }
     ]
