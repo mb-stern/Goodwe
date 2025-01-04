@@ -21,21 +21,25 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Lade die ausgewählten Register-Adressen
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        // Debugging: Zeige die ausgewählten Adressen
-        $this->SendDebug("ApplyChanges: SelectedAddresses", json_encode($selectedAddresses), 0);
-
+    
+        // Debug: Property prüfen
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters (Property)", json_encode($selectedRegisters), 0);
+    
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges: Error", "SelectedRegisters ist keine gültige Liste.", 0);
+            return;
+        }
+    
         // Lade alle verfügbaren Register
         $allRegisters = $this->GetRegisters();
-
+        $this->SendDebug("ApplyChanges: AllRegisters", json_encode($allRegisters), 0);
+    
+        // Erstelle Variablen für ausgewählte Register
         foreach ($allRegisters as $register) {
-            if (in_array($register['address'], $selectedAddresses)) {
+            if (in_array($register['address'], $selectedRegisters)) {
                 $ident = "Addr" . $register['address'];
-
-                // Prüfen, ob die Variable existiert, und falls nicht, erstellen
+    
                 if (!$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -43,11 +47,12 @@ class Goodwe extends IPSModule
                         $this->GetVariableProfile($register['unit']),
                         0
                     );
+                    $this->SendDebug("ApplyChanges", "Variable erstellt: " . $register['name'], 0);
                 }
             }
         }
     }
-
+    
     public function RequestRead()
     {
         $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
