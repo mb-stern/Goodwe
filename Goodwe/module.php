@@ -10,7 +10,7 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterPropertyString("SelectedRegisters", "[]");
+        $this->RegisterAttributeString("SelectedRegisters", "[]");
 
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
@@ -77,7 +77,7 @@ class Goodwe extends IPSModule
         }
 
         $this->UpdateFormField("SelectedRegisters", "values", json_encode($values));
-        $this->WritePropertyString("SelectedRegisters", json_encode($values));
+        $this->WriteAttributeString("SelectedRegisters", json_encode($values));
     }
 
     private function ReadRegister(int $address, string $type, float $scale)
