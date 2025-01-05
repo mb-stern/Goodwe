@@ -70,29 +70,40 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
-                    "type" => "List",
-                    "name" => "SelectedRegisters",
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
                     "rowCount" => 10,
                     "add" => true,
                     "delete" => true,
                     "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "NumberSpinner"]],
-                        ["caption" => "Name", "name" => "name", "width" => "200px", "edit" => ["type" => "ValidationTextBox"]],
+                        ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "NumberSpinner"], "add" => 0],
+                        ["caption" => "Name", "name" => "name", "width" => "200px", "edit" => ["type" => "ValidationTextBox"], "add" => ""],
                         ["caption" => "Type", "name" => "type", "width" => "80px", "edit" => ["type" => "Select", "options" => [
                             ["caption" => "U16", "value" => "U16"],
                             ["caption" => "S16", "value" => "S16"],
                             ["caption" => "U32", "value" => "U32"],
                             ["caption" => "S32", "value" => "S32"]
-                        ]]],
-                        ["caption" => "Unit", "name" => "unit", "width" => "80px", "edit" => ["type" => "ValidationTextBox"]],
-                        ["caption" => "Scale", "name" => "scale", "width" => "80px", "edit" => ["type" => "NumberSpinner"]]
+                        ]], "add" => "U16"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px", "edit" => ["type" => "ValidationTextBox"], "add" => ""],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px", "edit" => ["type" => "NumberSpinner"], "add" => 1]
                     ],
                     "values" => $selectedRegisters
                 ],
                 [
-                    "type" => "IntervalBox",
-                    "name" => "PollInterval",
+                    "type" => "Select",
+                    "name" => "AvailableRegisters",
+                    "caption" => "Add Register",
+                    "options" => $registerOptions
+                ],
+                [
+                    "type" => "Button",
+                    "caption" => "Hinzufügen",
+                    "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
+                ],
+                [
+                    "type"  => "IntervalBox",
+                    "name"  => "PollInterval",
                     "caption" => "Sekunden",
                     "suffix" => "seconds"
                 ]
@@ -105,6 +116,7 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
+        
     }
 
     public function RequestRead()
