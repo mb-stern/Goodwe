@@ -170,7 +170,7 @@ class Goodwe extends IPSModule
                     continue;
                 }
     
-                $scaledValue = $value / $register['scale'];
+                $scaledValue = $value * $register['scale'];
     
                 $variableID = @$this->GetIDForIdent($ident);
                 if ($variableID === false) {
@@ -242,7 +242,6 @@ class Goodwe extends IPSModule
         ]);
     }
     
-
     private function GetVariableDetails(string $unit): ?array
     {
         switch ($unit) {
@@ -265,18 +264,46 @@ class Goodwe extends IPSModule
         }
     }
     
-    
     private function GetRegisters()
     {
         return [
-            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
-            ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
-            ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
-            ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
-            ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1],
-            ["address" => 35182, "name" => "Batterie Leistung", "type" => "S32", "unit" => "W", "scale" => 1],
-            ["address" => 47908, "name" => "State of Charge (SOC)", "type" => "S16", "unit" => "%", "scale" => 1],
-            ["address" => 37003, "name" => "BMS Temperatur", "type" => "S16", "unit" => "°C", "scale" => 10]
+            // Smartmeter
+        ["address" => 36019, "name" => "EVU L1 P", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 36021, "name" => "EVU L2 P", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 36023, "name" => "EVU L3 P", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 36025, "name" => "EVU P Total", "type" => "U16", "unit" => "W", "scale" => 1],
+
+        // Batterie
+        ["address" => 47908, "name" => "Bat1 SOC", "type" => "S16", "unit" => "%", "scale" => 1],
+        ["address" => 45358, "name" => "Bat1 Min SOC OFFLINE", "type" => "U16", "unit" => "%", "scale" => 1],
+        ["address" => 45356, "name" => "Bat1 Min SOC ONLINE", "type" => "U16", "unit" => "%", "scale" => 1],
+        ["address" => 35184, "name" => "Bat1 Mode", "type" => "U16", "unit" => "", "scale" => 1],
+        ["address" => 47907, "name" => "Bat1 Strom", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 47903, "name" => "Bat1 Laden Strom max", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 47905, "name" => "Bat1 Entladen Strom max", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 47906, "name" => "Bat1 Spannung", "type" => "U16", "unit" => "V", "scale" => 0.1],
+        ["address" => 35182, "name" => "Bat1 Leistung", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 47909, "name" => "Bat1 SOH", "type" => "U16", "unit" => "%", "scale" => 1],
+        ["address" => 37003, "name" => "BMS Pack Temperature", "type" => "U16", "unit" => "°C", "scale" => 0.1],
+        ["address" => 35206, "name" => "E-BatteryCharge", "type" => "U16", "unit" => "kWh", "scale" => 0.1],
+        ["address" => 35209, "name" => "E-BatteryDischarge", "type" => "U16", "unit" => "kWh", "scale" => 0.1],
+
+        // Wechslerichter
+        ["address" => 35301, "name" => "Leistung Gesamt", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 35174, "name" => "Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1],
+        ["address" => 35193, "name" => "Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
+        ["address" => 35191, "name" => "Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
+        ["address" => 35189, "name" => "Error Message", "type" => "String", "unit" => "", "scale" => 1],
+        ["address" => 35104, "name" => "Strom String Ost", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 35107, "name" => "Spannung String Ost", "type" => "U16", "unit" => "V", "scale" => 0.1],
+        ["address" => 35108, "name" => "Strom String West", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 35103, "name" => "Spannung String West", "type" => "U16", "unit" => "V", "scale" => 0.1],
+        ["address" => 35345, "name" => "I MPPT1", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 35346, "name" => "I MPPT2", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 35347, "name" => "I MPPT3", "type" => "U16", "unit" => "A", "scale" => 0.1],
+        ["address" => 35337, "name" => "P MPPT1", "type" => "U32", "unit" => "W", "scale" => 1],
+        ["address" => 35338, "name" => "P MPPT2", "type" => "U32", "unit" => "W", "scale" => 1],
+        ["address" => 35339, "name" => "P MPPT3", "type" => "U32", "unit" => "W", "scale" => 1]
         ];
     }
 }
