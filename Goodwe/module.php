@@ -107,6 +107,7 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Erstellen der Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
@@ -127,8 +128,8 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "100px",
-                            "add" => 0, // Standardwert für Address
+                            "width" => "200px",
+                            "add" => 0, // Standardwert beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
@@ -142,33 +143,6 @@ class Goodwe extends IPSModule
                             "edit" => [
                                 "type" => "ValidationTextBox"
                             ]
-                        ],
-                        [
-                            "caption" => "Type",
-                            "name" => "type",
-                            "width" => "80px",
-                            "add" => "U16", // Standardwert für Type
-                            "edit" => [
-                                "type" => "ValidationTextBox"
-                            ]
-                        ],
-                        [
-                            "caption" => "Unit",
-                            "name" => "unit",
-                            "width" => "80px",
-                            "add" => "V", // Standardwert für Unit
-                            "edit" => [
-                                "type" => "ValidationTextBox"
-                            ]
-                        ],
-                        [
-                            "caption" => "Scale",
-                            "name" => "scale",
-                            "width" => "80px",
-                            "add" => 10, // Standardwert für Scale
-                            "edit" => [
-                                "type" => "NumberSpinner"
-                            ]
                         ]
                     ],
                     "values" => $selectedRegisters
@@ -176,8 +150,8 @@ class Goodwe extends IPSModule
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollInterval",
-                    "caption" => "Sekunden",
-                    "suffix" => "seconds"
+                    "caption" => "Abfrageintervall (Sekunden)",
+                    "suffix" => "s"
                 ]
             ],
             "actions" => [
