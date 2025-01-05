@@ -11,7 +11,7 @@ class Goodwe extends IPSModule
         // Initialisiere die Properties
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
-        $this->RegisterPropertyString("SelectedRegisters", "[]");
+        $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
         $this->RegisterPropertyInteger("PollInterval", 60); // Standard 60 Sekunden
     
         // Timer zur zyklischen Abfrage
@@ -56,7 +56,7 @@ class Goodwe extends IPSModule
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $selectedRegisters = [];
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+            //IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
             IPS_ApplyChanges($this->InstanceID);
         }
     
