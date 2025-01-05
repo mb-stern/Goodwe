@@ -267,12 +267,11 @@ class Goodwe extends IPSModule
     private function GetRegisters()
     {
         return [
-            // Smartmeter
+        // Smartmeter
         ["address" => 36019, "name" => "EVU L1 P", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36021, "name" => "EVU L2 P", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36023, "name" => "EVU L3 P", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36025, "name" => "EVU P Total", "type" => "S32", "unit" => "W", "scale" => 1],
-
         // Batterie
         ["address" => 47908, "name" => "Bat1 SOC", "type" => "S16", "unit" => "%", "scale" => 1],
         ["address" => 45358, "name" => "Bat1 Min SOC OFFLINE", "type" => "U16", "unit" => "%", "scale" => 1],
@@ -289,7 +288,6 @@ class Goodwe extends IPSModule
         ["address" => 35209, "name" => "E-BatteryDischarge", "type" => "S32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 47511, "name" => "Bat1 EMSPowerMode", "type" => "U16", "unit" => "", "scale" => 1],
         ["address" => 47512, "name" => "Bat1 EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1],
-
         // Wechslerichter
         ["address" => 35301, "name" => "Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1],
         ["address" => 35174, "name" => "Wechselrichter Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1],
