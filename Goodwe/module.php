@@ -19,6 +19,8 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
     
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -88,6 +90,8 @@ class Goodwe extends IPSModule
     
     public function RequestRead()
     {
+        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
+        
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
