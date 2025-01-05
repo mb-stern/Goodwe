@@ -54,6 +54,7 @@ public function GetConfigurationForm()
 {
     $registers = $this->GetRegisters();
     $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
+    $this->SendDebug("Direct GetRegisters Output", print_r($registers, true), 0);
 
     $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
