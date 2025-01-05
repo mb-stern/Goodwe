@@ -164,6 +164,7 @@ class Goodwe extends IPSModule
                     "rowCount" => 10,
                     "add" => true,
                     "delete" => true,
+                    "onAdd" => '',
                     "columns" => [
                         [
                             "caption" => "Address",
