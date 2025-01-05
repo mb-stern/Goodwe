@@ -74,19 +74,60 @@ class Goodwe extends IPSModule
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
                     "rowCount" => 10,
-                    "delete" => true,
                     "add" => true,
+                    "delete" => true,
                     "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "Select", "options" => array_map(function ($register) {
-                            return [
-                                "caption" => "{$register['address']} - {$register['name']}",
-                                "value" => $register['address']
-                            ];
-                        }, $registers)]],
-                        ["caption" => "Name", "name" => "name", "width" => "200px"],
-                        ["caption" => "Type", "name" => "type", "width" => "80px"],
-                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                        ["caption" => "Scale", "name" => "scale", "width" => "80px"]
+                        [
+                            "caption" => "Address",
+                            "name" => "address",
+                            "width" => "100px",
+                            "add" => true, // `add` aktiviert für diese Spalte
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => array_map(function ($register) {
+                                    return [
+                                        "caption" => "{$register['address']} - {$register['name']}",
+                                        "value" => $register['address']
+                                    ];
+                                }, $registers)
+                            ]
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name" => "name",
+                            "width" => "200px",
+                            "add" => false // Optional manuelles Ergänzen möglich
+                        ],
+                        [
+                            "caption" => "Type",
+                            "name" => "type",
+                            "width" => "80px",
+                            "add" => true, // `add` aktiviert für diese Spalte
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => [
+                                    ["caption" => "U16", "value" => "U16"],
+                                    ["caption" => "S16", "value" => "S16"],
+                                    ["caption" => "U32", "value" => "U32"],
+                                    ["caption" => "S32", "value" => "S32"]
+                                ]
+                            ]
+                        ],
+                        [
+                            "caption" => "Unit",
+                            "name" => "unit",
+                            "width" => "80px",
+                            "add" => false // Optional manuelles Ergänzen möglich
+                        ],
+                        [
+                            "caption" => "Scale",
+                            "name" => "scale",
+                            "width" => "80px",
+                            "add" => true, 
+                            "edit" => [
+                                "type" => "NumberSpinner"
+                            ]
+                        ]
                     ],
                     "values" => $selectedRegisters
                 ],
@@ -105,6 +146,7 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
+        
     }
 
     public function RequestRead()
