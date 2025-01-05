@@ -19,24 +19,19 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
+
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Überprüfen, ob die Liste gültig ist
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
     
-        // Debugging
-        $this->SendDebug("ApplyChanges", "Verarbeitete SelectedRegisters: " . json_encode($selectedRegisters), 0);
-    
         foreach ($selectedRegisters as &$selectedRegister) {
-            // JSON-Dekodierung für verschachtelte Adressen
-            if (isset($selectedRegister['address']) && is_string($selectedRegister['address'])) {
+            // Dekodiere verschachtelte JSON-Einträge
+            if (is_string($selectedRegister['address'])) {
                 $decodedRegister = json_decode($selectedRegister['address'], true);
-                if (is_array($decodedRegister)) {
+                if ($decodedRegister !== null) {
                     $selectedRegister = array_merge($selectedRegister, $decodedRegister);
                 } else {
                     $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
@@ -44,54 +39,41 @@ class Goodwe extends IPSModule
                 }
             }
     
-            // Validierung der erforderlichen Felder
-            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
-                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
+            $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+            if ($variableDetails === null) {
+                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                 continue;
             }
-    
+            
             $ident = "Addr" . $selectedRegister['address'];
-            $profile = $this->GetVariableTypeFromProfile($selectedRegister['unit']);
-    
-            // Überprüfen, ob ein gültiges Profil existiert
-            if ($profile === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil für Einheit {$selectedRegister['unit']} gefunden.", 0);
-                continue;
-            }
-    
-            // Variablenerstellung basierend auf Profil und Typ
+            
+            // Prüfen, ob die Variable bereits existiert
             if (!@$this->GetIDForIdent($ident)) {
-                $variableType = $this->GetVariableTypeFromProfile($profile);
-    
-                switch ($variableType) {
+                switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
+                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
+                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
+                        $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
                         continue 2;
                 }
-    
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
+            
         }
     
-        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
-    
-        // Debugging: Abschluss der ApplyChanges
-        $this->SendDebug("ApplyChanges", "ApplyChanges abgeschlossen", 0);
     }
-    
+
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -226,23 +208,26 @@ class Goodwe extends IPSModule
     }
     
 
-    private function GetVariableTypeFromProfile(string $profile): int
+    private function GetVariableDetails(string $unit): ?array
     {
-        switch ($profile) {
-            case "~Volt":
-            case "~Ampere":
-            case "~Watt":
-            case "~Electricity":
-                return VARIABLETYPE_FLOAT;
-            case "~Battery.100":
-                return VARIABLETYPE_INTEGER;
-            case "~String":
-            case "~TextBox":
-                return VARIABLETYPE_STRING;
+        switch ($unit) {
+            case "V":
+                return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
+            case "A":
+                return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
+            case "W":
+                return ["profile" => "~Watt", "type" => VARIABLETYPE_FLOAT];
+            case "kWh":
+                return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
+            case "%":
+                return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
+            case "String":
+                return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
-                return VARIABLETYPE_STRING; // Fallback
+                return null; // Kein bekanntes Profil oder Typ
         }
     }
+    
     
     private function GetRegisters()
     {
