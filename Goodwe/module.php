@@ -21,34 +21,30 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die verfügbaren Register und ausgewählten Register
-        $availableRegisters = json_decode($this->ReadPropertyString("Registers"), true);
+        // Lese die ausgewählten Register aus der Property
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        $this->SendDebug("ApplyChanges: AvailableRegisters", json_encode($availableRegisters), 0);
+        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
+        // Variablen für alle ausgewählten Register erstellen
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address'], $register['name'], $register['unit'])) {
+                $ident = "Addr" . $register['address'];
     
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
-                continue;
-            }
-    
-            $ident = "Addr" . $selectedRegister['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $selectedRegister['name'],
-                    $this->GetVariableProfile($selectedRegister['unit']),
-                    0
-                );
+                // Überprüfen, ob die Variable existiert
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
     }
+    
     
 public function GetConfigurationForm()
 {
@@ -86,23 +82,28 @@ public function GetConfigurationForm()
         "elements" => [
             [
                 "type"  => "List",
-                "name"  => "Registers",
-                "caption" => "Available Registers",
+                "name"  => "SelectedRegisters",
+                "caption" => "Selected Registers",
                 "rowCount" => 10,
-                "add" => false,
-                "delete" => false,
+                "add" => true,
+                "delete" => true,
                 "columns" => [
-                    ["caption" => "Address", "name" => "address", "width" => "100px"],
-                    ["caption" => "Name", "name" => "name", "width" => "200px"],
-                    ["caption" => "Type", "name" => "type", "width" => "80px"],
-                    ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                    ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                    ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
+                    ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "NumberSpinner"]],
+                    ["caption" => "Name", "name" => "name", "width" => "200px", "edit" => ["type" => "ValidationTextBox"]],
+                    ["caption" => "Type", "name" => "type", "width" => "80px", "edit" => ["type" => "Select", "options" => [
+                        ["caption" => "U16", "value" => "U16"],
+                        ["caption" => "S16", "value" => "S16"],
+                        ["caption" => "U32", "value" => "U32"],
+                        ["caption" => "S32", "value" => "S32"]
+                    ]]],
+                    ["caption" => "Unit", "name" => "unit", "width" => "80px", "edit" => ["type" => "ValidationTextBox"]],
+                    ["caption" => "Scale", "name" => "scale", "width" => "80px", "edit" => ["type" => "NumberSpinner"]]
                 ],
-                "values" => $values
+                "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
             ]
         ]
     ]);
+    
 }
 
 
