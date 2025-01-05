@@ -164,12 +164,12 @@ class Goodwe extends IPSModule
                     "rowCount" => 10,
                     "add" => true,
                     "delete" => true,
-                    "onAdd" => '',
                     "columns" => [
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "200px",
+                            "width" => "400px",
+                            "add" => '',
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
