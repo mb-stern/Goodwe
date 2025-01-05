@@ -168,7 +168,7 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "400px",
+                            "width" => "300px",
                             "add" => '',
                             "edit" => [
                                 "type" => "Select",
@@ -181,7 +181,6 @@ class Goodwe extends IPSModule
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollInterval",
-                    "width" => "400px",
                     "caption" => "Abfrageintervall (Sekunden)",
                     "suffix" => "s"
                 ]
