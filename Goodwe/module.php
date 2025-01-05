@@ -82,6 +82,7 @@ class Goodwe extends IPSModule
                             "name" => "address",
                             "width" => "300px",
                             "add" => true,
+                            "save" => true,
                             "edit" => [
                                 "type" => "Select",
                                 "options" => array_map(function ($register) {
@@ -91,6 +92,12 @@ class Goodwe extends IPSModule
                                     ];
                                 }, $registers)
                             ]
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name" => "name",
+                            "width" => "200px",
+                            "save" => true
                         ]
                     ],
                     "values" => $selectedRegisters
