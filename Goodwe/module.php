@@ -147,6 +147,7 @@ class Goodwe extends IPSModule
                     "caption" => "Read Values",
                     "onClick" => "Goodwe_RequestRead($id);"
                 ]
+                ]
         ]);
     }
     
