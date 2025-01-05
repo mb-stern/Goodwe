@@ -88,7 +88,8 @@ class Goodwe extends IPSModule
     
     public function RequestRead()
     {
-        $parentID = $this->ParentID;
+        $instance = IPS_GetInstance($this->InstanceID);
+        $parentID = $instance['ConnectionID'];
     
         // Prüfen, ob ein Parent verbunden ist
         if ($parentID == 0) {
@@ -182,6 +183,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
         }
     }
+    
     
     public function GetConfigurationForm()
     {
