@@ -140,15 +140,15 @@ class Goodwe extends IPSModule
                     "caption" => "Poll Interval (seconds)",
                     "suffix" => "seconds"
                 ]
-                ],
+            ],
                 "actions" => [
                 [
                     "type" => "Button",
                     "caption" => "Read Values",
                     "onClick" => "Goodwe_RequestRead($id);"
                 ]
-                ]
-                ]);
+            ]
+        ]);
     }
     
     public function RequestRead()
