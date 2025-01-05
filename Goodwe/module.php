@@ -91,17 +91,6 @@ class Goodwe extends IPSModule
                     "values" => $selectedRegisters
                 ],
                 [
-                    "type" => "Select",
-                    "name" => "AvailableRegisters",
-                    "caption" => "Add Register",
-                    "options" => $registerOptions
-                ],
-                [
-                    "type" => "Button",
-                    "caption" => "Hinzufügen",
-                    "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
-                ],
-                [
                     "type"  => "IntervalBox",
                     "name"  => "PollInterval",
                     "caption" => "Sekunden",
@@ -115,7 +104,7 @@ class Goodwe extends IPSModule
                     "onClick" => 'Goodwe_RequestRead($id);'
                 ]
             ]
-        ]);
+        ]);        
         
     }
 
