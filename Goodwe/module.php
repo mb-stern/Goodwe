@@ -20,35 +20,33 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register aus
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         foreach ($selectedRegisters as $register) {
-            if (isset($register['address'], $register['name'], $register['unit'])) {
-                $ident = "Addr" . $register['address'];
+            if (!isset($register['address'], $register['name'], $register['unit'])) {
+                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
+                continue;
+            }
     
-                // Prüfen, ob die Variable existiert
-                if (!@$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                    $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
-                }
+            $ident = "Addr" . $register['address'];
+    
+            if (!@$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
             }
         }
     
-        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
+    
+    
 
     public function RequestAction($ident, $value)
     {
@@ -200,37 +198,6 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
-    
-    public function ApplyChanges()
-    {
-        parent::ApplyChanges();
-    
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address'], $register['name'], $register['unit'])) {
-                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $register['address'];
-    
-            if (!@$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
-            }
-        }
-    
-        $pollInterval = $this->ReadPropertyInteger("PollInterval");
-        $this->SetTimerInterval("Poller", $pollInterval * 1000);
-    }
-    
     
     private function GetVariableProfile(string $unit)
     {
