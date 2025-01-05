@@ -145,7 +145,7 @@ class Goodwe extends IPSModule
                 [
                     "type" => "Button",
                     "caption" => "Read Values",
-                    "onClick" => "IPS_RequestRead();"
+                    "onClick" => "Goodwe_RequestRead();"
                 ]
             ]
         ]);
