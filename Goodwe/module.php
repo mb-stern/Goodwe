@@ -135,12 +135,18 @@ class Goodwe extends IPSModule
                     "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
                 ],
                 [
-                    "type"  => "NumberSpinner",
+                    "type"  => "IntervalBox",
                     "name"  => "PollInterval",
                     "caption" => "Poll Interval (seconds)",
                     "suffix" => "seconds"
                 ]
-            ]
+                ],
+                "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Read Values",
+                    "onClick" => "Goodwe_RequestRead($id);"
+                ]
         ]);
     }
     
