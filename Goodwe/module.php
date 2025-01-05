@@ -11,37 +11,68 @@ class Goodwe extends IPSModule
         // Verknüpfe mit dem Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
     
-        // Property für die Register-Liste
-        $this->RegisterPropertyString('Registers', json_encode($this->GetRegisters()));
-        $this->RegisterPropertyString('SelectedRegisters', json_encode([]));
+        // Eigenschaft für verfügbare Register initialisieren
+        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
     
-        // Timer für zyklische Abfragen
-        $this->RegisterTimer('Poller', 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        // Eigenschaft für ausgewählte Register initialisieren
+        $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
+    
+        // Timer zur zyklischen Abfrage
+        $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
     
-
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
-        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+        // Lade verfügbare Register aus der Property
+        $registers = json_decode($this->ReadPropertyString("Registers"), true);
+        $this->SendDebug("ApplyChanges: Registers", json_encode($registers), 0);
+    
+        // Lade ausgewählte Register aus der Property
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        foreach ($selectedRegisters as $register) {
-            if ($register['selected']) {
-                $ident = "Addr" . $register['address'];
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+        // Überprüfen, ob beide Listen gültig sind
+        if (!is_array($registers) || !is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "Registers oder SelectedRegisters sind keine gültigen Listen.", 0);
+            return;
+        }
+    
+        foreach ($selectedRegisters as $selectedRegister) {
+            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
+                continue;
+            }
+    
+            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
+            if (!$register) {
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     }
     
+    private function FindRegisterByAddress(int $address)
+    {
+        $registers = json_decode($this->ReadPropertyString("Registers"), true);
+        foreach ($registers as $register) {
+            if ($register['address'] === $address) {
+                return $register;
+            }
+        }
+        return null;
+    }
+
 
     public function GetConfigurationForm()
     {
