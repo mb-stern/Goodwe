@@ -141,7 +141,8 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        foreach ($this->ReadPropertyString("SelectedRegisters") as $register) {
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        foreach ($selectedRegisters as $register) {
             $ident = "Addr" . $register['address'];
     
             // Modbus-Anfrage senden
