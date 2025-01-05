@@ -140,30 +140,20 @@ class Goodwe extends IPSModule
         }
     }
     
+
     public function GetConfigurationForm()
     {
-        $registers = $this->GetRegisters(); // Vollständige Liste der verfügbaren Register
+        $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging: Anzeigen von Registers und SelectedRegisters
-        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        // Adressen der bereits ausgewählten Register
-        $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
-    
-        // Filtere bereits ausgewählte Register
-        $availableRegisters = array_filter($registers, function ($register) use ($selectedAddresses) {
-            return !in_array($register['address'], $selectedAddresses);
-        });
-    
-        // Optionen für die Auswahl erstellen
+        // Erstellen der Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => $register['address']
+                "value" => json_encode($register) // Speichert das gesamte Register als JSON
             ];
-        }, $availableRegisters);
+        }, $registers);
+        
     
         return json_encode([
             "elements" => [
@@ -178,11 +168,11 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "200px",
-                            "add" => "", // Kein Standardwert
+                            "width" => "300px",
+                            "add" => '',
                             "edit" => [
                                 "type" => "Select",
-                                "options" => $registerOptions // Nur nicht-ausgewählte Register
+                                "options" => $registerOptions
                             ]
                         ]
                     ],
@@ -205,6 +195,7 @@ class Goodwe extends IPSModule
         ]);
     }
     
+
     private function GetVariableProfile(string $unit)
     {
         switch ($unit) {
