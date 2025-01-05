@@ -141,56 +141,61 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['address'], $register['type'], $register['scale'])) {
-                $value = $this->ReadRegister($register['address'], $register['type'], $register['scale']);
-                $ident = "Addr" . $register['address'];
-                $this->SetValue($ident, $value);
-            }
-        }
-    }
-
+        foreach ($this->Registers() as $register) {
+            $ident = "Addr" . $register['address'];
     
-    private function ReadRegister(int $address, string $type, float $scale)
-    {
-        $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
-
-        $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $address,
-            "Quantity" => $quantity
-        ]));
-
-        if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-            $this->SendDebug("Error", "Keine oder unvollständige Antwort für Register $address", 0);
-            return 0;
+            // Modbus-Anfrage senden
+            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
+    
+            $response = $this->SendDataToParent(json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address"  => $register['address'],
+                "Quantity" => $quantity,
+                "Data"     => ""
+            ]));
+    
+            // Fehlerbehandlung
+            if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
+                continue;
+            }
+    
+            // Antwortdaten extrahieren
+            $data = unpack("n*", substr($response, 2));
+            $value = 0;
+    
+            // Werte basierend auf Typ interpretieren
+            switch ($register['type']) {
+                case "U16":
+                    $value = $data[1];
+                    break;
+                case "S16":
+                    $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                    break;
+                case "U32":
+                    $value = ($data[1] << 16) | $data[2];
+                    break;
+                case "S32":
+                    $combined = ($data[1] << 16) | $data[2];
+                    $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                    break;
+            }
+    
+            $scaledValue = $value / $register['scale'];
+    
+            // Prüfen, ob Variable existiert, bevor der Wert geschrieben wird
+            $variableID = @$this->GetIDForIdent($ident);
+            if ($variableID === false) {
+                $this->SendDebug("Error", "Variable mit Ident $ident wurde nicht gefunden.", 0);
+                continue;
+            }
+    
+            SetValue($variableID, $scaledValue);
+            $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
         }
-
-        $data = unpack("n*", substr($response, 2));
-        $value = 0;
-
-        switch ($type) {
-            case "U16":
-                $value = $data[1];
-                break;
-            case "S16":
-                $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                break;
-            case "U32":
-                $value = ($data[1] << 16) | $data[2];
-                break;
-            case "S32":
-                $combined = ($data[1] << 16) | $data[2];
-                $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                break;
-            default:
-                $this->SendDebug("Error", "Unbekannter Typ für Register $address: $type", 0);
-        }
-
-        return $value / $scale;
     }
+
 
     private function GetRegisters()
     {
