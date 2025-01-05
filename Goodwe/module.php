@@ -81,8 +81,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "300px",
-                            "add" => true,
-                            "save" => true,
+                            "add" => 0, // Standardwert für Address beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
                                 "options" => array_map(function ($register) {
@@ -97,6 +96,7 @@ class Goodwe extends IPSModule
                             "caption" => "Name",
                             "name" => "name",
                             "width" => "200px",
+                            "add" => "", // Standardwert für Name beim Hinzufügen
                             "save" => true
                         ]
                     ],
