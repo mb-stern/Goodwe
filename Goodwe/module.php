@@ -28,35 +28,38 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as &$selectedRegister) {
-            // Dekodiere verschachtelte JSON-Einträge
-            if (is_string($selectedRegister['address'])) {
-                $decodedRegister = json_decode($selectedRegister['address'], true);
-                if ($decodedRegister !== null) {
-                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                    continue;
-                }
-            }
-    
-            // Erstelle Variablen
             if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
                 $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
                 continue;
             }
-    
+        
             $ident = "Addr" . $selectedRegister['address'];
+            $profile = $this->GetVariableProfile($selectedRegister['unit']);
+        
             if (!@$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $selectedRegister['name'],
-                    $this->GetVariableProfile($selectedRegister['unit']),
-                    0
-                );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']}.", 0);
+                // Variablentyp basierend auf Profil ableiten
+                $variableType = $this->GetVariableTypeFromProfile($profile);
+        
+                switch ($variableType) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    default:
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
+                        continue;
+                }
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
-    
+        
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
@@ -195,26 +198,29 @@ class Goodwe extends IPSModule
     }
     
 
-    private function GetVariableProfile(string $unit)
+    private function GetVariableTypeFromProfile(string $profile): int
     {
-        switch ($unit) {
-            case "V":
-                return "~Volt";
-            case "A":
-                return "~Ampere";
-            case "W":
-                return "~Watt";
-            case "kWh":
-                return "~Electricity";
+        switch ($profile) {
+            case "~Volt":
+            case "~Ampere":
+            case "~Watt":
+            case "~Electricity":
+                return VARIABLETYPE_FLOAT;
+            case "~Battery.100":
+                return VARIABLETYPE_INTEGER;
+            case "~String":
+            case "~TextBox":
+                return VARIABLETYPE_STRING;
             default:
-                return ""; // Fallback
+                return VARIABLETYPE_FLOAT; // Fallback, wenn das Profil unbekannt ist
         }
     }
+    
 
     private function GetRegisters()
     {
         return [
-            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
+            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "var" => "float", "scale" => 10],
             ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
             ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
