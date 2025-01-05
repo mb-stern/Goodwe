@@ -18,51 +18,38 @@ class Goodwe extends IPSModule
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
-public function ApplyChanges()
-{
-    parent::ApplyChanges();
+    public function ApplyChanges()
+    {
+        parent::ApplyChanges();
+        
+        // Lese die ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
+        }
 
-    // Lese die ausgewählten Register
-    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
 
-    // Debugging
-    $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+        // Variablen für die ausgewählten Register erstellen
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address'], $register['name'], $register['unit'])) {
+                $ident = "Addr" . $register['address'];
 
-    foreach ($selectedRegisters as &$register) {
-        // Ergänze fehlende Felder mit den Daten aus GetRegisters
-        if (!isset($register['name']) || !isset($register['unit'])) {
-            $matchingRegister = array_filter($this->GetRegisters(), function ($r) use ($register) {
-                return $r['address'] === $register['address'];
-            });
-
-            if (!empty($matchingRegister)) {
-                $matchingRegister = array_shift($matchingRegister);
-                $register = array_merge($matchingRegister, $register);
+                if (!@$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
 
-        // Erstelle die Variable
-        if (isset($register['address'], $register['name'], $register['unit'])) {
-            $ident = "Addr" . $register['address'];
-            if (!@$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
-            }
-        }
+        // Timer setzen
+        $pollInterval = $this->ReadPropertyInteger("PollInterval");
+        $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
-
-    // Aktualisiere die Property mit den vollständigen Daten
-    IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-    IPS_ApplyChanges($this->InstanceID);
-
-    // Timer setzen
-    $pollInterval = $this->ReadPropertyInteger("PollInterval");
-    $this->SetTimerInterval("Poller", $pollInterval * 1000);
-}
 
     public function GetConfigurationForm()
     {
