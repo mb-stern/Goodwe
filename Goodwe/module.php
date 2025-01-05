@@ -51,39 +51,43 @@ class Goodwe extends IPSModule
     }
 
     public function RequestAction($ident, $value)
-{
-    if ($ident === "AddRegister") {
-        // Lade die aktuelle Liste der ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
-        }
-
-        // Neues Register hinzufügen
-        $newRegister = array_filter($this->GetRegisters(), function ($register) use ($value) {
-            return $register['address'] == $value;
-        });
-
-        if (!empty($newRegister)) {
-            $newRegister = reset($newRegister); // Hole das erste (und einzige) passende Register
-
-            // Verhindere Duplikate
-            foreach ($selectedRegisters as $register) {
-                if ($register['address'] === $newRegister['address']) {
-                    $this->SendDebug("RequestAction", "Register bereits hinzugefügt: " . json_encode($newRegister), 0);
-                    return; // Duplikat, nichts tun
-                }
+    {
+        if ($ident === "AddRegister") {
+            // Lade die aktuelle Liste der ausgewählten Register
+            $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+            if (!is_array($selectedRegisters)) {
+                $selectedRegisters = [];
             }
-
-            $selectedRegisters[] = $newRegister;
-
-            // Property aktualisieren
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-            IPS_ApplyChanges($this->InstanceID);
+    
+            // Finde das ausgewählte Register in der Liste der verfügbaren Register
+            $availableRegisters = $this->GetRegisters();
+            $newRegister = array_filter($availableRegisters, function ($register) use ($value) {
+                return $register['address'] == $value;
+            });
+    
+            if (!empty($newRegister)) {
+                $newRegister = reset($newRegister); // Hole das erste (und einzige) passende Register
+    
+                // Verhindere Duplikate
+                foreach ($selectedRegisters as $register) {
+                    if ($register['address'] === $newRegister['address']) {
+                        $this->SendDebug("RequestAction", "Register bereits hinzugefügt: " . json_encode($newRegister), 0);
+                        return; // Duplikat, nichts tun
+                    }
+                }
+    
+                // Füge das Register hinzu
+                $selectedRegisters[] = $newRegister;
+    
+                // Property aktualisieren
+                IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+                IPS_ApplyChanges($this->InstanceID);
+            } else {
+                $this->SendDebug("RequestAction", "Register nicht gefunden für Adresse: $value", 0);
+            }
         }
     }
-}
-
+    
     
     public function RequestRead()
     {
@@ -104,7 +108,7 @@ class Goodwe extends IPSModule
     
             // Fehlerbehandlung
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                $this->SendDebug("Error", "No or incomplete response for Register {$register['address']}", 0);
+                $this->SendDebug("RequestRead", "No or incomplete response for Register {$register['address']}", 0);
                 continue;
             }
     
