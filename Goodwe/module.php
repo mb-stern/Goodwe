@@ -20,7 +20,12 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
+        // Lese die aktuelle Liste der ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = []; // Falls die Liste ungültig ist, initialisiere sie leer
+        }
+    
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         foreach ($selectedRegisters as $register) {
@@ -31,6 +36,7 @@ class Goodwe extends IPSModule
     
             $ident = "Addr" . $register['address'];
     
+            // Prüfe, ob die Variable existiert
             if (!@$this->GetIDForIdent($ident)) {
                 $this->RegisterVariableFloat(
                     $ident,
@@ -46,8 +52,6 @@ class Goodwe extends IPSModule
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
     
-    
-
     public function RequestAction($ident, $value)
     {
         if ($ident === "AddRegister") {
@@ -151,11 +155,10 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Optionen für die Auswahlliste erstellen
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => $register // Das gesamte Register als Array speichern
+                "value" => $register
             ];
         }, $registers);
     
@@ -173,11 +176,16 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "200px",
-                            "add" => "", // Standardwert beim Hinzufügen
+                            "add" => 0,
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
                             ]
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name" => "name",
+                            "width" => "200px"
                         ]
                     ],
                     "values" => $selectedRegisters
@@ -198,6 +206,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
     
     private function GetVariableProfile(string $unit)
     {
