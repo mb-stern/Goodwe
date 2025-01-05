@@ -17,41 +17,43 @@ class Goodwe extends IPSModule
     }
     
     
-    public function ApplyChanges()
-    {
-        parent::ApplyChanges();
-    
-        // Lese die ausgewählten Register aus der Property
+
+    public function RequestAction($ident, $value)
+{
+    if ($ident === "AddRegister") {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist ungültig", 0);
-            return;
+
+        $newRegister = json_decode($value, true);
+        if (is_array($newRegister)) {
+            $selectedRegisters[] = $newRegister;
+            $this->WritePropertyString("SelectedRegisters", json_encode($selectedRegisters));
+            $this->ApplyChanges();
         }
-    
-        // Variablen für alle ausgewählten Register erstellen
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['address'], $register['name'], $register['unit'])) {
-                $ident = "Addr" . $register['address'];
-    
-                // Überprüfen, ob die Variable existiert
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
-            } else {
-                $this->SendDebug("ApplyChanges: Ungültiges Register", json_encode($register), 0);
+    }
+}
+
+public function ApplyChanges()
+{
+    parent::ApplyChanges();
+
+    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+
+    foreach ($selectedRegisters as $register) {
+        if (isset($register['address'], $register['name'], $register['unit'])) {
+            $ident = "Addr" . $register['address'];
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
             }
         }
     }
-    
+}
+
     
     public function GetConfigurationForm()
     {
@@ -60,6 +62,14 @@ class Goodwe extends IPSModule
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
+        $registerOptions = [];
+        foreach ($registers as $register) {
+            $registerOptions[] = [
+                "caption" => "{$register['address']} - {$register['name']}",
+                "value" => json_encode($register)
+            ];
+        }
     
         return json_encode([
             "elements" => [
@@ -71,55 +81,29 @@ class Goodwe extends IPSModule
                     "add" => true,
                     "delete" => true,
                     "columns" => [
-                        [
-                            "caption" => "Address",
-                            "name" => "address",
-                            "width" => "100px",
-                            "edit" => ["type" => "NumberSpinner"],
-                            "add" => 0 // Standardwert für Address
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name" => "name",
-                            "width" => "200px",
-                            "edit" => ["type" => "ValidationTextBox"],
-                            "add" => "" // Standardwert für Name
-                        ],
-                        [
-                            "caption" => "Type",
-                            "name" => "type",
-                            "width" => "80px",
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => [
-                                    ["caption" => "U16", "value" => "U16"],
-                                    ["caption" => "S16", "value" => "S16"],
-                                    ["caption" => "U32", "value" => "U32"],
-                                    ["caption" => "S32", "value" => "S32"]
-                                ]
-                            ],
-                            "add" => "U16" // Standardwert für Type
-                        ],
-                        [
-                            "caption" => "Unit",
-                            "name" => "unit",
-                            "width" => "80px",
-                            "edit" => ["type" => "ValidationTextBox"],
-                            "add" => "" // Standardwert für Unit
-                        ],
-                        [
-                            "caption" => "Scale",
-                            "name" => "scale",
-                            "width" => "80px",
-                            "edit" => ["type" => "NumberSpinner"],
-                            "add" => 1 // Standardwert für Scale
-                        ]
+                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Type", "name" => "type", "width" => "80px"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px"]
                     ],
-                    "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
+                    "values" => $selectedRegisters
+                ],
+                [
+                    "type" => "Select",
+                    "name" => "AvailableRegisters",
+                    "caption" => "Add Register",
+                    "options" => $registerOptions
+                ],
+                [
+                    "type" => "Button",
+                    "caption" => "Hinzufügen",
+                    "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
                 ]
             ]
         ]);
     }
+    
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
