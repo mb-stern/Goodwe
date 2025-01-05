@@ -97,36 +97,6 @@ class Goodwe extends IPSModule
                             "name" => "name",
                             "width" => "200px",
                             "add" => false // Optional manuelles Ergänzen möglich
-                        ],
-                        [
-                            "caption" => "Type",
-                            "name" => "type",
-                            "width" => "80px",
-                            "add" => true, // `add` aktiviert für diese Spalte
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => [
-                                    ["caption" => "U16", "value" => "U16"],
-                                    ["caption" => "S16", "value" => "S16"],
-                                    ["caption" => "U32", "value" => "U32"],
-                                    ["caption" => "S32", "value" => "S32"]
-                                ]
-                            ]
-                        ],
-                        [
-                            "caption" => "Unit",
-                            "name" => "unit",
-                            "width" => "80px",
-                            "add" => false // Optional manuelles Ergänzen möglich
-                        ],
-                        [
-                            "caption" => "Scale",
-                            "name" => "scale",
-                            "width" => "80px",
-                            "add" => true, // `add` aktiviert für diese Spalte
-                            "edit" => [
-                                "type" => "NumberSpinner"
-                            ]
                         ]
                     ],
                     "values" => $selectedRegisters
