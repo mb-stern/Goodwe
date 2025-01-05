@@ -8,55 +8,48 @@ class Goodwe extends IPSModule
     {
         parent::Create();
     
-        // Register properties
+        // Initialisiere die Property mit den verfügbaren Registern
+        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
-        $this->RegisterPropertyString("Registers", json_encode([]));
     
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
     
+    
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
-        // Stelle sicher, dass die Registers-Property initialisiert ist
-        $registers = json_decode($this->ReadPropertyString("Registers"), true);
-        if (empty($registers)) {
-            $registers = $this->GetRegisters();
-            $this->UpdateRegistersProperty($registers);
-        }
-    
-        // Weiterverarbeitung
+        // Lese die verfügbaren Register und ausgewählten Register
+        $availableRegisters = json_decode($this->ReadPropertyString("Registers"), true);
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        // Debugging
-        $this->SendDebug("ApplyChanges: Registers", json_encode($registers), 0);
+    
+        $this->SendDebug("ApplyChanges: AvailableRegisters", json_encode($availableRegisters), 0);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Verarbeite ausgewählte Register
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
+    
         foreach ($selectedRegisters as $selectedRegister) {
-            if ($selectedRegister['selected']) {
-                $ident = "Addr" . $selectedRegister['address'];
-                if (!$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $selectedRegister['name'],
-                        $this->GetVariableProfile($selectedRegister['unit']),
-                        0
-                    );
-                }
+            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
+                continue;
+            }
+    
+            $ident = "Addr" . $selectedRegister['address'];
+            if (!$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $selectedRegister['name'],
+                    $this->GetVariableProfile($selectedRegister['unit']),
+                    0
+                );
             }
         }
     }
-
-    private function UpdateRegistersProperty(array $registers)
-    {
-        $this->WritePropertyString("Registers", json_encode($registers));
-        $this->SendDebug("UpdateRegistersProperty", json_encode($registers), 0);
-    }
-
-
-
+    
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
