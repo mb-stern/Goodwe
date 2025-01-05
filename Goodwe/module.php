@@ -19,34 +19,45 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
-
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-
-        foreach ($selectedRegisters as $register) {
-            if (isset($register['address'], $register['name'], $register['unit'])) {
-                $ident = "Addr" . $register['address'];
-                if (!@$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                    $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
-                }
+    
+        // Lese die ausgewählten Register
+        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedAddresses), 0);
+    
+        // Hole alle verfügbaren Register
+        $registers = $this->GetRegisters();
+    
+        // Variablen für die ausgewählten Register erstellen
+        foreach ($selectedAddresses as $address) {
+            // Suche das Register in der Liste der verfügbaren Register
+            $register = array_filter($registers, fn($r) => $r['address'] === $address);
+            $register = reset($register); // Nimmt das erste (und einzige) Ergebnis
+            if (!$register) {
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address $address", 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+    
+            // Prüfen, ob die Variable bereits existiert
+            if (!@$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
-
+    
+        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
+    
 
     public function RequestRead()
     {
