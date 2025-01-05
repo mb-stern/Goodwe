@@ -8,16 +8,15 @@ class Goodwe extends IPSModule
     {
         parent::Create();
     
-        // Initialisiere die Property mit den verfügbaren Registern
+        // Initialisiere die Properties
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
+        $this->RegisterPropertyInteger("PollInterval", 60); // Standard 60 Sekunden
     
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
     
-    
-
     public function RequestAction($ident, $value)
     {
         if ($ident === "AddRegister") {
@@ -30,6 +29,13 @@ class Goodwe extends IPSModule
             // Neues Register hinzufügen
             $newRegister = json_decode($value, true);
             if (is_array($newRegister)) {
+                foreach ($selectedRegisters as $register) {
+                    if ($register['address'] === $newRegister['address']) {
+                        $this->SendDebug("RequestAction", "Register bereits hinzugefügt: " . json_encode($newRegister), 0);
+                        return; // Duplikat, nichts tun
+                    }
+                }
+    
                 $selectedRegisters[] = $newRegister;
     
                 // Property aktualisieren
@@ -41,26 +47,21 @@ class Goodwe extends IPSModule
         }
     }
     
-
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register aus der Property
+        // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Variablen für alle ausgewählten Register erstellen
+        // Variablen für die ausgewählten Register erstellen
         foreach ($selectedRegisters as $register) {
             if (isset($register['address'], $register['name'], $register['unit'])) {
                 $ident = "Addr" . $register['address'];
     
-                // Überprüfen, ob die Variable existiert
                 $varId = @$this->GetIDForIdent($ident);
                 if ($varId === false) {
-                    // Falls nicht vorhanden, Variable registrieren
                     $this->RegisterVariableFloat(
                         $ident,
                         $register['name'],
@@ -75,9 +76,11 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
             }
         }
-    }
     
-
+        // Timer setzen
+        $pollInterval = $this->ReadPropertyInteger("PollInterval");
+        $this->SetTimerInterval("Poller", $pollInterval * 1000);
+    }
     
     public function GetConfigurationForm()
     {
@@ -123,11 +126,30 @@ class Goodwe extends IPSModule
                     "type" => "Button",
                     "caption" => "Hinzufügen",
                     "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
+                ],
+                [
+                    "type"  => "NumberSpinner",
+                    "name"  => "PollInterval",
+                    "caption" => "Poll Interval (seconds)",
+                    "suffix" => "seconds"
                 ]
             ]
         ]);
+        
     }
     
+    public function RequestRead()
+    {
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address'], $register['type'], $register['scale'])) {
+                $value = $this->ReadRegister($register['address'], $register['type'], $register['scale']);
+                $ident = "Addr" . $register['address'];
+                $this->SetValue($ident, $value);
+            }
+        }
+    }
+
     
     private function ReadRegister(int $address, string $type, float $scale)
     {
