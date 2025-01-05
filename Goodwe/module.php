@@ -169,7 +169,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "200px",
-                            "add" => 0,
+                            "add" => true,
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
