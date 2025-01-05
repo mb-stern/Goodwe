@@ -18,59 +18,52 @@ class Goodwe extends IPSModule
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
-    public function ApplyChanges()
-    {
-        parent::ApplyChanges();
-    
-        // Lese die ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Debugging
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        // Prüfen, ob Ergänzungen notwendig sind
-        $updatesRequired = false;
-    
-        foreach ($selectedRegisters as &$register) {
-            // Ergänze fehlende Felder mit den Daten aus GetRegisters
-            if (!isset($register['name']) || !isset($register['unit'])) {
-                $matchingRegister = array_filter($this->GetRegisters(), function ($r) use ($register) {
-                    return $r['address'] === $register['address'];
-                });
-    
-                if (!empty($matchingRegister)) {
-                    $matchingRegister = array_shift($matchingRegister);
-                    $register = array_merge($matchingRegister, $register);
-                    $updatesRequired = true;
-                }
-            }
-    
-            // Erstelle die Variable
-            if (isset($register['address'], $register['name'], $register['unit'])) {
-                $ident = "Addr" . $register['address'];
-                if (!@$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
+public function ApplyChanges()
+{
+    parent::ApplyChanges();
+
+    // Lese die ausgewählten Register
+    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
+    // Debugging
+    $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+
+    foreach ($selectedRegisters as &$register) {
+        // Ergänze fehlende Felder mit den Daten aus GetRegisters
+        if (!isset($register['name']) || !isset($register['unit'])) {
+            $matchingRegister = array_filter($this->GetRegisters(), function ($r) use ($register) {
+                return $r['address'] === $register['address'];
+            });
+
+            if (!empty($matchingRegister)) {
+                $matchingRegister = array_shift($matchingRegister);
+                $register = array_merge($matchingRegister, $register);
             }
         }
-    
-        // Aktualisiere die Property nur, wenn Änderungen vorgenommen wurden
-        if ($updatesRequired) {
-            $this->SendDebug("ApplyChanges", "Updating SelectedRegisters property.", 0);
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-            // Keine `IPS_ApplyChanges()` hier aufrufen! Endlosschleife vermeiden.
+
+        // Erstelle die Variable
+        if (isset($register['address'], $register['name'], $register['unit'])) {
+            $ident = "Addr" . $register['address'];
+            if (!@$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
+            }
         }
-    
-        // Timer setzen
-        $pollInterval = $this->ReadPropertyInteger("PollInterval");
-        $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
-    
+
+    // Aktualisiere die Property mit den vollständigen Daten
+    IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+    IPS_ApplyChanges($this->InstanceID);
+
+    // Timer setzen
+    $pollInterval = $this->ReadPropertyInteger("PollInterval");
+    $this->SetTimerInterval("Poller", $pollInterval * 1000);
+}
+
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
