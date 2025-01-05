@@ -97,9 +97,11 @@ class Goodwe extends IPSModule
             return;
         }
     
-        // Prüfen, ob der Parent-Socket geöffnet ist
+        // Prüfen, ob der Parent die Eigenschaft 'Open' hat und ob sie gesetzt ist
         try {
-            if (!IPS_GetProperty($parentID, 'Open')) {
+            $parentObject = IPS_GetObject($parentID);
+            $parentModule = IPS_GetModule($parentObject['ModuleID']);
+            if (array_key_exists('Open', $parentModule['Properties']) && !IPS_GetProperty($parentID, 'Open')) {
                 $this->SendDebug("RequestRead", "Socket ist nicht verbunden. Abfrage übersprungen.", 0);
                 return;
             }
@@ -183,7 +185,6 @@ class Goodwe extends IPSModule
             $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
         }
     }
-    
     
     public function GetConfigurationForm()
     {
