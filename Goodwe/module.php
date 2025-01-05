@@ -52,8 +52,14 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register
+        // Sicherstellen, dass SelectedRegisters immer korrekt initialisiert wird
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
+            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+            IPS_ApplyChanges($this->InstanceID);
+        }
+    
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         // Variablen für die ausgewählten Register erstellen
@@ -197,21 +203,6 @@ class Goodwe extends IPSModule
         }
     }
 
-
-    private function GetRegisters()
-    {
-        $registers = [
-            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
-            ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
-            ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
-            ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
-            ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
-        ];
-        $this->SendDebug("GetRegisters", json_encode($registers), 0);
-        return $registers;
-    }
-    
-
     private function GetVariableProfile(string $unit)
     {
         switch ($unit) {
@@ -226,5 +217,18 @@ class Goodwe extends IPSModule
             default:
                 return ""; // Fallback
         }
+    }
+
+    private function GetRegisters()
+    {
+        $registers = [
+            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
+            ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
+            ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
+            ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
+            ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
+        ];
+        $this->SendDebug("GetRegisters", json_encode($registers), 0);
+        return $registers;
     }
 }
