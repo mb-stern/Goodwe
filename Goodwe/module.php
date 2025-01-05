@@ -19,24 +19,27 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Lese die aktuelle Liste der ausgewählten Register
+        
+        // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = []; // Falls die Liste ungültig ist, initialisiere sie leer
-        }
-    
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address'], $register['name'], $register['unit'])) {
-                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
+        $availableRegisters = $this->GetRegisters();
+    
+        foreach ($selectedRegisters as $selectedRegister) {
+            $register = array_filter($availableRegisters, function ($r) use ($selectedRegister) {
+                return $r['address'] === $selectedRegister['address'];
+            });
+    
+            $register = reset($register); // Erstes Element der gefilterten Liste
+            if (!$register) {
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address " . json_encode($selectedRegister), 0);
                 continue;
             }
     
             $ident = "Addr" . $register['address'];
     
-            // Prüfe, ob die Variable existiert
+            // Prüfen, ob die Variable bereits existiert
             if (!@$this->GetIDForIdent($ident)) {
                 $this->RegisterVariableFloat(
                     $ident,
@@ -45,61 +48,25 @@ class Goodwe extends IPSModule
                     0
                 );
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     
+        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
     
-    public function RequestAction($ident, $value)
-    {
-        if ($ident === "AddRegister") {
-            // Lade die aktuelle Liste der ausgewählten Register
-            $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-            if (!is_array($selectedRegisters)) {
-                $selectedRegisters = [];
-            }
-    
-            // Finde das ausgewählte Register in der Liste der verfügbaren Register
-            $availableRegisters = $this->GetRegisters();
-            $newRegister = array_filter($availableRegisters, function ($register) use ($value) {
-                return $register['address'] == $value;
-            });
-    
-            if (!empty($newRegister)) {
-                $newRegister = reset($newRegister); // Hole das erste (und einzige) passende Register
-    
-                // Verhindere Duplikate
-                foreach ($selectedRegisters as $register) {
-                    if ($register['address'] === $newRegister['address']) {
-                        $this->SendDebug("RequestAction", "Register bereits hinzugefügt: " . json_encode($newRegister), 0);
-                        return; // Duplikat, nichts tun
-                    }
-                }
-    
-                // Füge das Register hinzu
-                $selectedRegisters[] = $newRegister;
-    
-                // Property aktualisieren
-                IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-                IPS_ApplyChanges($this->InstanceID);
-            } else {
-                $this->SendDebug("RequestAction", "Register nicht gefunden für Adresse: $value", 0);
-            }
-        }
-    }
-    
-    
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
         foreach ($selectedRegisters as $register) {
             $ident = "Addr" . $register['address'];
-    
-            // Modbus-Anfrage senden
+
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
+
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
@@ -107,18 +74,15 @@ class Goodwe extends IPSModule
                 "Quantity" => $quantity,
                 "Data"     => ""
             ]));
-    
-            // Fehlerbehandlung
+
             if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                $this->SendDebug("RequestRead", "No or incomplete response for Register {$register['address']}", 0);
+                $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
                 continue;
             }
-    
-            // Antwortdaten extrahieren
+
             $data = unpack("n*", substr($response, 2));
             $value = 0;
-    
-            // Werte basierend auf Typ interpretieren
+
             switch ($register['type']) {
                 case "U16":
                     $value = $data[1];
@@ -134,31 +98,30 @@ class Goodwe extends IPSModule
                     $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                     break;
             }
-    
+
             $scaledValue = $value / $register['scale'];
-    
-            // Prüfen, ob Variable existiert, bevor der Wert geschrieben wird
+
             $variableID = @$this->GetIDForIdent($ident);
             if ($variableID === false) {
-                $this->SendDebug("Error", "Variable mit Ident $ident wurde nicht gefunden.", 0);
+                $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
                 continue;
             }
-    
+
             SetValue($variableID, $scaledValue);
-            $this->SendDebug("Parsed Value for Register {$register['address']}", $scaledValue, 0);
+            $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
         }
     }
-    
 
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
+        // Erstellen der Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => $register
+                "value" => $register['address']
             ];
         }, $registers);
     
@@ -176,16 +139,11 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "200px",
-                            "add" => 0,
+                            "add" => 0, // Standardwert beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
                             ]
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name" => "name",
-                            "width" => "200px"
                         ]
                     ],
                     "values" => $selectedRegisters
@@ -207,7 +165,7 @@ class Goodwe extends IPSModule
         ]);
     }
     
-    
+
     private function GetVariableProfile(string $unit)
     {
         switch ($unit) {
