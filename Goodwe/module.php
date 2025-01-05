@@ -220,7 +220,7 @@ class Goodwe extends IPSModule
     private function GetRegisters()
     {
         return [
-            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "var" => "float", "scale" => 10],
+            ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
             ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
