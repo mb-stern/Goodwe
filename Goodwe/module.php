@@ -16,45 +16,51 @@ class Goodwe extends IPSModule
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
-    foreach ($selectedRegisters as &$selectedRegister) {
-        if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
-            $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
-            continue;
+    public function ApplyChanges()
+    {
+        parent::ApplyChanges();
+
+        // Lese die ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
         }
     
-        $ident = "Addr" . $selectedRegister['address'];
-        $profile = $this->GetVariableProfile($selectedRegister['unit']);
-    
-        // Validierung des Profils
-        if ($profile === null) {
-            $this->SendDebug("ApplyChanges", "Kein Profil für Einheit {$selectedRegister['unit']} gefunden.", 0);
-            continue;
-        }
-    
-        if (!@$this->GetIDForIdent($ident)) {
-            // Variablentyp basierend auf Profil ableiten
-            $variableType = $this->GetVariableTypeFromProfile($profile);
-    
-            switch ($variableType) {
-                case VARIABLETYPE_INTEGER:
-                    $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
-                    break;
-                case VARIABLETYPE_FLOAT:
-                    $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
-                    break;
-                case VARIABLETYPE_STRING:
-                    $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
-                    break;
-                default:
-                    $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
+        foreach ($selectedRegisters as &$selectedRegister) {
+            // Dekodiere verschachtelte JSON-Einträge
+            if (is_string($selectedRegister['address'])) {
+                $decodedRegister = json_decode($selectedRegister['address'], true);
+                if ($decodedRegister !== null) {
+                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                     continue;
+                }
             }
-            $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
-        } else {
-            $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
-        }
-    }
     
+            // Erstelle Variablen
+            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
+                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $selectedRegister['address'];
+            if (!@$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $selectedRegister['name'],
+                    $this->GetVariableProfile($selectedRegister['unit']),
+                    0
+                );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']}.", 0);
+            }
+        }
+    
+        $pollInterval = $this->ReadPropertyInteger("PollInterval");
+        $this->SetTimerInterval("Poller", $pollInterval * 1000);
+    }
+
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -189,24 +195,21 @@ class Goodwe extends IPSModule
     }
     
 
-    private function GetVariableTypeFromProfile(string $profile): int
+    private function GetVariableProfile(string $unit)
     {
-        switch ($profile) {
-            case "~Volt":
-            case "~Ampere":
-            case "~Watt":
-            case "~Electricity":
-                return VARIABLETYPE_FLOAT;
-            case "~Battery.100":
-                return VARIABLETYPE_INTEGER;
-            case "~String":
-            case "~TextBox":
-                return VARIABLETYPE_STRING;
+        switch ($unit) {
+            case "V":
+                return "~Volt";
+            case "A":
+                return "~Ampere";
+            case "W":
+                return "~Watt";
+            case "kWh":
+                return "~Electricity";
             default:
-                return VARIABLETYPE_FLOAT; // Fallback, wenn das Profil unbekannt ist
+                return ""; // Fallback
         }
     }
-    
 
     private function GetRegisters()
     {
