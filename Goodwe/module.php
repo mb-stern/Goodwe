@@ -81,7 +81,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "100px",
-                            "add" => true, // `add` aktiviert für diese Spalte
+                            "add" => true,
                             "edit" => [
                                 "type" => "Select",
                                 "options" => array_map(function ($register) {
@@ -91,12 +91,6 @@ class Goodwe extends IPSModule
                                     ];
                                 }, $registers)
                             ]
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name" => "name",
-                            "width" => "200px",
-                            "add" => false // Optional manuelles Ergänzen möglich
                         ]
                     ],
                     "values" => $selectedRegisters
