@@ -153,11 +153,11 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Erstellen der Optionen für die Auswahlliste
+        // Optionen für die Auswahlliste erstellen
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register) // Speichern des gesamten Objekts als JSON
+                "value" => $register // Das gesamte Register als Array speichern
             ];
         }, $registers);
     
@@ -200,6 +200,37 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
+    public function ApplyChanges()
+    {
+        parent::ApplyChanges();
+    
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
+        foreach ($selectedRegisters as $register) {
+            if (!isset($register['address'], $register['name'], $register['unit'])) {
+                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
+                continue;
+            }
+    
+            $ident = "Addr" . $register['address'];
+    
+            if (!@$this->GetIDForIdent($ident)) {
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $register['name'],
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
+            }
+        }
+    
+        $pollInterval = $this->ReadPropertyInteger("PollInterval");
+        $this->SetTimerInterval("Poller", $pollInterval * 1000);
+    }
+    
     
     private function GetVariableProfile(string $unit)
     {
