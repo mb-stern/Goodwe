@@ -28,6 +28,9 @@ class Goodwe extends IPSModule
         // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
+        // Prüfen, ob Ergänzungen notwendig sind
+        $updatesRequired = false;
+    
         foreach ($selectedRegisters as &$register) {
             // Ergänze fehlende Felder mit den Daten aus GetRegisters
             if (!isset($register['name']) || !isset($register['unit'])) {
@@ -38,6 +41,7 @@ class Goodwe extends IPSModule
                 if (!empty($matchingRegister)) {
                     $matchingRegister = array_shift($matchingRegister);
                     $register = array_merge($matchingRegister, $register);
+                    $updatesRequired = true;
                 }
             }
     
@@ -55,9 +59,12 @@ class Goodwe extends IPSModule
             }
         }
     
-        // Aktualisiere die Property mit den vollständigen Daten
-        IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-        IPS_ApplyChanges($this->InstanceID);
+        // Aktualisiere die Property nur, wenn Änderungen vorgenommen wurden
+        if ($updatesRequired) {
+            $this->SendDebug("ApplyChanges", "Updating SelectedRegisters property.", 0);
+            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+            // Keine `IPS_ApplyChanges()` hier aufrufen! Endlosschleife vermeiden.
+        }
     
         // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
