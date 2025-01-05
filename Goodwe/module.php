@@ -169,7 +169,6 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "200px",
-                            "add" => '35103 - PV1 Voltage',
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
