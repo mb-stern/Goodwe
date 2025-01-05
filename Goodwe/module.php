@@ -19,25 +19,13 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        
+
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
-    
-        $availableRegisters = $this->GetRegisters();
-    
-        foreach ($selectedRegisters as $selectedRegister) {
-            $register = array_filter($availableRegisters, function ($r) use ($selectedRegister) {
-                return $r['address'] === $selectedRegister['address'];
-            });
-    
-            $register = reset($register);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address " . json_encode($selectedRegister), 0);
+        foreach ($selectedRegisters as $register) {
+            if (!isset($register['address'], $register['name'], $register['type'], $register['unit'], $register['scale'])) {
+                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
                 continue;
             }
     
@@ -49,7 +37,6 @@ class Goodwe extends IPSModule
                     $this->GetVariableProfile($register['unit']),
                     0
                 );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
             }
         }
     
@@ -135,9 +122,10 @@ class Goodwe extends IPSModule
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => $register['address']
+                "value" => json_encode($register) // Speichert das gesamte Register als JSON
             ];
         }, $registers);
+        
     
         return json_encode([
             "elements" => [
