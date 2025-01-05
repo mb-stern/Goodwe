@@ -55,10 +55,10 @@ class Goodwe extends IPSModule
     {
         $registers = $this->GetRegisters();
         $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
-
+    
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-
+    
         $registerOptions = [];
         foreach ($registers as $register) {
             $registerOptions[] = [
@@ -66,7 +66,7 @@ class Goodwe extends IPSModule
                 "value" => json_encode($register)
             ];
         }
-
+    
         return json_encode([
             "elements" => [
                 [
@@ -74,75 +74,33 @@ class Goodwe extends IPSModule
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
                     "rowCount" => 10,
-                    "add" => true,
+                    "add" => false,
                     "delete" => true,
                     "columns" => [
-                        [
-                            "caption" => "Address",
-                            "name" => "address",
-                            "width" => "100px",
-                            "add" => true, // `add` aktiviert für diese Spalte
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => array_map(function ($register) {
-                                    return [
-                                        "caption" => "{$register['address']} - {$register['name']}",
-                                        "value" => $register['address']
-                                    ];
-                                }, $registers)
-                            ]
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name" => "name",
-                            "width" => "200px",
-                            "add" => false // Optional manuelles Ergänzen möglich
-                        ],
-                        [
-                            "caption" => "Type",
-                            "name" => "type",
-                            "width" => "80px",
-                            "add" => true, // `add` aktiviert für diese Spalte
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => [
-                                    ["caption" => "U16", "value" => "U16"],
-                                    ["caption" => "S16", "value" => "S16"],
-                                    ["caption" => "U32", "value" => "U32"],
-                                    ["caption" => "S32", "value" => "S32"]
-                                ]
-                            ]
-                        ],
-                        [
-                            "caption" => "Unit",
-                            "name" => "unit",
-                            "width" => "80px",
-                            "add" => false // Optional manuelles Ergänzen möglich
-                        ],
-                        [
-                            "caption" => "Scale",
-                            "name" => "scale",
-                            "width" => "80px",
-                            "add" => true, 
-                            "edit" => [
-                                "type" => "NumberSpinner"
-                            ]
-                        ]
+                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Type", "name" => "type", "width" => "80px"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px"]
                     ],
                     "values" => $selectedRegisters
                 ],
                 [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollInterval",
-                    "caption" => "Sekunden",
-                    "suffix" => "seconds"
-                ]
-            ],
-            "actions" => [
+                    "type" => "Select",
+                    "name" => "AvailableRegisters",
+                    "caption" => "Add Register",
+                    "options" => $registerOptions
+                ],
                 [
                     "type" => "Button",
-                    "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_RequestRead($id);'
+                    "caption" => "Hinzufügen",
+                    "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
+                ],
+                [
+                    "type"  => "NumberSpinner",
+                    "name"  => "PollInterval",
+                    "caption" => "Poll Interval (seconds)",
+                    "suffix" => "seconds"
                 ]
             ]
         ]);
