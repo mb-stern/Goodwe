@@ -275,7 +275,7 @@ class Goodwe extends IPSModule
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1],
             ["address" => 35182, "name" => "Batterie Leistung", "type" => "S32", "unit" => "W", "scale" => 1],
             ["address" => 47908, "name" => "State of Charge (SOC)", "type" => "S16", "unit" => "%", "scale" => 1],
-            ["address" => 37003, "name" => "BMS Temperatur", "type" => "S16", "unit" => "°C", "scale" => 1]
+            ["address" => 37003, "name" => "BMS Temperatur", "type" => "S16", "unit" => "°C", "scale" => 10]
         ];
     }
 }
