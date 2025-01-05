@@ -67,57 +67,49 @@ class Goodwe extends IPSModule
             ];
         }
 
-return json_encode([
-    "elements" => [
-        [
-            "type"  => "List",
-            "name"  => "SelectedRegisters",
-            "caption" => "Selected Registers",
-            "rowCount" => 10,
-            "add" => true,
-            "delete" => true,
-            "columns" => [
+        return json_encode([
+            "elements" => [
                 [
-                    "caption" => "Address",
-                    "name" => "address",
-                    "width" => "300px",
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Selected Registers",
+                    "rowCount" => 10,
                     "add" => true,
-                    "save" => true,
-                    "edit" => [
-                        "type" => "Select",
-                        "options" => array_map(function ($register) {
-                            return [
-                                "caption" => "{$register['address']} - {$register['name']}",
-                                "value" => $register['address']
-                            ];
-                        }, $registers)
-                    ]
+                    "delete" => true,
+                    "columns" => [
+                        [
+                            "caption" => "Address",
+                            "name" => "address",
+                            "width" => "300px",
+                            "add" => true,
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => array_map(function ($register) {
+                                    return [
+                                        "caption" => "{$register['address']} - {$register['name']}",
+                                        "value" => $register['address']
+                                    ];
+                                }, $registers)
+                            ]
+                        ]
+                    ],
+                    "values" => $selectedRegisters
                 ],
                 [
-                    "caption" => "Name",
-                    "name" => "name",
-                    "width" => "200px",
-                    "save" => true
+                    "type"  => "IntervalBox",
+                    "name"  => "PollInterval",
+                    "caption" => "Sekunden",
+                    "suffix" => "seconds"
                 ]
             ],
-            "values" => $selectedRegisters
-        ],
-        [
-            "type"  => "IntervalBox",
-            "name"  => "PollInterval",
-            "caption" => "Sekunden",
-            "suffix" => "seconds"
-        ]
-    ],
-    "actions" => [
-        [
-            "type" => "Button",
-            "caption" => "Werte lesen",
-            "onClick" => 'Goodwe_RequestRead($id);'
-        ]
-    ]
-]);
-
+            "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Werte lesen",
+                    "onClick" => 'Goodwe_RequestRead($id);'
+                ]
+            ]
+        ]);
         
     }
 
