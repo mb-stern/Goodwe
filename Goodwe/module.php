@@ -123,14 +123,7 @@ class Goodwe extends IPSModule
             $ident = "Addr" . $register['address'];
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
     
-            // Abfangen von Fehlern bei der Kommunikation mit dem Parent
             try {
-                if (!IPS_GetProperty($parentID, "Open")) {
-                    $this->SendDebug("RequestRead", "Parent-Socket ist nicht geöffnet.", 0);
-                    IPS_LogMessage("Goodwe", "Parent-Socket ist nicht geöffnet. RequestRead abgebrochen.");
-                    return;
-                }
-    
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
