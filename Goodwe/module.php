@@ -106,14 +106,14 @@ class Goodwe extends IPSModule
     {
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
+    
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
+                "value" => $register['address']
             ];
         }, $registers);
-
+    
         return json_encode([
             "elements" => [
                 [
@@ -128,7 +128,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "100px",
-                            "add" => 0,
+                            "add" => 0, // Standardwert für Address
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
@@ -137,7 +137,38 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Name",
                             "name" => "name",
-                            "width" => "200px"
+                            "width" => "200px",
+                            "add" => "", // Standardwert für Name
+                            "edit" => [
+                                "type" => "ValidationTextBox"
+                            ]
+                        ],
+                        [
+                            "caption" => "Type",
+                            "name" => "type",
+                            "width" => "80px",
+                            "add" => "U16", // Standardwert für Type
+                            "edit" => [
+                                "type" => "ValidationTextBox"
+                            ]
+                        ],
+                        [
+                            "caption" => "Unit",
+                            "name" => "unit",
+                            "width" => "80px",
+                            "add" => "V", // Standardwert für Unit
+                            "edit" => [
+                                "type" => "ValidationTextBox"
+                            ]
+                        ],
+                        [
+                            "caption" => "Scale",
+                            "name" => "scale",
+                            "width" => "80px",
+                            "add" => 10, // Standardwert für Scale
+                            "edit" => [
+                                "type" => "NumberSpinner"
+                            ]
                         ]
                     ],
                     "values" => $selectedRegisters
@@ -158,6 +189,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
 
     private function GetVariableProfile(string $unit)
     {
