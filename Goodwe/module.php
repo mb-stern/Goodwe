@@ -27,6 +27,11 @@ class Goodwe extends IPSModule
         // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("Error", "SelectedRegisters ist ungültig", 0);
+            return;
+        }
+    
         // Variablen für alle ausgewählten Register erstellen
         foreach ($selectedRegisters as $register) {
             if (isset($register['address'], $register['name'], $register['unit'])) {
@@ -41,72 +46,81 @@ class Goodwe extends IPSModule
                         0
                     );
                 }
+            } else {
+                $this->SendDebug("ApplyChanges: Ungültiges Register", json_encode($register), 0);
             }
         }
     }
     
     
-public function GetConfigurationForm()
-{
-    $registers = $this->GetRegisters();
-    $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
-    $this->SendDebug("Direct GetRegisters Output", print_r($registers, true), 0);
-
-    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-
-    $values = [];
-    foreach ($registers as $register) {
-        $isSelected = false;
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (isset($selectedRegister['address'], $selectedRegister['selected']) &&
-                $selectedRegister['address'] === $register['address'] &&
-                $selectedRegister['selected']) {
-                $isSelected = true;
-                break;
-            }
-        }
+    public function GetConfigurationForm()
+    {
+        $registers = $this->GetRegisters();
+        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
     
-        $values[] = [
-            "address"  => $register['address'],
-            "name"     => $register['name'],
-            "type"     => $register['type'],
-            "unit"     => $register['unit'],
-            "scale"    => $register['scale'],
-            "selected" => $isSelected
-        ];
-    }
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-
-    return json_encode([
-        "elements" => [
-            [
-                "type"  => "List",
-                "name"  => "SelectedRegisters",
-                "caption" => "Selected Registers",
-                "rowCount" => 10,
-                "add" => true,
-                "delete" => true,
-                "columns" => [
-                    ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "NumberSpinner"]],
-                    ["caption" => "Name", "name" => "name", "width" => "200px", "edit" => ["type" => "ValidationTextBox"]],
-                    ["caption" => "Type", "name" => "type", "width" => "80px", "edit" => ["type" => "Select", "options" => [
-                        ["caption" => "U16", "value" => "U16"],
-                        ["caption" => "S16", "value" => "S16"],
-                        ["caption" => "U32", "value" => "U32"],
-                        ["caption" => "S32", "value" => "S32"]
-                    ]]],
-                    ["caption" => "Unit", "name" => "unit", "width" => "80px", "edit" => ["type" => "ValidationTextBox"]],
-                    ["caption" => "Scale", "name" => "scale", "width" => "80px", "edit" => ["type" => "NumberSpinner"]]
-                ],
-                "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
+        return json_encode([
+            "elements" => [
+                [
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Selected Registers",
+                    "rowCount" => 10,
+                    "add" => true,
+                    "delete" => true,
+                    "columns" => [
+                        [
+                            "caption" => "Address",
+                            "name" => "address",
+                            "width" => "100px",
+                            "edit" => ["type" => "NumberSpinner"],
+                            "add" => 0 // Standardwert für Address
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name" => "name",
+                            "width" => "200px",
+                            "edit" => ["type" => "ValidationTextBox"],
+                            "add" => "" // Standardwert für Name
+                        ],
+                        [
+                            "caption" => "Type",
+                            "name" => "type",
+                            "width" => "80px",
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => [
+                                    ["caption" => "U16", "value" => "U16"],
+                                    ["caption" => "S16", "value" => "S16"],
+                                    ["caption" => "U32", "value" => "U32"],
+                                    ["caption" => "S32", "value" => "S32"]
+                                ]
+                            ],
+                            "add" => "U16" // Standardwert für Type
+                        ],
+                        [
+                            "caption" => "Unit",
+                            "name" => "unit",
+                            "width" => "80px",
+                            "edit" => ["type" => "ValidationTextBox"],
+                            "add" => "" // Standardwert für Unit
+                        ],
+                        [
+                            "caption" => "Scale",
+                            "name" => "scale",
+                            "width" => "80px",
+                            "edit" => ["type" => "NumberSpinner"],
+                            "add" => 1 // Standardwert für Scale
+                        ]
+                    ],
+                    "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
+                ]
             ]
-        ]
-    ]);
+        ]);
+    }
     
-}
-
-
     private function ReadRegister(int $address, string $type, float $scale)
     {
         $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
