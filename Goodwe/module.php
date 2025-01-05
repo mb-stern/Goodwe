@@ -62,7 +62,7 @@ class Goodwe extends IPSModule
         $this->RequestAction();
     }
 
-    public function RequestAction()
+    public function RequestAction($Ident, $Value)
     {
         $this->RequestRead();
     }
