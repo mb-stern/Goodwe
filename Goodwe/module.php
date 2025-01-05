@@ -20,23 +20,40 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
 
+        // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
     
-        foreach ($selectedRegisters as $register) {
-            if (!isset($register['address'], $register['name'], $register['type'], $register['unit'], $register['scale'])) {
-                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
+        foreach ($selectedRegisters as &$selectedRegister) {
+            // Dekodiere verschachtelte JSON-Einträge
+            if (is_string($selectedRegister['address'])) {
+                $decodedRegister = json_decode($selectedRegister['address'], true);
+                if ($decodedRegister !== null) {
+                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                    continue;
+                }
+            }
+    
+            // Erstelle Variablen
+            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
+                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
                 continue;
             }
     
-            $ident = "Addr" . $register['address'];
+            $ident = "Addr" . $selectedRegister['address'];
             if (!@$this->GetIDForIdent($ident)) {
                 $this->RegisterVariableFloat(
                     $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
+                    $selectedRegister['name'],
+                    $this->GetVariableProfile($selectedRegister['unit']),
                     0
                 );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']}.", 0);
             }
         }
     
@@ -53,7 +70,18 @@ class Goodwe extends IPSModule
             return;
         }
     
-        foreach ($selectedRegisters as $register) {
+        foreach ($selectedRegisters as &$register) {
+            if (is_string($register['address'])) {
+                $decodedRegister = json_decode($register['address'], true);
+                if ($decodedRegister !== null) {
+                    $register = array_merge($register, $decodedRegister);
+                } else {
+                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
+                    continue;
+                }
+            }
+    
+            // Validierung der Felder
             if (!isset($register['address'], $register['type'], $register['scale'])) {
                 $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
                 continue;
