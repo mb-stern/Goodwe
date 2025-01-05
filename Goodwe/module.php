@@ -95,6 +95,14 @@ class Goodwe extends IPSModule
             return;
         }
     
+        // Prüfen, ob eine Verbindung zum Parent besteht
+        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+        if ($parentID === 0) {
+            $this->SendDebug("RequestRead", "Keine Verbindung zum Parent", 0);
+            IPS_LogMessage("Goodwe", "Keine Verbindung zum Parent. RequestRead abgebrochen.");
+            return;
+        }
+    
         foreach ($selectedRegisters as &$register) {
             if (is_string($register['address'])) {
                 $decodedRegister = json_decode($register['address'], true);
@@ -124,50 +132,53 @@ class Goodwe extends IPSModule
                     "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
-
+    
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                     $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
                     continue;
                 }
     
-            $data = unpack("n*", substr($response, 2));
-            $value = 0;
+                $data = unpack("n*", substr($response, 2));
+                $value = 0;
     
-            switch ($register['type']) {
-                case "U16":
-                    $value = $data[1];
-                    break;
-                case "S16":
-                    $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                    break;
-                case "U32":
-                    $value = ($data[1] << 16) | $data[2];
-                    break;
-                case "S32":
-                    $combined = ($data[1] << 16) | $data[2];
-                    $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                    break;
+                switch ($register['type']) {
+                    case "U16":
+                        $value = $data[1];
+                        break;
+                    case "S16":
+                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                        break;
+                    case "U32":
+                        $value = ($data[1] << 16) | $data[2];
+                        break;
+                    case "S32":
+                        $combined = ($data[1] << 16) | $data[2];
+                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                        break;
+                }
+    
+                if ($register['scale'] == 0) {
+                    $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
+                    continue;
+                }
+    
+                $scaledValue = $value / $register['scale'];
+    
+                $variableID = @$this->GetIDForIdent($ident);
+                if ($variableID === false) {
+                    $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
+                    continue;
+                }
+    
+                SetValue($variableID, $scaledValue);
+                $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
+            } catch (Exception $e) {
+                $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
+                IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
-    
-            if ($register['scale'] == 0) {
-                $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
-                continue;
-            }
-    
-            $scaledValue = $value / $register['scale'];
-    
-            $variableID = @$this->GetIDForIdent($ident);
-            if ($variableID === false) {
-                $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
-                continue;
-            }
-    
-            SetValue($variableID, $scaledValue);
-            $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
         }
     }
     
-
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
