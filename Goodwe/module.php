@@ -51,7 +51,7 @@ class Goodwe extends IPSModule
             }
     
             $ident = "Addr" . $selectedRegister['address'];
-            $profile = $this->GetVariableProfile($selectedRegister['unit']);
+            $profile = $this->GetVariableTypeFromProfile($selectedRegister['unit']);
     
             // Überprüfen, ob ein gültiges Profil existiert
             if ($profile === null) {
