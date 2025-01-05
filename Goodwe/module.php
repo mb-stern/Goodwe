@@ -19,22 +19,21 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
+        
         // Lese die ausgewählten Register
-        $selectedAddresses = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedAddresses), 0);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Hole alle verfügbaren Register
-        $registers = $this->GetRegisters();
+        $availableRegisters = $this->GetRegisters();
     
-        // Variablen für die ausgewählten Register erstellen
-        foreach ($selectedAddresses as $address) {
-            // Suche das Register in der Liste der verfügbaren Register
-            $register = array_filter($registers, fn($r) => $r['address'] === $address);
-            $register = reset($register); // Nimmt das erste (und einzige) Ergebnis
-            
+        foreach ($selectedRegisters as $selectedRegister) {
+            $register = array_filter($availableRegisters, function ($r) use ($selectedRegister) {
+                return $r['address'] === $selectedRegister['address'];
+            });
+    
+            $register = reset($register); // Erstes Element der gefilterten Liste
             if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address " . json_encode($address), 0);
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address " . json_encode($selectedRegister), 0);
                 continue;
             }
     
@@ -59,7 +58,6 @@ class Goodwe extends IPSModule
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
     
-
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
