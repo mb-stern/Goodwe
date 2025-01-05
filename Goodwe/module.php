@@ -50,49 +50,49 @@ class Goodwe extends IPSModule
         }
     }
     
-    public function GetConfigurationForm()
-    {
-        $registers = $this->GetRegisters();
-        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
-    
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-    
-        $values = [];
-        foreach ($registers as $register) {
-            $values[] = [
-                "address"  => $register['address'] ?? null,
-                "name"     => $register['name'] ?? null,
-                "type"     => $register['type'] ?? null,
-                "unit"     => $register['unit'] ?? null,
-                "scale"    => $register['scale'] ?? null,
-                "selected" => in_array($register['address'], array_column($selectedRegisters, 'address'))
-            ];
-        }
-    
-        return json_encode([
-            "elements" => [
-                [
-                    "type"  => "List",
-                    "name"  => "Registers",
-                    "caption" => "Available Registers",
-                    "rowCount" => 10,
-                    "add" => false,
-                    "delete" => false,
-                    "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px"],
-                        ["caption" => "Name", "name" => "name", "width" => "200px"],
-                        ["caption" => "Type", "name" => "type", "width" => "80px"],
-                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
-                    ],
-                    "values" => $values
-                ]
-            ]
-        ]);
+public function GetConfigurationForm()
+{
+    $registers = $this->GetRegisters();
+    $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
+
+    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
+
+    $values = [];
+    foreach ($registers as $register) {
+        $values[] = [
+            "address"  => $register['address'] ?? null,
+            "name"     => $register['name'] ?? null,
+            "type"     => $register['type'] ?? null,
+            "unit"     => $register['unit'] ?? null,
+            "scale"    => $register['scale'] ?? null,
+            "selected" => in_array($register['address'], array_column($selectedRegisters, 'address'))
+        ];
     }
-    
+
+    return json_encode([
+        "elements" => [
+            [
+                "type"  => "List",
+                "name"  => "Registers",
+                "caption" => "Available Registers",
+                "rowCount" => 10,
+                "add" => false,
+                "delete" => false,
+                "columns" => [
+                    ["caption" => "Address", "name" => "address", "width" => "100px"],
+                    ["caption" => "Name", "name" => "name", "width" => "200px"],
+                    ["caption" => "Type", "name" => "type", "width" => "80px"],
+                    ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                    ["caption" => "Scale", "name" => "scale", "width" => "80px"],
+                    ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
+                ],
+                "values" => $values
+            ]
+        ]
+    ]);
+}
+
 
     private function ReadRegister(int $address, string $type, float $scale)
     {
