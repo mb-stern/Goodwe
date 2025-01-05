@@ -67,7 +67,9 @@ public function GetConfigurationForm()
             "type"     => $register['type'] ?? null,
             "unit"     => $register['unit'] ?? null,
             "scale"    => $register['scale'] ?? null,
-            "selected" => in_array($register['address'], array_column($selectedRegisters, 'address'))
+            "selected" => in_array(true, array_column(array_filter($selectedRegisters, fn($reg) => $reg['address'] === $register['address']), 'selected'))
+
+
         ];
     }
 
