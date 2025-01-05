@@ -115,18 +115,20 @@ class Goodwe extends IPSModule
             $ident = "Addr" . $register['address'];
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
     
-            $response = $this->SendDataToParent(json_encode([
-                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,
-                "Address"  => $register['address'],
-                "Quantity" => $quantity,
-                "Data"     => ""
-            ]));
-    
-            if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
-                continue;
-            }
+            // Abfangen von Fehlern bei der Kommunikation mit dem Parent
+            try {
+                $response = $this->SendDataToParent(json_encode([
+                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                    "Function" => 3,
+                    "Address"  => $register['address'],
+                    "Quantity" => $quantity,
+                    "Data"     => ""
+                ]));
+
+                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                    $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
+                    continue;
+                }
     
             $data = unpack("n*", substr($response, 2));
             $value = 0;
