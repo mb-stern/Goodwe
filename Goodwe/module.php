@@ -80,7 +80,7 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "100px",
+                            "width" => "300px",
                             "add" => true,
                             "edit" => [
                                 "type" => "Select",
