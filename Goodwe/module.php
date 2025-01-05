@@ -95,6 +95,9 @@ class Goodwe extends IPSModule
         $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
     
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = []; // Fallback, falls SelectedRegisters nicht initialisiert ist
+        }
         $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         $registerOptions = [];
@@ -142,9 +145,8 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
-        
     }
-
+    
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
