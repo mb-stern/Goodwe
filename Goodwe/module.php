@@ -88,28 +88,6 @@ class Goodwe extends IPSModule
     
     public function RequestRead()
     {
-        $instance = IPS_GetInstance($this->InstanceID);
-        $parentID = $instance['ConnectionID'];
-    
-        // Prüfen, ob ein Parent verbunden ist
-        if ($parentID == 0) {
-            $this->SendDebug("RequestRead", "Kein Parent verbunden. Abfrage übersprungen.", 0);
-            return;
-        }
-    
-        // Prüfen, ob der Parent die Eigenschaft 'Open' hat und ob sie gesetzt ist
-        try {
-            $parentObject = IPS_GetObject($parentID);
-            $parentModule = IPS_GetModule($parentObject['ModuleID']);
-            if (array_key_exists('Open', $parentModule['Properties']) && !IPS_GetProperty($parentID, 'Open')) {
-                $this->SendDebug("RequestRead", "Socket ist nicht verbunden. Abfrage übersprungen.", 0);
-                return;
-            }
-        } catch (Exception $e) {
-            $this->SendDebug("RequestRead", "Fehler beim Zugriff auf Parent-Socket: " . $e->getMessage(), 0);
-            return;
-        }
-    
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
@@ -136,7 +114,7 @@ class Goodwe extends IPSModule
             $ident = "Addr" . $register['address'];
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
     
-            $response = @$this->SendDataToParent(json_encode([
+            $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
                 "Address"  => $register['address'],
