@@ -61,17 +61,26 @@ public function GetConfigurationForm()
 
     $values = [];
     foreach ($registers as $register) {
+        $isSelected = false;
+        foreach ($selectedRegisters as $selectedRegister) {
+            if (isset($selectedRegister['address'], $selectedRegister['selected']) &&
+                $selectedRegister['address'] === $register['address'] &&
+                $selectedRegister['selected']) {
+                $isSelected = true;
+                break;
+            }
+        }
+    
         $values[] = [
-            "address"  => $register['address'] ?? null,
-            "name"     => $register['name'] ?? null,
-            "type"     => $register['type'] ?? null,
-            "unit"     => $register['unit'] ?? null,
-            "scale"    => $register['scale'] ?? null,
-            "selected" => in_array(true, array_column(array_filter($selectedRegisters, fn($reg) => $reg['address'] === $register['address']), 'selected'))
-
-
+            "address"  => $register['address'],
+            "name"     => $register['name'],
+            "type"     => $register['type'],
+            "unit"     => $register['unit'],
+            "scale"    => $register['scale'],
+            "selected" => $isSelected
         ];
     }
+    
 
     return json_encode([
         "elements" => [
