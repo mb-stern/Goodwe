@@ -19,64 +19,48 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Lese die aktuellen ausgewählten Register
+
+        // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
         }
-        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Erhalte die Liste der verfügbaren Register
-        $availableRegisters = $this->GetRegisters();
-        
-        // Identifikatoren der ausgewählten Register
-        $selectedAddresses = array_column($selectedRegisters, 'address');
-    
-        // Bestehende Variablen durchgehen und prüfen, ob sie entfernt werden müssen
-        foreach ($this->GetMessageList() as $id => $messages) {
-            $ident = IPS_GetObject($id)['ObjectIdent'];
-            if (strpos($ident, "Addr") === 0) {
-                $address = (int)substr($ident, 4);
-                if (!in_array($address, $selectedAddresses)) {
-                    $this->SendDebug("ApplyChanges", "Lösche Variable mit Ident $ident, da das Register entfernt wurde.", 0);
-                    $this->UnregisterVariable($ident);
+        foreach ($selectedRegisters as &$selectedRegister) {
+            // Dekodiere verschachtelte JSON-Einträge
+            if (is_string($selectedRegister['address'])) {
+                $decodedRegister = json_decode($selectedRegister['address'], true);
+                if ($decodedRegister !== null) {
+                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                    continue;
                 }
             }
-        }
     
-        // Neue Variablen erstellen oder vorhandene aktualisieren
-        foreach ($selectedRegisters as $selectedRegister) {
-            $register = array_filter($availableRegisters, function ($r) use ($selectedRegister) {
-                return $r['address'] === $selectedRegister['address'];
-            });
-    
-            $register = reset($register);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein passendes Register für Address " . json_encode($selectedRegister), 0);
+            // Erstelle Variablen
+            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
+                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
                 continue;
             }
     
-            $ident = "Addr" . $register['address'];
-    
-            // Variable erstellen, falls nicht vorhanden
+            $ident = "Addr" . $selectedRegister['address'];
             if (!@$this->GetIDForIdent($ident)) {
                 $this->RegisterVariableFloat(
                     $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
+                    $selectedRegister['name'],
+                    $this->GetVariableProfile($selectedRegister['unit']),
                     0
                 );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']}.", 0);
             }
         }
     
-        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
+    
     
     public function RequestRead()
     {
