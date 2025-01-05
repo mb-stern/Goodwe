@@ -52,7 +52,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
-                        continue;
+                        continue 2;
                 }
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
             } else {
