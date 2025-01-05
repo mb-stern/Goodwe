@@ -268,10 +268,10 @@ class Goodwe extends IPSModule
     {
         return [
             // Smartmeter
-        ["address" => 36019, "name" => "EVU L1 P", "type" => "U16", "unit" => "W", "scale" => 1],
-        ["address" => 36021, "name" => "EVU L2 P", "type" => "U16", "unit" => "W", "scale" => 1],
-        ["address" => 36023, "name" => "EVU L3 P", "type" => "U16", "unit" => "W", "scale" => 1],
-        ["address" => 36025, "name" => "EVU P Total", "type" => "U16", "unit" => "W", "scale" => 1],
+        ["address" => 36019, "name" => "EVU L1 P", "type" => "S32", "unit" => "W", "scale" => 1],
+        ["address" => 36021, "name" => "EVU L2 P", "type" => "S32", "unit" => "W", "scale" => 1],
+        ["address" => 36023, "name" => "EVU L3 P", "type" => "S32", "unit" => "W", "scale" => 1],
+        ["address" => 36025, "name" => "EVU P Total", "type" => "S32", "unit" => "W", "scale" => 1],
 
         // Batterie
         ["address" => 47908, "name" => "Bat1 SOC", "type" => "S16", "unit" => "%", "scale" => 1],
