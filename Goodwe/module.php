@@ -11,34 +11,35 @@ class Goodwe extends IPSModule
         // Verknüpfe mit dem Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
     
-        // Eigenschaft für verfügbare Register initialisieren
+        // Lade verfügbare Register initial in die Property
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
     
-        // Eigenschaft für ausgewählte Register initialisieren
+        // Initialisiere ausgewählte Register
         $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
     
         // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
     
+    
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
-        // Lade verfügbare Register aus der Property
+        // Debugging: Lade verfügbare Register
         $registers = json_decode($this->ReadPropertyString("Registers"), true);
         $this->SendDebug("ApplyChanges: Registers", json_encode($registers), 0);
     
-        // Lade ausgewählte Register aus der Property
+        // Debugging: Lade ausgewählte Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Überprüfen, ob beide Listen gültig sind
         if (!is_array($registers) || !is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "Registers oder SelectedRegisters sind keine gültigen Listen.", 0);
+            $this->SendDebug("Error", "Registers oder SelectedRegisters sind keine gültigen Arrays", 0);
             return;
         }
     
+        // Prozessiere ausgewählte Register
         foreach ($selectedRegisters as $selectedRegister) {
             if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
                 continue;
@@ -61,6 +62,7 @@ class Goodwe extends IPSModule
             }
         }
     }
+    
     
     private function FindRegisterByAddress(int $address)
     {
@@ -158,14 +160,18 @@ class Goodwe extends IPSModule
 
     private function GetRegisters()
     {
-        return [
+        $registers = [
             ["address" => 35103, "name" => "PV1 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 35104, "name" => "PV1 Current", "type" => "U16", "unit" => "A", "scale" => 10],
             ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
         ];
+    
+        $this->SendDebug("GetRegisters", json_encode($registers), 0);
+        return $registers;
     }
+    
 
     private function GetVariableProfile(string $unit)
     {
