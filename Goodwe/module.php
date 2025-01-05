@@ -112,59 +112,58 @@ class Goodwe extends IPSModule
         }
     }
 
-    public function GetConfigurationForm()
-    {
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Erstellen der Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
-            return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => $register['address']
-            ];
-        }, $registers);
-    
-        return json_encode([
-            "elements" => [
-                [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Selected Registers",
-                    "rowCount" => 10,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
-                        [
-                            "caption" => "Address",
-                            "name" => "address",
-                            "width" => "200px",
-                            "add" => 0, // Standardwert beim Hinzufügen
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
-                            ]
+public function GetConfigurationForm()
+{
+    $registers = $this->GetRegisters();
+    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+
+    // Erstellen der Optionen für die Auswahlliste
+    $registerOptions = array_map(function ($register) {
+        return [
+            "caption" => "{$register['address']} - {$register['name']}",
+            "value" => json_encode($register) // Speichern des gesamten Objekts als JSON
+        ];
+    }, $registers);
+
+    return json_encode([
+        "elements" => [
+            [
+                "type"  => "List",
+                "name"  => "SelectedRegisters",
+                "caption" => "Selected Registers",
+                "rowCount" => 10,
+                "add" => true,
+                "delete" => true,
+                "columns" => [
+                    [
+                        "caption" => "Address",
+                        "name" => "address",
+                        "width" => "200px",
+                        "add" => "", // Standardwert beim Hinzufügen
+                        "edit" => [
+                            "type" => "Select",
+                            "options" => $registerOptions
                         ]
-                    ],
-                    "values" => $selectedRegisters
+                    ]
                 ],
-                [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollInterval",
-                    "caption" => "Abfrageintervall (Sekunden)",
-                    "suffix" => "s"
-                ]
+                "values" => $selectedRegisters
             ],
-            "actions" => [
-                [
-                    "type" => "Button",
-                    "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_RequestRead($id);'
-                ]
+            [
+                "type"  => "IntervalBox",
+                "name"  => "PollInterval",
+                "caption" => "Abfrageintervall (Sekunden)",
+                "suffix" => "s"
             ]
-        ]);
-    }
-    
+        ],
+        "actions" => [
+            [
+                "type" => "Button",
+                "caption" => "Werte lesen",
+                "onClick" => 'Goodwe_RequestRead($id);'
+            ]
+        ]
+    ]);
+}
 
     private function GetVariableProfile(string $unit)
     {
