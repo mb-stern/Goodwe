@@ -66,7 +66,7 @@ class Goodwe extends IPSModule
                 "type"     => $register['type'] ?? null,
                 "unit"     => $register['unit'] ?? null,
                 "scale"    => $register['scale'] ?? null,
-                "selected" => false // Defaultwert, falls nicht gesetzt
+                "selected" => true // Defaultwert, falls nicht gesetzt
             ];
         }
     
