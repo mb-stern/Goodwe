@@ -169,7 +169,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "200px",
-                            "add" => null, // Standardwert beim Hinzufügen
+                            "add" => "", // Standardwert beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
