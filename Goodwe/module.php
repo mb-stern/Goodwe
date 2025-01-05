@@ -34,7 +34,7 @@ class Goodwe extends IPSModule
             $register = reset($register); // Nimmt das erste (und einzige) Ergebnis
             
             if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address $address", 0);
+                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address " . json_encode($address), 0);
                 continue;
             }
     
