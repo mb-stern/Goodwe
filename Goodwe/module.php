@@ -91,7 +91,8 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "100px",
+                            "width" => "300px",
+                            "add" => 0, // Standardwert für Address beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
                                 "options" => array_map(function ($register) {
@@ -99,23 +100,18 @@ class Goodwe extends IPSModule
                                         "caption" => "{$register['address']} - {$register['name']}",
                                         "value" => $register['address']
                                     ];
-                                }, $this->GetRegisters())
+                                }, $registers)
                             ]
                         ],
                         [
                             "caption" => "Name",
                             "name" => "name",
                             "width" => "200px",
-                            "edit" => ["type" => "ValidationTextBox"]
-                        ],
-                        [
-                            "caption" => "Unit",
-                            "name" => "unit",
-                            "width" => "80px",
-                            "edit" => ["type" => "ValidationTextBox"]
+                            "add" => "", // Standardwert für Name beim Hinzufügen
+                            "save" => true
                         ]
                     ],
-                    "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
+                    "values" => $selectedRegisters
                 ],
                 [
                     "type"  => "IntervalBox",
@@ -132,7 +128,6 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
-        
         
     }
 
