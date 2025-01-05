@@ -7,64 +7,54 @@ class Goodwe extends IPSModule
     public function Create()
     {
         parent::Create();
-        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
+    
+        // Register properties
         $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
+        $this->RegisterPropertyString("Registers", json_encode([]));
+    
+        // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
-    
     
     public function ApplyChanges()
     {
         parent::ApplyChanges();
     
-        // Debugging: Lade verfügbare Register
+        // Stelle sicher, dass die Registers-Property initialisiert ist
         $registers = json_decode($this->ReadPropertyString("Registers"), true);
-        $this->SendDebug("ApplyChanges: Registers", json_encode($registers), 0);
+        if (empty($registers)) {
+            $registers = $this->GetRegisters();
+            $this->UpdateRegistersProperty($registers);
+        }
     
-        // Debugging: Lade ausgewählte Register
+        // Weiterverarbeitung
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Debugging
+        $this->SendDebug("ApplyChanges: Registers", json_encode($registers), 0);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        if (!is_array($registers) || !is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "Registers oder SelectedRegisters sind keine gültigen Arrays", 0);
-            return;
-        }
-    
-        // Prozessiere ausgewählte Register
+        // Verarbeite ausgewählte Register
         foreach ($selectedRegisters as $selectedRegister) {
-            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
-                continue;
-            }
-    
-            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $register['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
+            if ($selectedRegister['selected']) {
+                $ident = "Addr" . $selectedRegister['address'];
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $selectedRegister['name'],
+                        $this->GetVariableProfile($selectedRegister['unit']),
+                        0
+                    );
+                }
             }
         }
     }
-    
-    
-    private function FindRegisterByAddress(int $address)
+
+    private function UpdateRegistersProperty(array $registers)
     {
-        $registers = json_decode($this->ReadPropertyString("Registers"), true);
-        foreach ($registers as $register) {
-            if ($register['address'] === $address) {
-                return $register;
-            }
-        }
-        return null;
+        $this->WritePropertyString("Registers", json_encode($registers));
+        $this->SendDebug("UpdateRegistersProperty", json_encode($registers), 0);
     }
+
 
 
     public function GetConfigurationForm()
@@ -162,7 +152,6 @@ class Goodwe extends IPSModule
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1]
         ];
-    
         $this->SendDebug("GetRegisters", json_encode($registers), 0);
         return $registers;
     }
