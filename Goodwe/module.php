@@ -40,20 +40,27 @@ class Goodwe extends IPSModule
             }
     
             // Erstelle Variablen
-            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
-                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $selectedRegister['address'];
             if (!@$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $selectedRegister['name'],
-                    $this->GetVariableProfile($selectedRegister['unit']),
-                    0
-                );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']}.", 0);
+                // Variablentyp basierend auf Profil ableiten
+                $variableType = $this->GetVariableTypeFromProfile($profile);
+        
+                switch ($variableType) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
+                        break;
+                    default:
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
+                        continue;
+                }
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     
@@ -195,22 +202,24 @@ class Goodwe extends IPSModule
     }
     
 
-    private function GetVariableProfile(string $unit)
+    private function GetVariableTypeFromProfile(string $profile): int
     {
-        switch ($unit) {
-            case "V":
-                return "~Volt";
-            case "A":
-                return "~Ampere";
-            case "W":
-                return "~Watt";
-            case "kWh":
-                return "~Electricity";
+        switch ($profile) {
+            case "~Volt":
+            case "~Ampere":
+            case "~Watt":
+            case "~Electricity":
+                return VARIABLETYPE_FLOAT;
+            case "~Battery.100":
+                return VARIABLETYPE_INTEGER;
+            case "~String":
+            case "~TextBox":
+                return VARIABLETYPE_STRING;
             default:
-                return ""; // Fallback
+                return VARIABLETYPE_STRING; // Fallback
         }
     }
-
+    
     private function GetRegisters()
     {
         return [
