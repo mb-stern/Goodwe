@@ -19,7 +19,7 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
+    
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
@@ -27,8 +27,10 @@ class Goodwe extends IPSModule
             return;
         }
     
+        // Liste der aktuellen Register-Identifikatoren
+        $currentIdents = [];
+    
         foreach ($selectedRegisters as &$selectedRegister) {
-            // Dekodiere verschachtelte JSON-Einträge
             if (is_string($selectedRegister['address'])) {
                 $decodedRegister = json_decode($selectedRegister['address'], true);
                 if ($decodedRegister !== null) {
@@ -44,10 +46,10 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                 continue;
             }
-            
+    
             $ident = "Addr" . $selectedRegister['address'];
-            
-            // Prüfen, ob die Variable bereits existiert
+            $currentIdents[] = $ident;
+    
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
@@ -67,13 +69,23 @@ class Goodwe extends IPSModule
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
-            
         }
     
+        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+    
+        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
         $this->RequestRead();
     }
+    
 
     public function RequestRead()
     {
