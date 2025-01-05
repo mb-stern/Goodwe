@@ -188,15 +188,21 @@ class Goodwe extends IPSModule
     
     public function GetConfigurationForm()
     {
+        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         IPS_SetProperty($this->InstanceID, "Registers", json_encode($registers));
+        
+        // Änderungen an der Instanz übernehmen
+        IPS_ApplyChanges($this->InstanceID);
+    
+        // Danach die aktualisierte Property-Liste verwenden
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Erstellen der Optionen für die Auswahlliste
+        // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register) // Speichert das gesamte Register als JSON
+                "value" => json_encode($register)
             ];
         }, $registers);
         
