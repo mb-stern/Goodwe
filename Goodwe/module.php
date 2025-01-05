@@ -135,7 +135,7 @@ class Goodwe extends IPSModule
         return $scaledValue;
     }
 
-    private function GetConfigurationForm()
+    public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
         $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
