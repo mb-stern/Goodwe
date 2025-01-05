@@ -134,15 +134,6 @@ class Goodwe extends IPSModule
                                 "type" => "Select",
                                 "options" => $registerOptions
                             ]
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name" => "name",
-                            "width" => "200px",
-                            "add" => "", // Standardwert für Name
-                            "edit" => [
-                                "type" => "ValidationTextBox"
-                            ]
                         ]
                     ],
                     "values" => $selectedRegisters
