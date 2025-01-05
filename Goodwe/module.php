@@ -19,18 +19,28 @@ class Goodwe extends IPSModule
     
 
     public function RequestAction($ident, $value)
-{
-    if ($ident === "AddRegister") {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        $newRegister = json_decode($value, true);
-        if (is_array($newRegister)) {
-            $selectedRegisters[] = $newRegister;
-            $this->WritePropertyString("SelectedRegisters", json_encode($selectedRegisters));
-            $this->ApplyChanges();
+    {
+        if ($ident === "AddRegister") {
+            // Lade die aktuelle Liste der ausgewählten Register
+            $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+            if (!is_array($selectedRegisters)) {
+                $selectedRegisters = [];
+            }
+    
+            // Neues Register hinzufügen
+            $newRegister = json_decode($value, true);
+            if (is_array($newRegister)) {
+                $selectedRegisters[] = $newRegister;
+    
+                // Property aktualisieren
+                IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+    
+                // Änderungen anwenden
+                IPS_ApplyChanges($this->InstanceID);
+            }
         }
     }
-}
+    
 
 public function ApplyChanges()
 {
