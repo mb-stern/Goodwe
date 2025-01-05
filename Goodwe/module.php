@@ -33,12 +33,10 @@ class Goodwe extends IPSModule
             $register = array_filter($registers, fn($r) => $r['address'] === $address);
             $register = reset($register); // Nimmt das erste (und einzige) Ergebnis
             
-            /*
             if (!$register) {
                 $this->SendDebug("ApplyChanges", "Kein Register gefunden für Address $address", 0);
                 continue;
             }
-                */
     
             $ident = "Addr" . $register['address'];
     
