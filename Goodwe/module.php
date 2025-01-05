@@ -7,17 +7,8 @@ class Goodwe extends IPSModule
     public function Create()
     {
         parent::Create();
-    
-        // Verknüpfe mit dem Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-    
-        // Lade verfügbare Register initial in die Property
-        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
-    
-        // Initialisiere ausgewählte Register
         $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
-    
-        // Timer zur zyklischen Abfrage
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
     
@@ -78,40 +69,44 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
-        $registers = json_decode($this->ReadPropertyString('Registers'), true);
-        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+        $registers = $this->GetRegisters();
+        $this->SendDebug("GetConfigurationForm: Registers", json_encode($registers), 0);
+    
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         $values = [];
         foreach ($registers as $register) {
-            $isSelected = in_array($register['address'], array_column($selectedRegisters, 'address'));
             $values[] = [
-                'address'  => $register['address'],
-                'name'     => $register['name'],
-                'type'     => $register['type'],
-                'unit'     => $register['unit'],
-                'scale'    => $register['scale'],
-                'selected' => $isSelected
+                "address"  => $register['address'] ?? null,
+                "name"     => $register['name'] ?? null,
+                "type"     => $register['type'] ?? null,
+                "unit"     => $register['unit'] ?? null,
+                "scale"    => $register['scale'] ?? null,
+                "selected" => false // Defaultwert, falls nicht gesetzt
             ];
         }
     
+        $this->SendDebug("GetConfigurationForm: Values", json_encode($values), 0);
+    
         return json_encode([
-            'elements' => [
+            "elements" => [
                 [
-                    'type'    => 'List',
-                    'name'    => 'Registers',
-                    'caption' => 'Available Registers',
-                    'rowCount' => 10,
-                    'add'     => false,
-                    'delete'  => false,
-                    'columns' => [
-                        ['caption' => 'Address', 'name' => 'address', 'width' => '100px'],
-                        ['caption' => 'Name', 'name' => 'name', 'width' => '200px'],
-                        ['caption' => 'Type', 'name' => 'type', 'width' => '80px'],
-                        ['caption' => 'Unit', 'name' => 'unit', 'width' => '80px'],
-                        ['caption' => 'Scale', 'name' => 'scale', 'width' => '80px'],
-                        ['caption' => 'Selected', 'name' => 'selected', 'width' => '80px', 'edit' => ['type' => 'CheckBox']]
+                    "type"  => "List",
+                    "name"  => "Registers",
+                    "caption" => "Available Registers",
+                    "rowCount" => 10,
+                    "add"   => false,
+                    "delete" => false,
+                    "columns" => [
+                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Name", "name" => "name", "width" => "200px"],
+                        ["caption" => "Type", "name" => "type", "width" => "80px"],
+                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
+                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
+                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
                     ],
-                    'values' => $values
+                    "values" => $values
                 ]
             ]
         ]);
