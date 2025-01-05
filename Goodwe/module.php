@@ -152,9 +152,10 @@ class Goodwe extends IPSModule
         }
     }
     
+
     public function GetConfigurationForm()
     {
-        $registers = $this->GetRegisters(); // Hole aktuelle Registerliste
+        $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         // Erstellen der Optionen für die Auswahlliste
@@ -164,6 +165,7 @@ class Goodwe extends IPSModule
                 "value" => json_encode($register) // Speichert das gesamte Register als JSON
             ];
         }, $registers);
+        
     
         return json_encode([
             "elements" => [
@@ -172,11 +174,7 @@ class Goodwe extends IPSModule
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
                     "rowCount" => 10,
-                    "add" => [
-                        "caption" => "Neues Register hinzufügen",
-                        "type" => "Select",
-                        "options" => $registerOptions // Nutze aktuelle Registerliste
-                    ],
+                    "add" => true,
                     "delete" => true,
                     "columns" => [
                         [
@@ -186,7 +184,7 @@ class Goodwe extends IPSModule
                             "add" => '',
                             "edit" => [
                                 "type" => "Select",
-                                "options" => $registerOptions // Nutze aktuelle Registerliste
+                                "options" => $registerOptions
                             ]
                         ]
                     ],
@@ -209,6 +207,7 @@ class Goodwe extends IPSModule
         ]);
     }
     
+
     private function GetVariableDetails(string $unit): ?array
     {
         switch ($unit) {
@@ -238,7 +237,6 @@ class Goodwe extends IPSModule
             ["address" => 35191, "name" => "Total PV Energy", "type" => "U32", "unit" => "kWh", "scale" => 10],
             ["address" => 35107, "name" => "PV2 Voltage", "type" => "U16", "unit" => "V", "scale" => 10],
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1],
-            ["address" => 35182, "name" => "Batterie Leistung", "type" => "S32", "unit" => "W", "scale" => 1],
             ["address" => 47908, "name" => "State of Charge (SOC)", "type" => "S16", "unit" => "%", "scale" => 1]
         ];
     }
