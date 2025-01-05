@@ -75,35 +75,20 @@ class Goodwe extends IPSModule
                     "caption" => "Selected Registers",
                     "rowCount" => 10,
                     "delete" => true,
+                    "add" => true,
                     "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px"],
+                        ["caption" => "Address", "name" => "address", "width" => "100px", "edit" => ["type" => "Select", "options" => array_map(function ($register) {
+                            return [
+                                "caption" => "{$register['address']} - {$register['name']}",
+                                "value" => $register['address']
+                            ];
+                        }, $registers)]],
                         ["caption" => "Name", "name" => "name", "width" => "200px"],
                         ["caption" => "Type", "name" => "type", "width" => "80px"],
                         ["caption" => "Unit", "name" => "unit", "width" => "80px"],
                         ["caption" => "Scale", "name" => "scale", "width" => "80px"]
                     ],
                     "values" => $selectedRegisters
-                ],
-                [
-                    "type" => "PopupDialog",
-                    "name" => "AddRegisterPopup",
-                    "caption" => "Register hinzufügen",
-                    "popup" => [
-                        "type"  => "Select",
-                        "name"  => "AvailableRegisters",
-                        "caption" => "Select Register",
-                        "options" => array_map(function ($register) {
-                            return [
-                                "caption" => "{$register['address']} - {$register['name']}",
-                                "value" => json_encode($register)
-                            ];
-                        }, $registers)
-                    ]
-                ],
-                [
-                    "type" => "Button",
-                    "caption" => "Hinzufügen",
-                    "onClick" => 'IPS_RequestAction($id, "AddRegister", $AvailableRegisters);'
                 ],
                 [
                     "type"  => "IntervalBox",
@@ -120,7 +105,6 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
-        
     }
 
     public function RequestRead()
