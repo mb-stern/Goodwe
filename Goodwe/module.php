@@ -42,27 +42,41 @@ class Goodwe extends IPSModule
     }
     
 
-public function ApplyChanges()
-{
-    parent::ApplyChanges();
-
-    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-
-    foreach ($selectedRegisters as $register) {
-        if (isset($register['address'], $register['name'], $register['unit'])) {
-            $ident = "Addr" . $register['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
+    public function ApplyChanges()
+    {
+        parent::ApplyChanges();
+    
+        // Lese die ausgewählten Register aus der Property
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        // Debugging
+        $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
+    
+        // Variablen für alle ausgewählten Register erstellen
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address'], $register['name'], $register['unit'])) {
+                $ident = "Addr" . $register['address'];
+    
+                // Überprüfen, ob die Variable existiert
+                $varId = @$this->GetIDForIdent($ident);
+                if ($varId === false) {
+                    // Falls nicht vorhanden, Variable registrieren
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                    $this->SendDebug("ApplyChanges", "Variable mit Ident $ident erstellt.", 0);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
+                }
+            } else {
+                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
             }
         }
     }
-}
+    
 
     
     public function GetConfigurationForm()
