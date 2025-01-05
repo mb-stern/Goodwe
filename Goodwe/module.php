@@ -25,28 +25,32 @@ class Goodwe extends IPSModule
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Debugging
+        // Sicherstellen, dass es ein Array ist
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
+    
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
         foreach ($selectedRegisters as $register) {
-            // Sicherstellen, dass alle erforderlichen Felder vorhanden sind
-            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
-                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($register), 0);
+            // Validierung der Registerdaten
+            if (!isset($register['address'], $register['name'], $register['unit'])) {
+                $this->SendDebug("ApplyChanges", "Ungültiges Register: " . json_encode($register), 0);
                 continue;
             }
     
             $ident = "Addr" . $register['address'];
     
-            // Prüfen, ob die Variable bereits existiert
+            // Prüfen, ob die Variable existiert
             if (!@$this->GetIDForIdent($ident)) {
-                $name = $register['name'] ?: "Unnamed Register"; // Fallback-Name für leere Namen
                 $this->RegisterVariableFloat(
                     $ident,
-                    $name,
+                    $register['name'] ?: "Unnamed Register", // Fallback-Name
                     $this->GetVariableProfile($register['unit']),
                     0
                 );
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name $name.", 0);
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$register['name']}.", 0);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
@@ -87,8 +91,7 @@ class Goodwe extends IPSModule
                         [
                             "caption" => "Address",
                             "name" => "address",
-                            "width" => "300px",
-                            "add" => 0, // Standardwert für Address beim Hinzufügen
+                            "width" => "100px",
                             "edit" => [
                                 "type" => "Select",
                                 "options" => array_map(function ($register) {
@@ -96,18 +99,23 @@ class Goodwe extends IPSModule
                                         "caption" => "{$register['address']} - {$register['name']}",
                                         "value" => $register['address']
                                     ];
-                                }, $registers)
+                                }, $this->GetRegisters())
                             ]
                         ],
                         [
                             "caption" => "Name",
                             "name" => "name",
                             "width" => "200px",
-                            "add" => "", // Standardwert für Name beim Hinzufügen
-                            "save" => true
+                            "edit" => ["type" => "ValidationTextBox"]
+                        ],
+                        [
+                            "caption" => "Unit",
+                            "name" => "unit",
+                            "width" => "80px",
+                            "edit" => ["type" => "ValidationTextBox"]
                         ]
                     ],
-                    "values" => $selectedRegisters
+                    "values" => json_decode($this->ReadPropertyString("SelectedRegisters"), true)
                 ],
                 [
                     "type"  => "IntervalBox",
@@ -124,6 +132,7 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
+        
         
     }
 
