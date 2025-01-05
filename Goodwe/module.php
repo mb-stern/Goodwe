@@ -16,54 +16,45 @@ class Goodwe extends IPSModule
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
-    public function ApplyChanges()
-    {
-        parent::ApplyChanges();
-
-        // Lese die ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
+    foreach ($selectedRegisters as &$selectedRegister) {
+        if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
+            $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
+            continue;
         }
     
-        foreach ($selectedRegisters as &$selectedRegister) {
-            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
-                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
-                continue;
-            }
-        
-            $ident = "Addr" . $selectedRegister['address'];
-            $profile = $this->GetVariableProfile($selectedRegister['unit']);
-        
-            if (!@$this->GetIDForIdent($ident)) {
-                // Variablentyp basierend auf Profil ableiten
-                $variableType = $this->GetVariableTypeFromProfile($profile);
-        
-                switch ($variableType) {
-                    case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
-                        break;
-                    default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
-                        continue 2;
-                }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
-            }
+        $ident = "Addr" . $selectedRegister['address'];
+        $profile = $this->GetVariableProfile($selectedRegister['unit']);
+    
+        // Validierung des Profils
+        if ($profile === null) {
+            $this->SendDebug("ApplyChanges", "Kein Profil für Einheit {$selectedRegister['unit']} gefunden.", 0);
+            continue;
         }
-        
-        $pollInterval = $this->ReadPropertyInteger("PollInterval");
-        $this->SetTimerInterval("Poller", $pollInterval * 1000);
+    
+        if (!@$this->GetIDForIdent($ident)) {
+            // Variablentyp basierend auf Profil ableiten
+            $variableType = $this->GetVariableTypeFromProfile($profile);
+    
+            switch ($variableType) {
+                case VARIABLETYPE_INTEGER:
+                    $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
+                    break;
+                case VARIABLETYPE_FLOAT:
+                    $this->RegisterVariableFloat($ident, $selectedRegister['name'], $profile, 0);
+                    break;
+                case VARIABLETYPE_STRING:
+                    $this->RegisterVariableString($ident, $selectedRegister['name'], $profile, 0);
+                    break;
+                default:
+                    $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
+                    continue;
+            }
+            $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
+        } else {
+            $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
+        }
     }
-
+    
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
