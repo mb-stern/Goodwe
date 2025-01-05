@@ -14,6 +14,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollInterval", 5); // Standard: 60 Sekunden
 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        $this->IPS_ApplyChanges();
     }
 
     public function ApplyChanges()
