@@ -70,8 +70,6 @@ class Goodwe extends IPSModule
             ];
         }
     
-        $this->SendDebug("GetConfigurationForm: Values", json_encode($values), 0);
-    
         return json_encode([
             "elements" => [
                 [
@@ -79,7 +77,7 @@ class Goodwe extends IPSModule
                     "name"  => "Registers",
                     "caption" => "Available Registers",
                     "rowCount" => 10,
-                    "add"   => false,
+                    "add" => false,
                     "delete" => false,
                     "columns" => [
                         ["caption" => "Address", "name" => "address", "width" => "100px"],
