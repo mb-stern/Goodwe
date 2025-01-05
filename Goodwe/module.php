@@ -59,7 +59,7 @@ class Goodwe extends IPSModule
     
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
-        $this->RequestRead()
+        $this->RequestRead();
     }
     
     
