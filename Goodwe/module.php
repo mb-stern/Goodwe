@@ -190,12 +190,6 @@ class Goodwe extends IPSModule
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
-        IPS_SetProperty($this->InstanceID, "Registers", json_encode($registers));
-        
-        // Änderungen an der Instanz übernehmen
-        IPS_ApplyChanges($this->InstanceID);
-    
-        // Danach die aktualisierte Property-Liste verwenden
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         // Optionen für die Auswahlliste
