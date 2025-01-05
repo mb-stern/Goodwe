@@ -98,8 +98,16 @@ class Goodwe extends IPSModule
         // Prüfen, ob eine Verbindung zum Parent besteht
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
-            $this->SendDebug("RequestRead", "Keine gültige Verbindung zum Parent vorhanden.", 0);
-            IPS_LogMessage("Goodwe", "Keine gültige Verbindung zum Parent vorhanden. RequestRead abgebrochen.");
+            $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
+            IPS_LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+            return;
+        }
+    
+        // Prüfen, ob der Parent geöffnet ist (sofern relevant für den Parent-Typ)
+        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
+        if ($parentStatus !== IS_ACTIVE) {
+            $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+            IPS_LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
     
