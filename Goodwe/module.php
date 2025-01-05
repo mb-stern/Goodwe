@@ -137,6 +137,18 @@ class Goodwe extends IPSModule
         ]);
         
     }
+
+    public function RequestRead()
+    {
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address'], $register['type'], $register['scale'])) {
+                $value = $this->ReadRegister($register['address'], $register['type'], $register['scale']);
+                $ident = "Addr" . $register['address'];
+                $this->SetValue($ident, $value);
+            }
+        }
+    }
     
     public function RequestRead()
     {
