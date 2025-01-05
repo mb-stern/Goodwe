@@ -7,113 +7,83 @@ class Goodwe extends IPSModule
     public function Create()
     {
         parent::Create();
-
+    
         // Verknüpfe mit dem Modbus-Gateway
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-
-        // Eigenschaft für die ausgewählten Register
-        $this->RegisterPropertyString("SelectedRegisters", json_encode([]));
-
-        // Timer zur zyklischen Abfrage
-        $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+    
+        // Property für die Register-Liste
+        $this->RegisterPropertyString('Registers', json_encode($this->GetRegisters()));
+        $this->RegisterPropertyString('SelectedRegisters', json_encode([]));
+    
+        // Timer für zyklische Abfragen
+        $this->RegisterTimer('Poller', 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
+    
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Lese die ausgewählten Register aus der Property
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("Error", "SelectedRegisters ist keine gültige Liste: " . $this->ReadPropertyString("SelectedRegisters"), 0);
-            return;
-        }
-
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
-                continue;
-            }
-
-            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
-                continue;
-            }
-
-            $ident = "Addr" . $register['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
+    
+        foreach ($selectedRegisters as $register) {
+            if ($register['selected']) {
+                $ident = "Addr" . $register['address'];
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'],
+                        $this->GetVariableProfile($register['unit']),
+                        0
+                    );
+                }
             }
         }
     }
-
-    private function FindRegisterByAddress(int $address)
-    {
-        foreach ($this->GetRegisters() as $register) {
-            if ($register['address'] === $address) {
-                return $register;
-            }
-        }
-        return null;
-    }
+    
 
     public function GetConfigurationForm()
     {
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        // Debugging
-        $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
-
+        $registers = json_decode($this->ReadPropertyString('Registers'), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+    
         $values = [];
         foreach ($registers as $register) {
-            $isSelected = false;
-
-            foreach ($selectedRegisters as $selectedRegister) {
-                if (isset($selectedRegister['address']) && $selectedRegister['address'] === $register['address'] && $selectedRegister['selected']) {
-                    $isSelected = true;
-                    break;
-                }
-            }
-
+            $isSelected = in_array($register['address'], array_column($selectedRegisters, 'address'));
             $values[] = [
-                "address"  => $register['address'],
-                "name"     => $register['name'],
-                "type"     => $register['type'],
-                "unit"     => $register['unit'],
-                "scale"    => $register['scale'],
-                "selected" => $isSelected
+                'address'  => $register['address'],
+                'name'     => $register['name'],
+                'type'     => $register['type'],
+                'unit'     => $register['unit'],
+                'scale'    => $register['scale'],
+                'selected' => $isSelected
             ];
         }
-
+    
         return json_encode([
-            "elements" => [
+            'elements' => [
                 [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Register",
-                    "add"   => false,
-                    "delete" => false,
-                    "columns" => [
-                        ["caption" => "Address", "name" => "address", "width" => "100px"],
-                        ["caption" => "Name", "name" => "name", "width" => "200px"],
-                        ["caption" => "Type", "name" => "type", "width" => "80px"],
-                        ["caption" => "Unit", "name" => "unit", "width" => "80px"],
-                        ["caption" => "Scale", "name" => "scale", "width" => "80px"],
-                        ["caption" => "Selected", "name" => "selected", "width" => "80px", "edit" => ["type" => "CheckBox"]]
+                    'type'    => 'List',
+                    'name'    => 'Registers',
+                    'caption' => 'Available Registers',
+                    'rowCount' => 10,
+                    'add'     => false,
+                    'delete'  => false,
+                    'columns' => [
+                        ['caption' => 'Address', 'name' => 'address', 'width' => '100px'],
+                        ['caption' => 'Name', 'name' => 'name', 'width' => '200px'],
+                        ['caption' => 'Type', 'name' => 'type', 'width' => '80px'],
+                        ['caption' => 'Unit', 'name' => 'unit', 'width' => '80px'],
+                        ['caption' => 'Scale', 'name' => 'scale', 'width' => '80px'],
+                        ['caption' => 'Selected', 'name' => 'selected', 'width' => '80px', 'edit' => ['type' => 'CheckBox']]
                     ],
-                    "values" => $values
+                    'values' => $values
                 ]
             ]
         ]);
     }
+    
 
     private function ReadRegister(int $address, string $type, float $scale)
     {
