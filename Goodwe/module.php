@@ -21,20 +21,29 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        
+    
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
-        }
-
+    
+        // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
-
-        // Variablen für die ausgewählten Register erstellen
-        foreach ($selectedRegisters as $register) {
+    
+        foreach ($selectedRegisters as &$register) {
+            // Ergänze fehlende Felder mit den Daten aus GetRegisters
+            if (!isset($register['name']) || !isset($register['unit'])) {
+                $matchingRegister = array_filter($this->GetRegisters(), function ($r) use ($register) {
+                    return $r['address'] === $register['address'];
+                });
+    
+                if (!empty($matchingRegister)) {
+                    $matchingRegister = array_shift($matchingRegister);
+                    $register = array_merge($matchingRegister, $register);
+                }
+            }
+    
+            // Erstelle die Variable
             if (isset($register['address'], $register['name'], $register['unit'])) {
                 $ident = "Addr" . $register['address'];
-
                 if (!@$this->GetIDForIdent($ident)) {
                     $this->RegisterVariableFloat(
                         $ident,
@@ -45,12 +54,16 @@ class Goodwe extends IPSModule
                 }
             }
         }
-
+    
+        // Aktualisiere die Property mit den vollständigen Daten
+        IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
+        IPS_ApplyChanges($this->InstanceID);
+    
         // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
-
+    
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
