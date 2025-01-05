@@ -38,6 +38,15 @@ class Goodwe extends IPSModule
                     continue;
                 }
             }
+
+            $ident = "Addr" . $selectedRegister['address'];
+            $profile = $this->GetVariableProfile($selectedRegister['unit']);
+        
+            // Validierung des Profils
+            if ($profile === null) {
+                $this->SendDebug("ApplyChanges", "Kein Profil für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                continue;
+            }
     
             // Erstelle Variablen
             if (!@$this->GetIDForIdent($ident)) {
