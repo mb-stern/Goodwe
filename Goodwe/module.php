@@ -11,7 +11,7 @@ class Goodwe extends IPSModule
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-        $this->RegisterPropertyInteger("PollInterval", 60); // Standard: 60 Sekunden
+        $this->RegisterPropertyInteger("PollInterval", 5); // Standard: 60 Sekunden
 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
