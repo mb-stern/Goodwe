@@ -14,13 +14,12 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollInterval", 5); // Standard: 60 Sekunden
 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        $this->ApplyChanges();
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
     
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -88,13 +87,28 @@ class Goodwe extends IPSModule
         $this->RequestRead();
     }
     
+
     public function RequestRead()
     {
-        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
+    
+        // Prüfen, ob eine Verbindung zum Parent besteht
+        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+        if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
+            $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
+            IPS_LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+            return;
+        }
+    
+        // Prüfen, ob der Parent geöffnet ist (sofern relevant für den Parent-Typ)
+        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
+        if ($parentStatus !== IS_ACTIVE) {
+            $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+            IPS_LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
     
@@ -118,53 +132,58 @@ class Goodwe extends IPSModule
             $ident = "Addr" . $register['address'];
             $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
     
-            $response = $this->SendDataToParent(json_encode([
-                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,
-                "Address"  => $register['address'],
-                "Quantity" => $quantity,
-                "Data"     => ""
-            ]));
+            try {
+                $response = $this->SendDataToParent(json_encode([
+                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                    "Function" => 3,
+                    "Address"  => $register['address'],
+                    "Quantity" => $quantity,
+                    "Data"     => ""
+                ]));
     
-            if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
-                continue;
+                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                    $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
+                    continue;
+                }
+    
+                $data = unpack("n*", substr($response, 2));
+                $value = 0;
+    
+                switch ($register['type']) {
+                    case "U16":
+                        $value = $data[1];
+                        break;
+                    case "S16":
+                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                        break;
+                    case "U32":
+                        $value = ($data[1] << 16) | $data[2];
+                        break;
+                    case "S32":
+                        $combined = ($data[1] << 16) | $data[2];
+                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                        break;
+                }
+    
+                if ($register['scale'] == 0) {
+                    $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
+                    continue;
+                }
+    
+                $scaledValue = $value / $register['scale'];
+    
+                $variableID = @$this->GetIDForIdent($ident);
+                if ($variableID === false) {
+                    $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
+                    continue;
+                }
+    
+                SetValue($variableID, $scaledValue);
+                $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
+            } catch (Exception $e) {
+                $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
+                IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
-    
-            $data = unpack("n*", substr($response, 2));
-            $value = 0;
-    
-            switch ($register['type']) {
-                case "U16":
-                    $value = $data[1];
-                    break;
-                case "S16":
-                    $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                    break;
-                case "U32":
-                    $value = ($data[1] << 16) | $data[2];
-                    break;
-                case "S32":
-                    $combined = ($data[1] << 16) | $data[2];
-                    $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                    break;
-            }
-    
-            if ($register['scale'] == 0) {
-                $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
-                continue;
-            }
-    
-            $scaledValue = $value / $register['scale'];
-    
-            $variableID = @$this->GetIDForIdent($ident);
-            if ($variableID === false) {
-                $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
-                continue;
-            }
-    
-            SetValue($variableID, $scaledValue);
-            $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
         }
     }
     
@@ -222,6 +241,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
 
     private function GetVariableDetails(string $unit): ?array
     {
@@ -245,6 +265,7 @@ class Goodwe extends IPSModule
         }
     }
     
+    
     private function GetRegisters()
     {
         return [
@@ -255,9 +276,7 @@ class Goodwe extends IPSModule
             ["address" => 36025, "name" => "Smartmeter Power", "type" => "S32", "unit" => "W", "scale" => 1],
             ["address" => 35182, "name" => "Batterie Leistung", "type" => "S32", "unit" => "W", "scale" => 1],
             ["address" => 47908, "name" => "State of Charge (SOC)", "type" => "S16", "unit" => "%", "scale" => 1],
-            ["address" => 47909, "name" => "State of Healt (SOH)", "type" => "S16", "unit" => "%", "scale" => 1],
-            ["address" => 37003, "name" => "BMS Temperatur", "type" => "S16", "unit" => "°C", "scale" => 10],
-            ["address" => 47906, "name" => "Batterie Spannung", "type" => "U16", "unit" => "V", "scale" => 10]
+            ["address" => 37003, "name" => "BMS Temperatur", "type" => "S16", "unit" => "°C", "scale" => 10]
         ];
     }
 }
