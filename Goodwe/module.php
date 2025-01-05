@@ -19,40 +19,50 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
+    
         // Lese die ausgewählten Register
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        // Überprüfen, ob die Liste gültig ist
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
     
+        // Debugging
+        $this->SendDebug("ApplyChanges", "Verarbeitete SelectedRegisters: " . json_encode($selectedRegisters), 0);
+    
         foreach ($selectedRegisters as &$selectedRegister) {
-            // Dekodiere verschachtelte JSON-Einträge
-            if (is_string($selectedRegister['address'])) {
+            // JSON-Dekodierung für verschachtelte Adressen
+            if (isset($selectedRegister['address']) && is_string($selectedRegister['address'])) {
                 $decodedRegister = json_decode($selectedRegister['address'], true);
-                if ($decodedRegister !== null) {
+                if (is_array($decodedRegister)) {
                     $selectedRegister = array_merge($selectedRegister, $decodedRegister);
                 } else {
                     $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                     continue;
                 }
             }
-
+    
+            // Validierung der erforderlichen Felder
+            if (!isset($selectedRegister['address'], $selectedRegister['name'], $selectedRegister['unit'])) {
+                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($selectedRegister), 0);
+                continue;
+            }
+    
             $ident = "Addr" . $selectedRegister['address'];
             $profile = $this->GetVariableProfile($selectedRegister['unit']);
-        
-            // Validierung des Profils
+    
+            // Überprüfen, ob ein gültiges Profil existiert
             if ($profile === null) {
                 $this->SendDebug("ApplyChanges", "Kein Profil für Einheit {$selectedRegister['unit']} gefunden.", 0);
                 continue;
             }
     
-            // Erstelle Variablen
+            // Variablenerstellung basierend auf Profil und Typ
             if (!@$this->GetIDForIdent($ident)) {
-                // Variablentyp basierend auf Profil ableiten
                 $variableType = $this->GetVariableTypeFromProfile($profile);
-        
+    
                 switch ($variableType) {
                     case VARIABLETYPE_INTEGER:
                         $this->RegisterVariableInteger($ident, $selectedRegister['name'], $profile, 0);
@@ -67,16 +77,21 @@ class Goodwe extends IPSModule
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für Profil $profile bei $ident.", 0);
                         continue 2;
                 }
+    
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil $profile.", 0);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     
+        // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
+    
+        // Debugging: Abschluss der ApplyChanges
+        $this->SendDebug("ApplyChanges", "ApplyChanges abgeschlossen", 0);
     }
-
+    
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
