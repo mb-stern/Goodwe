@@ -31,37 +31,20 @@ class Goodwe extends IPSModule
             return;
         }
 
-        foreach ($selectedRegisters as $selectedRegister) {
-            if (!isset($selectedRegister['address']) || !$selectedRegister['selected']) {
-                continue;
-            }
+        foreach ($selectedRegisters as $register) {
+            if (isset($register['address']) && $register['selected']) {
+                $ident = "Addr" . $register['address'];
 
-            $register = $this->FindRegisterByAddress((int)$selectedRegister['address']);
-            if (!$register) {
-                $this->SendDebug("ApplyChanges", "Kein Register gefunden für Adresse: {$selectedRegister['address']}", 0);
-                continue;
-            }
-
-            $ident = "Addr" . $register['address'];
-            if (!$this->GetIDForIdent($ident)) {
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $register['name'],
-                    $this->GetVariableProfile($register['unit']),
-                    0
-                );
+                if (!$this->GetIDForIdent($ident)) {
+                    $this->RegisterVariableFloat(
+                        $ident,
+                        $register['name'] ?? "Unbekannt",
+                        $this->GetVariableProfile($register['unit'] ?? ""),
+                        0
+                    );
+                }
             }
         }
-    }
-
-    private function FindRegisterByAddress(int $address)
-    {
-        foreach ($this->GetRegisters() as $register) {
-            if ($register['address'] === $address) {
-                return $register;
-            }
-        }
-        return null;
     }
 
     public function GetConfigurationForm()
@@ -69,7 +52,6 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-        // Debugging
         $this->SendDebug("GetConfigurationForm: SelectedRegisters", json_encode($selectedRegisters), 0);
 
         $values = [];
@@ -93,7 +75,7 @@ class Goodwe extends IPSModule
             ];
         }
 
-        return json_encode([
+        $form = [
             "elements" => [
                 [
                     "type"  => "List",
@@ -112,47 +94,10 @@ class Goodwe extends IPSModule
                     "values" => $values
                 ]
             ]
-        ]);
-    }
+        ];
 
-    private function ReadRegister(int $address, string $type, float $scale)
-    {
-        $quantity = ($type === "U32" || $type === "S32") ? 2 : 1;
-
-        $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $address,
-            "Quantity" => $quantity
-        ]));
-
-        if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-            $this->SendDebug("Error", "Keine oder unvollständige Antwort für Register $address", 0);
-            return 0;
-        }
-
-        $data = unpack("n*", substr($response, 2));
-        $value = 0;
-
-        switch ($type) {
-            case "U16":
-                $value = $data[1];
-                break;
-            case "S16":
-                $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                break;
-            case "U32":
-                $value = ($data[1] << 16) | $data[2];
-                break;
-            case "S32":
-                $combined = ($data[1] << 16) | $data[2];
-                $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                break;
-            default:
-                $this->SendDebug("Error", "Unbekannter Typ für Register $address: $type", 0);
-        }
-
-        return $value / $scale;
+        $this->SendDebug("GetConfigurationForm: Full Output", json_encode($form), 0);
+        return json_encode($form);
     }
 
     private function GetRegisters()
@@ -178,7 +123,7 @@ class Goodwe extends IPSModule
             case "kWh":
                 return "~Electricity";
             default:
-                return ""; // Fallback
+                return "";
         }
     }
 }
