@@ -28,48 +28,35 @@ class Goodwe extends IPSModule
         // Debugging
         $this->SendDebug("ApplyChanges: SelectedRegisters", json_encode($selectedRegisters), 0);
     
-        // Prüfen, ob Ergänzungen notwendig sind
-        $updatesRequired = false;
-    
-        foreach ($selectedRegisters as &$register) {
-            // Ergänze fehlende Felder mit den Daten aus GetRegisters
-            if (!isset($register['name']) || !isset($register['unit'])) {
-                $matchingRegister = array_filter($this->GetRegisters(), function ($r) use ($register) {
-                    return $r['address'] === $register['address'];
-                });
-    
-                if (!empty($matchingRegister)) {
-                    $matchingRegister = array_shift($matchingRegister);
-                    $register = array_merge($matchingRegister, $register);
-                    $updatesRequired = true;
-                }
+        foreach ($selectedRegisters as $register) {
+            // Sicherstellen, dass alle erforderlichen Felder vorhanden sind
+            if (!isset($register['address']) || !isset($register['name']) || !isset($register['unit'])) {
+                $this->SendDebug("ApplyChanges", "Fehlende Felder im Register: " . json_encode($register), 0);
+                continue;
             }
     
-            // Erstelle die Variable
-            if (isset($register['address'], $register['name'], $register['unit'])) {
-                $ident = "Addr" . $register['address'];
-                if (!@$this->GetIDForIdent($ident)) {
-                    $this->RegisterVariableFloat(
-                        $ident,
-                        $register['name'],
-                        $this->GetVariableProfile($register['unit']),
-                        0
-                    );
-                }
-            }
-        }
+            $ident = "Addr" . $register['address'];
     
-        // Aktualisiere die Property nur, wenn Änderungen vorgenommen wurden
-        if ($updatesRequired) {
-            $this->SendDebug("ApplyChanges", "Updating SelectedRegisters property.", 0);
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($selectedRegisters));
-            // Keine `IPS_ApplyChanges()` hier aufrufen! Endlosschleife vermeiden.
+            // Prüfen, ob die Variable bereits existiert
+            if (!@$this->GetIDForIdent($ident)) {
+                $name = $register['name'] ?: "Unnamed Register"; // Fallback-Name für leere Namen
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $name,
+                    $this->GetVariableProfile($register['unit']),
+                    0
+                );
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name $name.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
+            }
         }
     
         // Timer setzen
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
     }
+    
 
     public function GetConfigurationForm()
     {
