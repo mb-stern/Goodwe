@@ -59,10 +59,14 @@ class Goodwe extends IPSModule
     
         $pollInterval = $this->ReadPropertyInteger("PollInterval");
         $this->SetTimerInterval("Poller", $pollInterval * 1000);
-        $this->RequestRead($_IPS["TARGET"]);
+        $this->RequestAction();
     }
-    
-    
+
+    public function RequestAction()
+    {
+        $this->RequestRead();
+    }
+
     public function RequestRead()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
