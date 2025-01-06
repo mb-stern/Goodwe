@@ -240,6 +240,21 @@ class Goodwe extends IPSModule
                     "suffix" => "s"
                 ]
             ],
+            [
+                "type" => "ValidationTextBox",
+                "name" => "WallboxUser",
+                "caption" => "Benutzername",
+            ],
+            [
+                "type" => "ValidationTextBox",
+                "name" => "WallboxPassword",
+                "caption" => "Passwort",
+            ],
+            [
+                "type" => "ValidationTextBox",
+                "name" => "WallboxSerial",
+                "caption" => "Seriennummer",
+            ],
             "actions" => [
                 [
                     "type" => "Button",
@@ -267,6 +282,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
+    
     
     private function GetVariableDetails(string $unit): ?array
     {
