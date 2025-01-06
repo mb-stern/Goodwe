@@ -197,101 +197,108 @@ class Goodwe extends IPSModule
                 IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
-        
+
          // Abrufen von Wallbox-Daten
          $this->FetchWallboxData();
     }
 
-    private function FetchWallboxData()
-    {
-        $user = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
-    
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+private function FetchWallboxData()
+{
+    $user = $this->ReadPropertyString("WallboxUser");
+    $password = $this->ReadPropertyString("WallboxPassword");
+    $serial = $this->ReadPropertyString("WallboxSerial");
+
+    if (empty($user) || empty($password) || empty($serial)) {
+        $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        return;
+    }
+
+    $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+
+    try {
+        // Login
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
+
+        $body = http_build_query([
+            "account" => $user,
+            "pwd" => $password,
+            "code" => "",
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+
+        $loginResponse = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$loginResponse) {
+            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return;
         }
-    
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
-    
-        try {
-            // Login
-            $headers = [
-                "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-                "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-            ];
-    
-            $body = http_build_query([
-                "account" => $user,
-                "pwd" => $password,
-                "code" => "",
-            ]);
-    
-            $ch = curl_init('https://eu.semsportal.com/Home/Login');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
-    
-            $loginResponse = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-    
-            if ($httpCode !== 200 || !$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
-                return;
-            }
-    
-            // Daten abrufen
-            $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-            $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
-    
-            $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
-    
-            $apiResponse = curl_exec($ch);
-            curl_close($ch);
-    
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
-    
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
-    
-            // Daten verarbeiten
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-    
-                // Variablentyp bestimmen
-                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-    
-                // Variable erstellen oder aktualisieren
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-                }
-    
-                // Wert setzen
-                SetValue($this->GetIDForIdent($ident), $value);
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+
+        // Daten abrufen
+        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
+        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
+
+        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
+
+        $apiResponse = curl_exec($ch);
+        curl_close($ch);
+
+        if (!$apiResponse) {
+            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+            return;
         }
+
+        $data = json_decode($apiResponse, true);
+        if (!isset($data['data'])) {
+            $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+            return;
+        }
+
+        // **DEBUGGING der eingehenden Daten**
+        $this->SendDebug("FetchWallboxData", "Rohdaten: " . json_encode($data['data'], JSON_PRETTY_PRINT), 0);
+
+        // Reduzierte Ausgabe (nur relevante Schlüssel und Werte)
+        $filteredData = array_intersect_key($data['data'], array_flip(['key1', 'key2', 'key3'])); // Beispiel: gewünschte Schlüssel anpassen
+        $this->SendDebug("FetchWallboxData", "Gefilterte Daten: " . json_encode($filteredData, JSON_PRETTY_PRINT), 0);
+
+        // Daten verarbeiten
+        foreach ($data['data'] as $key => $value) {
+            $ident = "WB_" . $key;
+
+            // Variablentyp bestimmen
+            $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+
+            // Variable erstellen oder aktualisieren
+            $varID = @$this->GetIDForIdent($ident);
+            if ($varID === false) {
+                $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+            }
+
+            // Wert setzen
+            SetValue($this->GetIDForIdent($ident), $value);
+        }
+
+        $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
+    } catch (Exception $e) {
+        $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
     }
-    
+}
+
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
