@@ -213,27 +213,6 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
-                    "type" => "ExpansionPanel",
-                    "caption" => "API-Konfiguration (Goodwe-Wallbox)",
-                    "items" => [
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxUser",
-                            "caption" => "Benutzername",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxPassword",
-                            "caption" => "Passwort",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxSerial",
-                            "caption" => "Seriennummer",
-                        ]
-                    ]
-                ],
-                [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
@@ -259,6 +238,27 @@ class Goodwe extends IPSModule
                     "name"  => "PollInterval",
                     "caption" => "Sekunden",
                     "suffix" => "s"
+                ],
+                [
+                    "type" => "ExpansionPanel",
+                    "caption" => "API-Konfiguration (Goodwe-Wallbox)",
+                    "items" => [
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxUser",
+                            "caption" => "Benutzername",
+                        ],
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxPassword",
+                            "caption" => "Passwort",
+                        ],
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxSerial",
+                            "caption" => "Seriennummer",
+                        ]
+                    ]
                 ]
             ],
             "actions" => [
