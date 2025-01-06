@@ -196,7 +196,7 @@ class Goodwe extends IPSModule
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
-                "caption" => "{$register['address']} - {$register['name']}",
+                "caption" => "{$register['address']} - {$register['name']} - {($register['Unit'])}",
                 "value" => json_encode($register)
             ];
         }, $registers);
