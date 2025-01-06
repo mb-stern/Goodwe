@@ -69,10 +69,15 @@ class Goodwe extends IPSModule
                 }
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
             } else {
+                $variableID = $this->GetIDForIdent($ident);
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
-            // Position der Variable setzen
-            IPS_SetPosition($ident, $ident);
+           // Position der Variable setzen
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, (int)$selectedRegister['address']);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
+            }
         }
     
         // Variablen löschen, die nicht mehr in der aktuellen Liste sind
