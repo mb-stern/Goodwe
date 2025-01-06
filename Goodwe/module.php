@@ -197,7 +197,7 @@ class Goodwe extends IPSModule
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
             return [
-                "caption" => "{$register['address']} - {$register['name']} ({$register['unit']})",
+                "caption" => "{$register['address']} - {$register['name']}",
                 "value" => json_encode($register)
             ];
         }, $registers);
@@ -260,8 +260,6 @@ class Goodwe extends IPSModule
                 return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
             case "ems":
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
-            case "wrfehl":
-                return ["profile" => "Goodwe.WRFehler", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
             case "String":
@@ -279,13 +277,6 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Batteriestandby', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Zwangsladung', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.WRFehler')){
-            IPS_CreateVariableProfile('Goodwe.WRFehler', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '1', 'Automatikmodus', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '8', 'Batteriestandby', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '11', 'Zwangsladung', '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
@@ -338,7 +329,6 @@ class Goodwe extends IPSModule
         ["address" => 35108, "name" => "WR-Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1],
         ["address" => 35109, "name" => "WR-Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1],
         ["address" => 35174, "name" => "WR-Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1],
-        ["address" => 35189, "name" => "WR-Fehlermeldung", "type" => "U32", "unit" => "wrfehl", "scale" => 1],
         ["address" => 35191, "name" => "WR-Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 35193, "name" => "WR-Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 35301, "name" => "WR-Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1],
