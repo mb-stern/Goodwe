@@ -56,15 +56,12 @@ class Goodwe extends IPSModule
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
                         $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
-                        IPS_SetPosition($ident, $ident);
                         break;
                     case VARIABLETYPE_FLOAT:
                         $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
-                        IPS_SetPosition($ident, $ident);
                         break;
                     case VARIABLETYPE_STRING:
                         $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
-                        IPS_SetPosition($ident, $ident);
                         break;
                     default:
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
@@ -74,6 +71,8 @@ class Goodwe extends IPSModule
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
+            // Position der Variable setzen
+            IPS_SetPosition($ident, $ident);
         }
     
         // Variablen löschen, die nicht mehr in der aktuellen Liste sind
