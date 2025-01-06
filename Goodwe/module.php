@@ -15,7 +15,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
-          
+
         $this->RegisterPropertyInteger("PollInterval", 5); 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
@@ -102,6 +102,9 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
+        // Abrufen von Wallbox-Daten
+        $this->FetchWallboxData();
+    
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
