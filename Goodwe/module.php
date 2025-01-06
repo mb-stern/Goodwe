@@ -236,7 +236,7 @@ class Goodwe extends IPSModule
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollInterval",
-                    "caption" => "Abfrageintervall (Sekunden)",
+                    "caption" => "Sekunden",
                     "suffix" => "s"
                 ]
             ],
