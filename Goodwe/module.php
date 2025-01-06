@@ -14,7 +14,6 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollInterval", 5); // Standard: 60 Sekunden
 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
-        $this->ApplyChanges();
     }
 
     public function ApplyChanges()
@@ -50,6 +49,8 @@ class Goodwe extends IPSModule
     
             $ident = "Addr" . $selectedRegister['address'];
             $currentIdents[] = $ident;
+
+            $this->CreateProfile();
     
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
@@ -250,17 +251,58 @@ class Goodwe extends IPSModule
             case "A":
                 return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
             case "W":
-                return ["profile" => "~Watt", "type" => VARIABLETYPE_FLOAT];
+                return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
             case "kWh":
                 return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
             case "°C":
                 return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
             case "%":
                 return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
+            case "ems":
+                return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
+            case "wrfehl":
+                return ["profile" => "Goodwe.WRFehler", "type" => VARIABLETYPE_INTEGER];
+            case "mode":
+                return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
             case "String":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
                 return null; // Kein bekanntes Profil oder Typ
+        }
+    }
+
+    private function CreateProfile()
+    {
+        {
+            IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Automatikmodus', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Batteriestandby', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Zwangsladung', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
+        }
+        {
+            IPS_CreateVariableProfile('Goodwe.WRFehler', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '1', 'Automatikmodus', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '8', 'Batteriestandby', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '11', 'Zwangsladung', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
+        }
+        {
+            IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '2', 'entlädt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
+        }
+        {
+            IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.Watt', '', ' W');
+            IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
+            IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
         }
     }
     
@@ -273,15 +315,14 @@ class Goodwe extends IPSModule
         ["address" => 36023, "name" => "SM-Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36025, "name" => "SM-Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1],
         // Batterie
-       
         ["address" => 35182, "name" => "BAT-Leistung", "type" => "S32", "unit" => "W", "scale" => 1],
-        ["address" => 35184, "name" => "BAT-Mode", "type" => "U16", "unit" => "", "scale" => 1],
+        ["address" => 35184, "name" => "BAT-Mode", "type" => "U16", "unit" => "mode", "scale" => 1],
         ["address" => 35206, "name" => "BAT-Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 35209, "name" => "BAT-Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 37003, "name" => "BAT-Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1],
         ["address" => 45356, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1],
         ["address" => 45358, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1],
-        ["address" => 47511, "name" => "BAT-EMSPowerMode", "type" => "U16", "unit" => "", "scale" => 1],
+        ["address" => 47511, "name" => "BAT-EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1],
         ["address" => 47512, "name" => "BAT-EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1],
         ["address" => 47903, "name" => "BAT-Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1],
         ["address" => 47905, "name" => "BAT-Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1],
@@ -297,7 +338,7 @@ class Goodwe extends IPSModule
         ["address" => 35108, "name" => "WR-Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1],
         ["address" => 35109, "name" => "WR-Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1],
         ["address" => 35174, "name" => "WR-Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1],
-        ["address" => 35189, "name" => "WR-Fehlermeldung", "type" => "U32", "unit" => "", "scale" => 1],
+        ["address" => 35189, "name" => "WR-Fehlermeldung", "type" => "U32", "unit" => "wrfehl", "scale" => 1],
         ["address" => 35191, "name" => "WR-Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 35193, "name" => "WR-Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1],
         ["address" => 35301, "name" => "WR-Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1],
