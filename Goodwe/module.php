@@ -204,36 +204,67 @@ class Goodwe extends IPSModule
 
     private function FetchWallboxData()
     {
-        $email = $this->ReadPropertyString("WallboxUser");
+        $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
-        $sn = $this->ReadPropertyString("WallboxSerial");
+        $serial = $this->ReadPropertyString("WallboxSerial");
     
-        if (empty($email) || empty($password) || empty($sn)) {
-            $this->SendDebug("FetchWallboxData", "Benutzername, Passwort oder Seriennummer fehlen. Abfrage wird nicht ausgeführt.", 0);
-            return;
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf nicht möglich: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            return; // Abbrechen, wenn Eingabefelder leer sind
         }
     
-        if (!$this->GoodweLogin($email, $password)) {
-            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. Abfrage wird nicht ausgeführt.", 0);
-            return;
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+    
+        try {
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
+            }
+    
+            $apiResponse = $this->GoodweFetchData($serial);
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
+            }
+    
+            $data = json_decode($apiResponse, true);
+            if (!isset($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                return;
+            }
+    
+            $this->ProcessWallboxData($data['data']);
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        }
+    }
+    
+    private function ProcessWallboxData(array $data)
+    {
+        foreach ($data as $key => $value) {
+            $ident = "WB_" . $key;
+    
+            // Variablentyp bestimmen
+            if (is_numeric($value)) {
+                $type = VARIABLETYPE_FLOAT; // Float für numerische Werte
+            } elseif (is_bool($value)) {
+                $type = VARIABLETYPE_BOOLEAN; // Boolean für Wahrheitswerte
+            } else {
+                $type = VARIABLETYPE_STRING; // String für alles andere
+            }
+    
+            // Variable erstellen oder aktualisieren
+            $varID = @$this->GetIDForIdent($ident);
+            if ($varID === false) {
+                $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+            }
+    
+            // Wert setzen
+            SetValue($this->GetIDForIdent($ident), $value);
         }
     
-        // Hier kannst du die Abfrage fortsetzen
-        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-        $response = $this->GoodweFetchData($sn, $apiEndpoint);
-    
-        if ($response === false) {
-            $this->SendDebug("FetchWallboxData", "Fehler bei der Abfrage der Wallbox-Daten.", 0);
-            return;
-        }
-    
-        $data = json_decode($response, true);
-        if (!isset($data['data'])) {
-            $this->SendDebug("FetchWallboxData", "Keine gültigen Daten empfangen.", 0);
-            return;
-        }
-    
-        $this->ProcessAndSaveWallboxData($data['data']);
+        $this->SendDebug("ProcessWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
     }
     
     private function GoodweLogin(string $email, string $password): bool
