@@ -11,8 +11,12 @@ class Goodwe extends IPSModule
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-        $this->RegisterPropertyInteger("PollInterval", 5); // Standard: 60 Sekunden
 
+        $this->RegisterPropertyString("WallboxUser", "");     
+        $this->RegisterPropertyString("WallboxPassword", "");  
+        $this->RegisterPropertyString("WallboxSerial", "");  
+          
+        $this->RegisterPropertyInteger("PollInterval", 5); 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
     }
 
@@ -194,7 +198,53 @@ class Goodwe extends IPSModule
             }
         }
     }
-    
+
+    private function FetchWallboxData()
+    {
+        $email = $this->ReadPropertyString('WallboxUser');
+        $password = $this->ReadPropertyString('WallboxPassword');
+        $sn = $this->ReadPropertyString('WallboxSerial');
+
+        if (empty($email) || empty($password) || empty($sn)) {
+            $this->SendDebug("FetchWallboxData", "Benutzername, Passwort oder Seriennummer fehlen. Abfrage wird nicht ausgeführt.", 0);
+            return;
+        }
+
+        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
+
+        // Login und Datenabfrage
+        $loginResponse = $this->GoodweLogin($email, $password);
+        if (!$loginResponse) {
+            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. Abbruch.", 0);
+            return;
+        }
+
+        $dataResponse = $this->GoodweFetchData($sn, $apiEndpoint);
+        if (!$dataResponse) {
+            $this->SendDebug("FetchWallboxData", "Datenabfrage fehlgeschlagen. Abbruch.", 0);
+            return;
+        }
+
+        $data = json_decode($dataResponse, true);
+        if (isset($data['data']) && !empty($data['data'])) {
+            foreach ($data['data'] as $key => $value) {
+                $ident = "WB_" . $key;
+                $varType = is_numeric($value) ? VARIABLETYPE_FLOAT : VARIABLETYPE_STRING;
+
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) {
+                    $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), "", 0);
+                    $varID = $this->GetIDForIdent($ident);
+                }
+
+                SetValue($varID, $value);
+            }
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+        } else {
+            $this->SendDebug("FetchWallboxData", "Keine Wallbox-Daten gefunden oder Fehler in der API-Antwort.", 0);
+        }
+    }
+
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
