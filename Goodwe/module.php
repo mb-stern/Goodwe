@@ -67,11 +67,12 @@ class Goodwe extends IPSModule
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
                         continue 2;
                 }
-                IPS_SetPosition($ident, (int)$selectedRegister['address']);
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
+            // Position der Variable setzen
+            IPS_SetPosition($variableID, (int)$selectedRegister['address']);
         }
     
         // Variablen löschen, die nicht mehr in der aktuellen Liste sind
