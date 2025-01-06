@@ -264,6 +264,7 @@ class Goodwe extends IPSModule
                         "caption" => ""
                         ]
                     ]
+                    ]
         ]);
     }
     
