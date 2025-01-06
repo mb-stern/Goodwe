@@ -213,6 +213,21 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
+                    "type" => "ValidationTextBox",
+                    "name" => "WallboxUser",
+                    "caption" => "Benutzername",
+                ],
+                [
+                    "type" => "ValidationTextBox",
+                    "name" => "WallboxPassword",
+                    "caption" => "Passwort",
+                ],
+                [
+                    "type" => "ValidationTextBox",
+                    "name" => "WallboxSerial",
+                    "caption" => "Seriennummer",
+                ],
+                [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
@@ -239,21 +254,6 @@ class Goodwe extends IPSModule
                     "caption" => "Sekunden",
                     "suffix" => "s"
                 ]
-            ],
-            [
-                "type" => "ValidationTextBox",
-                "name" => "WallboxUser",
-                "caption" => "Benutzername",
-            ],
-            [
-                "type" => "ValidationTextBox",
-                "name" => "WallboxPassword",
-                "caption" => "Passwort",
-            ],
-            [
-                "type" => "ValidationTextBox",
-                "name" => "WallboxSerial",
-                "caption" => "Seriennummer",
             ],
             "actions" => [
                 [
