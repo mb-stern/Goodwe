@@ -204,48 +204,69 @@ class Goodwe extends IPSModule
 
     private function FetchWallboxData()
     {
-        $email = $this->ReadPropertyString('WallboxUser');
-        $password = $this->ReadPropertyString('WallboxPassword');
-        $sn = $this->ReadPropertyString('WallboxSerial');
-
+        $email = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $sn = $this->ReadPropertyString("WallboxSerial");
+    
         if (empty($email) || empty($password) || empty($sn)) {
             $this->SendDebug("FetchWallboxData", "Benutzername, Passwort oder Seriennummer fehlen. Abfrage wird nicht ausgeführt.", 0);
             return;
         }
-
+    
+        if (!$this->GoodweLogin($email, $password)) {
+            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. Abfrage wird nicht ausgeführt.", 0);
+            return;
+        }
+    
+        // Hier kannst du die Abfrage fortsetzen
         $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-
-        // Login und Datenabfrage
-        $loginResponse = $this->GoodweLogin($email, $password);
-        if (!$loginResponse) {
-            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. Abbruch.", 0);
+        $response = $this->GoodweFetchData($sn, $apiEndpoint);
+    
+        if ($response === false) {
+            $this->SendDebug("FetchWallboxData", "Fehler bei der Abfrage der Wallbox-Daten.", 0);
             return;
         }
-
-        $dataResponse = $this->GoodweFetchData($sn, $apiEndpoint);
-        if (!$dataResponse) {
-            $this->SendDebug("FetchWallboxData", "Datenabfrage fehlgeschlagen. Abbruch.", 0);
+    
+        $data = json_decode($response, true);
+        if (!isset($data['data'])) {
+            $this->SendDebug("FetchWallboxData", "Keine gültigen Daten empfangen.", 0);
             return;
         }
+    
+        $this->ProcessAndSaveWallboxData($data['data']);
+    }
+    
+    private function GoodweLogin(string $email, string $password): bool
+    {
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
 
-        $data = json_decode($dataResponse, true);
-        if (isset($data['data']) && !empty($data['data'])) {
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varType = is_numeric($value) ? VARIABLETYPE_FLOAT : VARIABLETYPE_STRING;
+        $body = http_build_query([
+            "account" => $email,
+            "pwd" => $password,
+            "code" => "",
+        ]);
 
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), "", 0);
-                    $varID = $this->GetIDForIdent($ident);
-                }
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
 
-                SetValue($varID, $value);
-            }
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-        } else {
-            $this->SendDebug("FetchWallboxData", "Keine Wallbox-Daten gefunden oder Fehler in der API-Antwort.", 0);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return false;
         }
+
+        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
+        return true;
     }
 
     public function GetConfigurationForm()
