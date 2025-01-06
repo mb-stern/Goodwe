@@ -213,24 +213,26 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
-                    "type" => "Label",
-                    "caption" => "Eingabefelder für die API (nur für Goodwe-Wallbox)"
-                ],
-                [
-                    "type" => "ValidationTextBox",
-                    "name" => "WallboxUser",
-                    "caption" => "Benutzername",
-                ],
-                [
-                    "type" => "ValidationTextBox",
-                    "name" => "WallboxPassword",
-                    "caption" => "Passwort",
-                ],
-                [
-                    "type" => "ValidationTextBox",
-                    "name" => "WallboxSerial",
-                    "caption" => "Seriennummer",
-                ],
+                    "type" => "ExpansionPanel",
+                    "caption" => "API-Konfiguration (Goodwe-Wallbox)",
+                    "items" => [
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxUser",
+                            "caption" => "Benutzername",
+                        ],
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxPassword",
+                            "caption" => "Passwort",
+                        ],
+                        [
+                            "type" => "ValidationTextBox",
+                            "name" => "WallboxSerial",
+                            "caption" => "Seriennummer",
+                        ]
+                    ]
+                ]
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
