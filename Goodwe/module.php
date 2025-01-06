@@ -74,7 +74,7 @@ class Goodwe extends IPSModule
            // Position der Variable setzen
            $variableID = $this->GetIDForIdent($ident);
             if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$selectedRegister['pos']);
+                IPS_SetPosition($variableID, $selectedRegister['pos']);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
