@@ -232,7 +232,7 @@ class Goodwe extends IPSModule
                             "caption" => "Seriennummer",
                         ]
                     ]
-                ]
+                ],
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
