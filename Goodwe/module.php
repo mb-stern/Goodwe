@@ -265,7 +265,41 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
-    
+
+    private function GoodweLogin(string $email, string $password): bool
+    {
+        $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd" => $password,
+            "code" => "",
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return false;
+        }
+
+        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
+        return true;
+    }
 
     private function GetWbVariables(): array
     {
