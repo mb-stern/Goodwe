@@ -15,6 +15,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
+        $this->RegisterPropertyString("WallboxVariableMapping", "[]");
 
         $this->RegisterPropertyInteger("PollInterval", 5); 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
@@ -202,102 +203,138 @@ class Goodwe extends IPSModule
          $this->FetchWallboxData();
     }
 
-private function FetchWallboxData()
-{
-    $user = $this->ReadPropertyString("WallboxUser");
-    $password = $this->ReadPropertyString("WallboxPassword");
-    $serial = $this->ReadPropertyString("WallboxSerial");
-
-    if (empty($user) || empty($password) || empty($serial)) {
-        $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-        return;
+    private function FetchWallboxData()
+    {
+        $user = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial = $this->ReadPropertyString("WallboxSerial");
+    
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            return;
+        }
+    
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+    
+        try {
+            // Login und Datenabruf
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
+            }
+    
+            $apiResponse = $this->GoodweFetchData($serial);
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
+            }
+    
+            $data = json_decode($apiResponse, true);
+            if (!isset($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                return;
+            }
+    
+            $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
+    
+            // Daten verarbeiten
+            foreach ($data['data'] as $key => $value) {
+                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+                if (empty($variable)) {
+                    continue; // Überspringen, wenn die Variable deaktiviert ist
+                }
+    
+                $ident = "WB_" . $key;
+    
+                // Variablentyp bestimmen
+                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+    
+                // Variable erstellen oder aktualisieren
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) {
+                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+                }
+    
+                // Wert setzen
+                SetValue($this->GetIDForIdent($ident), $value);
+            }
+    
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        }
     }
+    
 
-    $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+    private function GetWbVariables(): array
+    {
+        // Zuordnungstabelle mit Standardwerten
+        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
 
-    try {
-        // Login
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        if (empty($mapping)) {
+            // Standardwerte, falls Mapping leer ist
+            $mapping = [
+            ["key" => "powerStationId", "name" => "Power Station ID", "active" => false],
+            ["key" => "sn", "name" => "Seriennummer", "active" => false],
+            ["key" => "name", "name" => "Name", "active" => false],
+            ["key" => "state", "name" => "State", "active" => true],
+            ["key" => "status", "name" => "Status", "active" => false],
+            ["key" => "workstate", "name" => "Work State", "active" => false],
+            ["key" => "workstatus", "name" => "Work Status", "active" => false],
+            ["key" => "lastUpdate", "name" => "Letztes Update", "active" => false],
+            ["key" => "model", "name" => "Modell", "active" => false],
+            ["key" => "fireware", "name" => "Firmware", "active" => false],
+            ["key" => "last_fireware", "name" => "Letzte Firmware", "active" => false],
+            ["key" => "startStatus", "name" => "Start Status", "active" => false],
+            ["key" => "chargeEnergy", "name" => "Geladene Energie", "active" => true],
+            ["key" => "power", "name" => "Leistung", "active" => true],
+            ["key" => "current", "name" => "Strom", "active" => true],
+            ["key" => "time", "name" => "Zeit", "active" => false],
+            ["key" => "importPowerLimit", "name" => "Import Power Limit", "active" => false],
+            ["key" => "chargeMode", "name" => "Lademodus", "active" => true],
+            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "active" => false],
+            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "active" => false],
+            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "active" => false],
+            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "active" => false],
+            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "active" => false],
+            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "active" => false],
+            ["key" => "unitType", "name" => "Einheitstyp", "active" => false],
+            ["key" => "factor", "name" => "Faktor", "active" => false],
+            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "active" => false],
+            ["key" => "soc", "name" => "State of Charge", "active" => false],
+            ["key" => "maxEnergy", "name" => "Maximale Energie", "active" => false],
+            ["key" => "minEnergy", "name" => "Minimale Energie", "active" => false],
+            ["key" => "finishTime", "name" => "Beendigungszeit", "active" => false],
+            ["key" => "chargedNow", "name" => "Aktuell Geladen", "active" => false],
+            ["key" => "dynamicLoad", "name" => "Dynamische Last", "active" => false],
+            ["key" => "currentLimit", "name" => "Stromlimit", "active" => false],
+            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "active" => false],
+            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "active" => false],
+            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "active" => false],
+            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "active" => false],
+            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "active" => false],
+            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "active" => false],
+            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "active" => false],
+            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "active" => false],
+            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "active" => false],
+            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "active" => false],
+            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "active" => false],
+            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "active" => false],
+            ["key" => "isPermission", "name" => "Erlaubnis", "active" => false],
+            ["key" => "local_date", "name" => "Lokales Datum", "active" => false],
+            ["key" => "timeSpan", "name" => "Zeitspanne", "active" => false],
+            ["key" => "timeZone", "name" => "Zeitzone", "active" => false],
         ];
 
-        $body = http_build_query([
-            "account" => $user,
-            "pwd" => $password,
-            "code" => "",
-        ]);
 
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
-
-        $loginResponse = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$loginResponse) {
-            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
-            return;
+            // Property aktualisieren, falls leer
+            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
+            IPS_ApplyChanges($this->InstanceID);
         }
 
-        // Daten abrufen
-        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
-
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
-
-        $apiResponse = curl_exec($ch);
-        curl_close($ch);
-
-        if (!$apiResponse) {
-            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-            return;
-        }
-
-        $data = json_decode($apiResponse, true);
-        if (!isset($data['data'])) {
-            $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-            return;
-        }
-
-        // **DEBUGGING der eingehenden Daten**
-        $this->SendDebug("FetchWallboxData", "Rohdaten: " . json_encode($data['data'], JSON_PRETTY_PRINT), 0);
-
-        // Reduzierte Ausgabe (nur relevante Schlüssel und Werte)
-        $filteredData = array_intersect_key($data['data'], array_flip(['key1', 'key2', 'key3'])); // Beispiel: gewünschte Schlüssel anpassen
-        $this->SendDebug("FetchWallboxData", "Gefilterte Daten: " . json_encode($filteredData, JSON_PRETTY_PRINT), 0);
-
-        // Daten verarbeiten
-        foreach ($data['data'] as $key => $value) {
-            $ident = "WB_" . $key;
-
-            // Variablentyp bestimmen
-            $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-
-            // Variable erstellen oder aktualisieren
-            $varID = @$this->GetIDForIdent($ident);
-            if ($varID === false) {
-                $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-            }
-
-            // Wert setzen
-            SetValue($this->GetIDForIdent($ident), $value);
-        }
-
-        $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
-    } catch (Exception $e) {
-        $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        return $mapping;
     }
-}
 
     public function GetConfigurationForm()
     {
