@@ -273,21 +273,21 @@ class Goodwe extends IPSModule
 
     private function CreateProfile()
     {
-        {
+        if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
             IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Automatikmodus', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Batteriestandby', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Zwangsladung', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
         }
-        {
+        if (!IPS_VariableProfileExists('Goodwe.WRFehler')){
             IPS_CreateVariableProfile('Goodwe.WRFehler', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '1', 'Automatikmodus', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '8', 'Batteriestandby', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WRFehler', '11', 'Zwangsladung', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
         }
-        {
+        if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby', '', -1);
@@ -297,7 +297,7 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
         }
-        {
+        if (!IPS_VariableProfileExists('Goodwe.Watt')){
             IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileText('Goodwe.Watt', '', ' W');
             IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
