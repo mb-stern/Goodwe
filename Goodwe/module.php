@@ -266,6 +266,38 @@ class Goodwe extends IPSModule
         }
     }
 
+    private function GoodweFetchData(string $serial): ?string
+    {
+        $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
+
+        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
+        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
+
+        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return null;
+        }
+
+        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen. Antwort: $response", 0);
+        return $response;
+    }
+
     private function GoodweLogin(string $email, string $password): bool
     {
         $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
