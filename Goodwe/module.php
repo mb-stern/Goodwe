@@ -216,7 +216,7 @@ class Goodwe extends IPSModule
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
-                    "rowCount" => 20,
+                    "rowCount" => 15,
                     "add" => true,
                     "delete" => true,
                     "columns" => [
@@ -245,7 +245,6 @@ class Goodwe extends IPSModule
                     "type" => "Button",
                     "caption" => "Werte lesen",
                     "onClick" => 'Goodwe_RequestRead($id);'
-                ]
                 ],
                 [
                     "type" => "Label",
@@ -264,7 +263,7 @@ class Goodwe extends IPSModule
                         "caption" => ""
                         ]
                     ]
-                    ]
+                ]
         ]);
     }
     
