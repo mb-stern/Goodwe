@@ -102,9 +102,6 @@ class Goodwe extends IPSModule
 
     public function RequestRead()
     {
-        // Abrufen von Wallbox-Daten
-        $this->FetchWallboxData();
-    
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
@@ -200,6 +197,9 @@ class Goodwe extends IPSModule
                 IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
+        
+         // Abrufen von Wallbox-Daten
+         $this->FetchWallboxData();
     }
 
     private function FetchWallboxData()
@@ -209,20 +209,55 @@ class Goodwe extends IPSModule
         $serial = $this->ReadPropertyString("WallboxSerial");
     
         if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf nicht möglich: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-            return; // Abbrechen, wenn Eingabefelder leer sind
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            return;
         }
     
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
         try {
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+            // Login
+            $headers = [
+                "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+                "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+            ];
+    
+            $body = http_build_query([
+                "account" => $user,
+                "pwd" => $password,
+                "code" => "",
+            ]);
+    
+            $ch = curl_init('https://eu.semsportal.com/Home/Login');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+    
+            $loginResponse = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+    
+            if ($httpCode !== 200 || !$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
                 return;
             }
     
-            $apiResponse = $this->GoodweFetchData($serial);
+            // Daten abrufen
+            $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
+            $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
+    
+            $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
+    
+            $apiResponse = curl_exec($ch);
+            curl_close($ch);
+    
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
                 return;
@@ -234,72 +269,29 @@ class Goodwe extends IPSModule
                 return;
             }
     
-            $this->ProcessWallboxData($data['data']);
+            // Daten verarbeiten
+            foreach ($data['data'] as $key => $value) {
+                $ident = "WB_" . $key;
+    
+                // Variablentyp bestimmen
+                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+    
+                // Variable erstellen oder aktualisieren
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) {
+                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+                }
+    
+                // Wert setzen
+                SetValue($this->GetIDForIdent($ident), $value);
+            }
+    
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
     
-    private function ProcessWallboxData(array $data)
-    {
-        foreach ($data as $key => $value) {
-            $ident = "WB_" . $key;
-    
-            // Variablentyp bestimmen
-            if (is_numeric($value)) {
-                $type = VARIABLETYPE_FLOAT; // Float für numerische Werte
-            } elseif (is_bool($value)) {
-                $type = VARIABLETYPE_BOOLEAN; // Boolean für Wahrheitswerte
-            } else {
-                $type = VARIABLETYPE_STRING; // String für alles andere
-            }
-    
-            // Variable erstellen oder aktualisieren
-            $varID = @$this->GetIDForIdent($ident);
-            if ($varID === false) {
-                $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-            }
-    
-            // Wert setzen
-            SetValue($this->GetIDForIdent($ident), $value);
-        }
-    
-        $this->SendDebug("ProcessWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
-    }
-    
-    private function GoodweLogin(string $email, string $password): bool
-    {
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-        ];
-
-        $body = http_build_query([
-            "account" => $email,
-            "pwd" => $password,
-            "code" => "",
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
-            return false;
-        }
-
-        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
-        return true;
-    }
-
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
