@@ -74,7 +74,7 @@ class Goodwe extends IPSModule
            // Position der Variable setzen
            $variableID = $this->GetIDForIdent($ident);
             if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$selectedRegister['address']);
+                IPS_SetPosition($variableID, (int)$selectedRegister['pos']);
             } else {
                 $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
@@ -308,7 +308,7 @@ class Goodwe extends IPSModule
     {
         return [
         // Smartmeter
-        ["address" => 36019, "name" => "SM-Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1],
+        ["address" => 36019, "name" => "SM-Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 1],
         ["address" => 36021, "name" => "SM-Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36023, "name" => "SM-Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1],
         ["address" => 36025, "name" => "SM-Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1],
