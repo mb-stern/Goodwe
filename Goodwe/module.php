@@ -208,7 +208,7 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function FetchWallboxData()
+    public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
