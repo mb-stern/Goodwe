@@ -240,6 +240,8 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
                 return;
             }
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler: " . $e->getMessage(), 0);
     
             $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
     
