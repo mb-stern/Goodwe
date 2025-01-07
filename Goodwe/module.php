@@ -71,7 +71,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("Variable Creation", "Unbekannter Variablentyp für {$variable['unit']} bei Key {$variable['key']}.", 0);
-                        continue;
+                        continue 2;
                 }
             }
         }
