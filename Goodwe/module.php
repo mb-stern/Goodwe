@@ -27,57 +27,48 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Variable-Details aus den Registern erstellen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+        // Wallbox-Variablen abrufen
+        $wallboxVariables = $this->GetWbVariables();
+        if (!is_array($wallboxVariables)) {
+            $this->SendDebug("ApplyChanges", "WallboxVariableMapping ist keine gültige Liste", 0);
             return;
         }
-    
-        // Variable-Details aus Wallbox-Mapping erstellen
-        $wallboxVariables = $this->GetWbVariables();
-    
-        // Zusammenführen der Variablen aus beiden Quellen
-        $allVariables = array_merge($selectedRegisters, $wallboxVariables);
     
         // Liste der aktuellen Register-Identifikatoren
         $currentIdents = [];
     
-        foreach ($allVariables as $variable) {
-            // `unit` prüfen, um das Variablenprofil zu bestimmen
-            if (!isset($variable['unit'])) {
-                $this->SendDebug("ApplyChanges", "Kein 'unit' definiert für Variable: " . json_encode($variable), 0);
-                continue;
+        foreach ($wallboxVariables as $variable) {
+            if (!$variable['active']) {
+                continue; // Überspringen, wenn die Variable deaktiviert ist
             }
     
-            $details = $this->GetVariableDetails($variable['unit']);
-            if ($details === null) {
+            $ident = "WB_" . $variable['key'];
+    
+            // Variablen-Details basierend auf der Einheit abrufen
+            $variableDetails = $this->GetVariableDetails($variable['unit']);
+            if ($variableDetails === null) {
                 $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$variable['unit']} gefunden.", 0);
                 continue;
             }
     
-            $ident = isset($variable['address']) ? "Addr" . $variable['address'] : "WB_" . $variable['key'];
             $currentIdents[] = $ident;
     
             // Variable erstellen, falls nicht vorhanden
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($details['type']) {
+                switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                     default:
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
                         continue 2;
                 }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     
@@ -93,8 +84,6 @@ class Goodwe extends IPSModule
         // Timer setzen
         $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
-    
-        $this->FetchAll();
     }
     
     public function FetchAll()
