@@ -76,18 +76,19 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
             }
     
-        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-            $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
-                $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+            foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+                $object = IPS_GetObject($childID);
+                if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+                    $this->UnregisterVariable($object['ObjectIdent']);
+                    $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+                }
             }
-        }
     
-        // Timer setzen
-        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+            // Timer setzen
+            $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+            $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        }
     }
     
     public function FetchAll()
