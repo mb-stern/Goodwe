@@ -107,7 +107,6 @@ class Goodwe extends IPSModule
     {
         $this->FetchWallboxData();
         $this->RequestRead();
-
     }
 
     public function RequestRead()
@@ -246,21 +245,32 @@ class Goodwe extends IPSModule
     
             // Daten verarbeiten
             foreach ($data['data'] as $key => $value) {
-                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+                // Aktive Zuordnungseinträge filtern
+                $variable = array_filter($mapping, function ($var) use ($key) {
+                    return $var['key'] === $key && $var['active'];
+                });
+            
                 if (empty($variable)) {
-                    continue; // Überspringen, wenn die Variable deaktiviert ist
+                    // Überspringen, wenn keine aktive Zuordnung für den Schlüssel vorhanden ist
+                    continue;
                 }
-    
+            
+                // Die erste Übereinstimmung aus der Filterung verwenden
+                $variable = reset($variable);
+            
                 $ident = "WB_" . $key;
-    
+                $variableName = $variable['name'];
+            
                 // Variablentyp bestimmen
                 $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-    
+            
                 // Variable erstellen oder aktualisieren
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+                    $this->MaintainVariable($ident, $variableName, $type, "", 0, true);
+                    $this->SendDebug("FetchWallboxData", "Variable erstellt: $ident mit Name $variableName", 0);
                 }
+            
     
                 // Wert setzen
                 SetValue($this->GetIDForIdent($ident), $value);
@@ -337,75 +347,6 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
         return true;
-    }
-
-    private function GetWbVariables(): array
-    {
-        // Zuordnungstabelle mit Standardwerten
-        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
-
-        if (empty($mapping)) {
-            // Standardwerte, falls Mapping leer ist
-            $mapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "active" => false],
-            ["key" => "sn", "name" => "Seriennummer", "active" => false],
-            ["key" => "name", "name" => "Name", "active" => false],
-            ["key" => "state", "name" => "State", "active" => true],
-            ["key" => "status", "name" => "Status", "active" => false],
-            ["key" => "workstate", "name" => "Work State", "active" => false],
-            ["key" => "workstatus", "name" => "Work Status", "active" => false],
-            ["key" => "lastUpdate", "name" => "Letztes Update", "active" => false],
-            ["key" => "model", "name" => "Modell", "active" => false],
-            ["key" => "fireware", "name" => "Firmware", "active" => false],
-            ["key" => "last_fireware", "name" => "Letzte Firmware", "active" => false],
-            ["key" => "startStatus", "name" => "Start Status", "active" => false],
-            ["key" => "chargeEnergy", "name" => "Geladene Energie", "active" => true],
-            ["key" => "power", "name" => "Leistung", "active" => true],
-            ["key" => "current", "name" => "Strom", "active" => true],
-            ["key" => "time", "name" => "Zeit", "active" => false],
-            ["key" => "importPowerLimit", "name" => "Import Power Limit", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "active" => true],
-            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "active" => false],
-            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "active" => false],
-            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "active" => false],
-            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "active" => false],
-            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "active" => false],
-            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "active" => false],
-            ["key" => "unitType", "name" => "Einheitstyp", "active" => false],
-            ["key" => "factor", "name" => "Faktor", "active" => false],
-            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "active" => false],
-            ["key" => "soc", "name" => "State of Charge", "active" => false],
-            ["key" => "maxEnergy", "name" => "Maximale Energie", "active" => false],
-            ["key" => "minEnergy", "name" => "Minimale Energie", "active" => false],
-            ["key" => "finishTime", "name" => "Beendigungszeit", "active" => false],
-            ["key" => "chargedNow", "name" => "Aktuell Geladen", "active" => false],
-            ["key" => "dynamicLoad", "name" => "Dynamische Last", "active" => false],
-            ["key" => "currentLimit", "name" => "Stromlimit", "active" => false],
-            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "active" => false],
-            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "active" => false],
-            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "active" => false],
-            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "active" => false],
-            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "active" => false],
-            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "active" => false],
-            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "active" => false],
-            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "active" => false],
-            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "active" => false],
-            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "active" => false],
-            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "active" => false],
-            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "active" => false],
-            ["key" => "isPermission", "name" => "Erlaubnis", "active" => false],
-            ["key" => "local_date", "name" => "Lokales Datum", "active" => false],
-            ["key" => "timeSpan", "name" => "Zeitspanne", "active" => false],
-            ["key" => "timeZone", "name" => "Zeitzone", "active" => false],
-        ];
-
-
-            // Property aktualisieren, falls leer
-            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
-            IPS_ApplyChanges($this->InstanceID);
-        }
-
-        return $mapping;
     }
 
     public function GetConfigurationForm()
@@ -508,7 +449,6 @@ class Goodwe extends IPSModule
         ]);
     }
     
-    
     private function GetVariableDetails(string $unit): ?array
     {
         switch ($unit) {
@@ -561,6 +501,75 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
         }
+    }
+
+    private function GetWbVariables(): array
+    {
+        // Zuordnungstabelle mit Standardwerten
+        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+
+        if (empty($mapping)) {
+            // Standardwerte, falls Mapping leer ist
+            $mapping = [
+            ["key" => "powerStationId", "name" => "Power Station ID", "active" => false],
+            ["key" => "sn", "name" => "Seriennummer", "active" => false],
+            ["key" => "name", "name" => "Name", "active" => false],
+            ["key" => "state", "name" => "State", "active" => true],
+            ["key" => "status", "name" => "Status", "active" => false],
+            ["key" => "workstate", "name" => "Work State", "active" => false],
+            ["key" => "workstatus", "name" => "Work Status", "active" => false],
+            ["key" => "lastUpdate", "name" => "Letztes Update", "active" => false],
+            ["key" => "model", "name" => "Modell", "active" => false],
+            ["key" => "fireware", "name" => "Firmware", "active" => false],
+            ["key" => "last_fireware", "name" => "Letzte Firmware", "active" => false],
+            ["key" => "startStatus", "name" => "Start Status", "active" => false],
+            ["key" => "chargeEnergy", "name" => "Geladene Energie", "active" => true],
+            ["key" => "power", "name" => "Leistung", "active" => true],
+            ["key" => "current", "name" => "Strom", "active" => true],
+            ["key" => "time", "name" => "Zeit", "active" => false],
+            ["key" => "importPowerLimit", "name" => "Import Power Limit", "active" => false],
+            ["key" => "chargeMode", "name" => "Lademodus", "active" => true],
+            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "active" => false],
+            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "active" => false],
+            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "active" => false],
+            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "active" => false],
+            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "active" => false],
+            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "active" => false],
+            ["key" => "unitType", "name" => "Einheitstyp", "active" => false],
+            ["key" => "factor", "name" => "Faktor", "active" => false],
+            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "active" => false],
+            ["key" => "soc", "name" => "State of Charge", "active" => false],
+            ["key" => "maxEnergy", "name" => "Maximale Energie", "active" => false],
+            ["key" => "minEnergy", "name" => "Minimale Energie", "active" => false],
+            ["key" => "finishTime", "name" => "Beendigungszeit", "active" => false],
+            ["key" => "chargedNow", "name" => "Aktuell Geladen", "active" => false],
+            ["key" => "dynamicLoad", "name" => "Dynamische Last", "active" => false],
+            ["key" => "currentLimit", "name" => "Stromlimit", "active" => false],
+            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "active" => false],
+            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "active" => false],
+            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "active" => false],
+            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "active" => false],
+            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "active" => false],
+            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "active" => false],
+            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "active" => false],
+            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "active" => false],
+            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "active" => false],
+            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "active" => false],
+            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "active" => false],
+            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "active" => false],
+            ["key" => "isPermission", "name" => "Erlaubnis", "active" => false],
+            ["key" => "local_date", "name" => "Lokales Datum", "active" => false],
+            ["key" => "timeSpan", "name" => "Zeitspanne", "active" => false],
+            ["key" => "timeZone", "name" => "Zeitzone", "active" => false],
+        ];
+
+
+            // Property aktualisieren, falls leer
+            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
+            IPS_ApplyChanges($this->InstanceID);
+        }
+
+        return $mapping;
     }
     
     private function GetRegisters()
