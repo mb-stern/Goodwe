@@ -33,24 +33,30 @@ class Goodwe extends IPSModule
     
         // **Wallbox-Variablen erstellen**
         $mapping = $this->GetWbVariables();
-    
+
         foreach ($mapping as $variable) {
             if (!$variable['active']) {
                 continue; // Überspringen, wenn die Variable deaktiviert ist
             }
-    
+        
             $ident = "WB_" . $variable['key'];
-    
+        
+            // Prüfen, ob 'unit' vorhanden ist
+            if (!isset($variable['unit']) || empty($variable['unit'])) {
+                $this->SendDebug("Variable Creation", "Einheit fehlt für Key {$variable['key']}. Eintrag wird übersprungen.", 0);
+                continue;
+            }
+        
             // Details basierend auf der Einheit abrufen
             $details = $this->GetVariableDetails($variable['unit']);
             if ($details === null) {
-                $this->SendDebug("Variable Creation", "Unbekannte Einheit {$variable['unit']}.", 0);
+                $this->SendDebug("Variable Creation", "Unbekannte Einheit {$variable['unit']} für Key {$variable['key']}.", 0);
                 continue;
             }
-    
+        
             $type = $details['type'];
             $profile = $details['profile'];
-    
+        
             // Variable erstellen, falls nicht vorhanden
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($type) {
@@ -64,13 +70,13 @@ class Goodwe extends IPSModule
                         $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
                         break;
                     default:
-                        $this->SendDebug("Variable Creation", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
-                        continue 2;
+                        $this->SendDebug("Variable Creation", "Unbekannter Variablentyp für {$variable['unit']} bei Key {$variable['key']}.", 0);
+                        continue;
                 }
             }
         }
-    
-        // **Register-Variablen erstellen**
+        
+        // **Wechslerichter-Variablen erstellen**
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         foreach ($selectedRegisters as $register) {
