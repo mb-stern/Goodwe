@@ -414,7 +414,7 @@ class Goodwe extends IPSModule
                 [
                     "type" => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_RequestRead($id);'
+                    "onClick" => 'Goodwe_FetchAll($id);'
                 ],
                 [
                     "type" => "Label",
