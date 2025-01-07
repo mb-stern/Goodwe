@@ -258,7 +258,7 @@ class Goodwe extends IPSModule
                 // Variable erstellen oder aktualisieren
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
-                    $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), 0);
+                    $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $type);
                 }
     
                 // Wert setzen
