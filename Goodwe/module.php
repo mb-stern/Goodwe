@@ -27,78 +27,89 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
+        // Timer aktualisieren
+        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
-        // Liste der aktuellen Register-Identifikatoren
-        $currentIdents = [];
+        // **Wallbox-Variablen erstellen**
+        $mapping = $this->GetWbVariables();
     
-        foreach ($selectedRegisters as &$selectedRegister) {
-            if (is_string($selectedRegister['address'])) {
-                $decodedRegister = json_decode($selectedRegister['address'], true);
-                if ($decodedRegister !== null) {
-                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                    continue;
-                }
+        foreach ($mapping as $variable) {
+            if (!$variable['active']) {
+                continue; // Überspringen, wenn die Variable deaktiviert ist
             }
     
-            $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
-            if ($variableDetails === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+            $ident = "WB_" . $variable['key'];
+    
+            // Details basierend auf der Einheit abrufen
+            $details = $this->GetVariableDetails($variable['unit']);
+            if ($details === null) {
+                $this->SendDebug("Variable Creation", "Unbekannte Einheit {$variable['unit']}.", 0);
                 continue;
             }
     
-            $ident = "Addr" . $selectedRegister['address'];
-            $currentIdents[] = $ident;
-
-            $this->CreateProfile();
+            $type = $details['type'];
+            $profile = $details['profile'];
     
+            // Variable erstellen, falls nicht vorhanden
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($variableDetails['type']) {
+                switch ($type) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
-                        continue 2;
+                        $this->SendDebug("Variable Creation", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
+                        continue;
                 }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
-            }
-           // Position der Variable setzen
-           $variableID = $this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, $selectedRegister['pos']);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
         }
     
-        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-            $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
-                $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+        // **Register-Variablen erstellen**
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        foreach ($selectedRegisters as $register) {
+            $ident = "Addr" . $register['address'];
+            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
+    
+            // Validierung
+            if (!isset($register['address'], $register['type'], $register['scale'], $register['unit'])) {
+                $this->SendDebug("ApplyChanges", "Ungültiger Registereintrag: " . json_encode($register), 0);
+                continue;
+            }
+    
+            $details = $this->GetVariableDetails($register['unit']);
+            if ($details === null) {
+                $this->SendDebug("ApplyChanges", "Unbekannte Einheit {$register['unit']}.", 0);
+                continue;
+            }
+    
+            // Variable erstellen, falls nicht vorhanden
+            if (!@$this->GetIDForIdent($ident)) {
+                switch ($details['type']) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, $register['name'], $details['profile'], $register['pos']);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, $register['name'], $details['profile'], $register['pos']);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, $register['name'], $details['profile'], $register['pos']);
+                        break;
+                    default:
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$register['unit']}.", 0);
+                        continue;
+                }
             }
         }
     
-        // Timer setzen
-        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        // Initialdaten abrufen
+        $this->FetchAll();
     }
     
     public function FetchAll()
@@ -239,39 +250,16 @@ class Goodwe extends IPSModule
                 return;
             }
     
-            $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
-    
-            // Daten verarbeiten
+            // Werte aktualisieren
             foreach ($data['data'] as $key => $value) {
-                // Aktive Zuordnungseinträge filtern
-                $variable = array_filter($mapping, function ($var) use ($key) {
-                    return $var['key'] === $key && $var['active'];
-                });
-            
-                if (empty($variable)) {
-                    // Überspringen, wenn keine aktive Zuordnung für den Schlüssel vorhanden ist
+                $ident = "WB_" . $key;
+                $variableID = @$this->GetIDForIdent($ident);
+                if ($variableID === false) {
+                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident nicht gefunden. Überspringe Wert für $key.", 0);
                     continue;
                 }
-            
-                // Die erste Übereinstimmung aus der Filterung verwenden
-                $variable = reset($variable);
-            
-                $ident = "WB_" . $key;
-                $variableName = $variable['name'];
-            
-                // Variablentyp bestimmen
-                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-            
-                // Variable erstellen oder aktualisieren
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-                    $this->SendDebug("FetchWallboxData", "Variable erstellt: $ident mit Name $variableName", 0);
-                }
-            
     
-                // Wert setzen
-                SetValue($this->GetIDForIdent($ident), $value);
+                SetValue($variableID, $value);
             }
     
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
@@ -279,7 +267,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
-
+    
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
@@ -509,7 +497,7 @@ class Goodwe extends IPSModule
         if (empty($mapping)) {
             // Standardwerte, falls Mapping leer ist
             $mapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "active" => false],
+            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "W", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "active" => false],
             ["key" => "name", "name" => "Name", "active" => false],
             ["key" => "state", "name" => "State", "active" => true],
