@@ -290,6 +290,7 @@ class Goodwe extends IPSModule
                 SetValue($this->GetIDForIdent($ident), $value);
                 $this->SendDebug("FetchWallboxData", "Wert gesetzt: Ident = $ident, Value = $value", 0);
             }
+        }
             
     }
 
