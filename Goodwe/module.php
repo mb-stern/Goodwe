@@ -27,75 +27,80 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Wallbox-Variablen abrufen
-        $wallboxVariables = $this->GetWbVariables();
-        if (!is_array($wallboxVariables)) {
-            $this->SendDebug("ApplyChanges", "WallboxVariableMapping ist keine gültige Liste", 0);
+        // Lese die ausgewählten Register
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
     
         // Liste der aktuellen Register-Identifikatoren
         $currentIdents = [];
     
-        foreach ($wallboxVariables as $variable) {
-            if (!$variable['active']) {
-                continue; // Überspringen, wenn die Variable deaktiviert ist
+        foreach ($selectedRegisters as &$selectedRegister) {
+            if (is_string($selectedRegister['address'])) {
+                $decodedRegister = json_decode($selectedRegister['address'], true);
+                if ($decodedRegister !== null) {
+                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                    continue;
+                }
             }
-        
-            $ident = "WB_" . $variable['key'];
-        
-            // Leere Einheit behandeln
-            $unit = $variable['unit'] ?? null;
-            if ($unit === null || $unit === "") {
-                $this->SendDebug("Unit Error", "Die Einheit ist leer oder nicht gesetzt für {$variable['key']}.", 0);
-                $unit = "String"; // Fallback auf "String"
-            }
-            $this->SendDebug("Unit Set", "Unit für {$variable['key']} ist {$unit}.", 0);
-            
-        
-            // Details basierend auf der Einheit abrufen
-            $details = $this->GetVariableDetails($unit);
-            if ($details === null) {
-                $this->SendDebug("ApplyChanges", "Unbekannte Einheit {$unit} für Variable {$variable['key']}.", 0);
+    
+            $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+            if ($variableDetails === null) {
+                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                 continue;
             }
-        
-            // Variable erstellen oder aktualisieren
+    
+            $ident = "Addr" . $selectedRegister['address'];
+            $currentIdents[] = $ident;
+
+            $this->CreateProfile();
+    
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($details['type']) {
+                switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
+                        $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$unit}.", 0);
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
                         continue 2;
                 }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
-    
-            /*
-            
-            // Variablen löschen, die nicht mehr in der aktuellen Liste sind
-            foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-                $object = IPS_GetObject($childID);
-                if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
-                    $this->UnregisterVariable($object['ObjectIdent']);
-                    $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
-                }
+           // Position der Variable setzen
+           $variableID = $this->GetIDForIdent($ident);
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, $selectedRegister['pos']);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
-
-            */
-    
-            // Timer setzen
-            $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-            $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
         }
+    
+        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+    
+        // Timer setzen
+        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        
+        $this->FetchAll();
     }
     
     public function FetchAll()
@@ -203,7 +208,7 @@ class Goodwe extends IPSModule
         }
     }
 
-    public function FetchWallboxData()
+    private function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
@@ -236,16 +241,28 @@ class Goodwe extends IPSModule
                 return;
             }
     
-            // Werte aktualisieren
+            $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
+    
+            // Daten verarbeiten
             foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $variableID = @$this->GetIDForIdent($ident);
-                if ($variableID === false) {
-                    //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident nicht gefunden. Überspringe Wert für $key.", 0);
-                    continue;
+                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+                if (empty($variable)) {
+                    continue; // Überspringen, wenn die Variable deaktiviert ist
                 }
     
-                SetValue($variableID, $value);
+                $ident = "WB_" . $key;
+    
+                // Variablentyp bestimmen
+                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+    
+                // Variable erstellen oder aktualisieren
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) {
+                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+                }
+    
+                // Wert setzen
+                SetValue($this->GetIDForIdent($ident), $value);
             }
     
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
@@ -253,7 +270,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
-    
+
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
@@ -397,7 +414,7 @@ class Goodwe extends IPSModule
                 [
                     "type" => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchAll($id);'
+                    "onClick" => 'Goodwe_RequestRead($id);'
                 ],
                 [
                     "type" => "Label",
@@ -483,56 +500,56 @@ class Goodwe extends IPSModule
         if (empty($mapping)) {
             // Standardwerte, falls Mapping leer ist
             $mapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
-            ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
-            ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
-            ["key" => "state", "name" => "State", "unit" => "", "active" => true],
-            ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
-            ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
-            ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
-            ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
-            ["key" => "model", "name" => "Modell", "unit" => "", "active" => false],
-            ["key" => "fireware", "name" => "Firmware", "unit" => "", "active" => false],
-            ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
-            ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
-            ["key" => "chargeEnergy", "name" => "Geladene Energie", "unit" => "kWh", "active" => true],
-            ["key" => "power", "name" => "Leistung", "unit" => "kW", "active" => true],
-            ["key" => "current", "name" => "Strom", "unit" => "A", "active" => true],
-            ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
-            ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "", "active" => true],
-            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
-            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
-            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
-            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "unit" => "", "active" => false],
-            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "unitType", "name" => "Einheitstyp", "unit" => "", "active" => false],
-            ["key" => "factor", "name" => "Faktor", "unit" => "", "active" => false],
-            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "soc", "name" => "State of Charge", "unit" => "", "active" => false],
-            ["key" => "maxEnergy", "name" => "Maximale Energie", "unit" => "", "active" => false],
-            ["key" => "minEnergy", "name" => "Minimale Energie", "unit" => "", "active" => false],
-            ["key" => "finishTime", "name" => "Beendigungszeit", "unit" => "", "active" => false],
-            ["key" => "chargedNow", "name" => "Aktuell Geladen", "unit" => "", "active" => false],
-            ["key" => "dynamicLoad", "name" => "Dynamische Last", "unit" => "", "active" => false],
-            ["key" => "currentLimit", "name" => "Stromlimit", "unit" => "", "active" => false],
-            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "unit" => "", "active" => false],
-            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "unit" => "", "active" => false],
-            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "unit" => "", "active" => false],
-            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "unit" => "", "active" => false],
-            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "unit" => "", "active" => false],
-            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "unit" => "", "active" => false],
-            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "unit" => "", "active" => false],
-            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "unit" => "", "active" => false],
-            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "unit" => "", "active" => false],
-            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "unit" => "", "active" => false],
-            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "unit" => "", "active" => false],
-            ["key" => "isPermission", "name" => "Erlaubnis", "unit" => "", "active" => false],
-            ["key" => "local_date", "name" => "Lokales Datum", "unit" => "", "active" => false],
-            ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "active" => false],
-            ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "active" => false],
+            ["key" => "powerStationId", "name" => "Power Station ID", "active" => false],
+            ["key" => "sn", "name" => "Seriennummer", "active" => false],
+            ["key" => "name", "name" => "Name", "active" => false],
+            ["key" => "state", "name" => "State", "active" => true],
+            ["key" => "status", "name" => "Status", "active" => false],
+            ["key" => "workstate", "name" => "Work State", "active" => false],
+            ["key" => "workstatus", "name" => "Work Status", "active" => false],
+            ["key" => "lastUpdate", "name" => "Letztes Update", "active" => false],
+            ["key" => "model", "name" => "Modell", "active" => false],
+            ["key" => "fireware", "name" => "Firmware", "active" => false],
+            ["key" => "last_fireware", "name" => "Letzte Firmware", "active" => false],
+            ["key" => "startStatus", "name" => "Start Status", "active" => false],
+            ["key" => "chargeEnergy", "name" => "Geladene Energie", "active" => true],
+            ["key" => "power", "name" => "Leistung", "active" => true],
+            ["key" => "current", "name" => "Strom", "active" => true],
+            ["key" => "time", "name" => "Zeit", "active" => false],
+            ["key" => "importPowerLimit", "name" => "Import Power Limit", "active" => false],
+            ["key" => "chargeMode", "name" => "Lademodus", "active" => true],
+            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "active" => false],
+            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "active" => false],
+            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "active" => false],
+            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "active" => false],
+            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "active" => false],
+            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "active" => false],
+            ["key" => "unitType", "name" => "Einheitstyp", "active" => false],
+            ["key" => "factor", "name" => "Faktor", "active" => false],
+            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "active" => false],
+            ["key" => "soc", "name" => "State of Charge", "active" => false],
+            ["key" => "maxEnergy", "name" => "Maximale Energie", "active" => false],
+            ["key" => "minEnergy", "name" => "Minimale Energie", "active" => false],
+            ["key" => "finishTime", "name" => "Beendigungszeit", "active" => false],
+            ["key" => "chargedNow", "name" => "Aktuell Geladen", "active" => false],
+            ["key" => "dynamicLoad", "name" => "Dynamische Last", "active" => false],
+            ["key" => "currentLimit", "name" => "Stromlimit", "active" => false],
+            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "active" => false],
+            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "active" => false],
+            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "active" => false],
+            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "active" => false],
+            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "active" => false],
+            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "active" => false],
+            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "active" => false],
+            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "active" => false],
+            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "active" => false],
+            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "active" => false],
+            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "active" => false],
+            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "active" => false],
+            ["key" => "isPermission", "name" => "Erlaubnis", "active" => false],
+            ["key" => "local_date", "name" => "Lokales Datum", "active" => false],
+            ["key" => "timeSpan", "name" => "Zeitspanne", "active" => false],
+            ["key" => "timeZone", "name" => "Zeitzone", "active" => false],
         ];
 
 
