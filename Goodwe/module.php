@@ -76,7 +76,7 @@ class Goodwe extends IPSModule
             }
         }
         
-        // **Wechslerichter-Variablen erstellen**
+        // **Wechselrichter-Variablen erstellen**
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
         foreach ($selectedRegisters as $register) {
@@ -223,7 +223,7 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function FetchWallboxData()
+    public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
