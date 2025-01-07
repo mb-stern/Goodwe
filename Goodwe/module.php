@@ -17,10 +17,10 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyString("WallboxVariableMapping", "[]");
 
-        $this->RegisterPropertyInteger("PollInterval", 5); 
-        $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
-        $this->RegisterPropertyInteger("PollIntervalWB", 60); 
-        $this->RegisterTimer("PollerWB", 0, 'FetchWallboxData($_IPS["TARGET"]);');
+        //$this->RegisterPropertyInteger("PollInterval", 5); 
+        $this->RegisterTimer("PollerWR", 5, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        //$this->RegisterPropertyInteger("PollIntervalWB", 60); 
+        $this->RegisterTimer("PollerWB", 60, 'FetchWallboxData($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges()
@@ -447,7 +447,7 @@ class Goodwe extends IPSModule
                 ],
                 [
                     "type"  => "IntervalBox",
-                    "name"  => "PollInterval",
+                    "name"  => "PollerWR",
                     "caption" => "Sekunden",
                     "suffix" => "s"
                 ],
@@ -472,7 +472,7 @@ class Goodwe extends IPSModule
                         ],
                         [
                             "type"  => "IntervalBox",
-                            "name"  => "PollIntervalWB",
+                            "name"  => "PollerWB",
                             "caption" => "Sekunden",
                             "suffix" => "s"
                         ]
