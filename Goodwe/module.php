@@ -267,7 +267,7 @@ class Goodwe extends IPSModule
                 // Variable erstellen oder aktualisieren
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
-                    $this->MaintainVariable($ident, $variableName, $type, "", 0, true);
+                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
                     $this->SendDebug("FetchWallboxData", "Variable erstellt: $ident mit Name $variableName", 0);
                 }
             
