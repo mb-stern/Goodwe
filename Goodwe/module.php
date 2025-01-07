@@ -76,6 +76,8 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
             }
     
+            /*
+            
             // Variablen löschen, die nicht mehr in der aktuellen Liste sind
             foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
                 $object = IPS_GetObject($childID);
@@ -84,6 +86,8 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
                 }
             }
+
+            */
     
             // Timer setzen
             $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
