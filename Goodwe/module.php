@@ -75,8 +75,6 @@ class Goodwe extends IPSModule
                 }
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
             }
-        }        
-    }
     
         // Variablen löschen, die nicht mehr in der aktuellen Liste sind
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
