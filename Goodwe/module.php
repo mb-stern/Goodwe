@@ -241,7 +241,7 @@ class Goodwe extends IPSModule
                 $ident = "WB_" . $key;
                 $variableID = @$this->GetIDForIdent($ident);
                 if ($variableID === false) {
-                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident nicht gefunden. Überspringe Wert für $key.", 0);
+                    //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident nicht gefunden. Überspringe Wert für $key.", 0);
                     continue;
                 }
     
