@@ -73,7 +73,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
-                        continue;
+                        continue 2;
                 }
                 $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
             } else {
