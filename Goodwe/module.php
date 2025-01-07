@@ -16,10 +16,10 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyString("WallboxVariableMapping", "[]");
-
+        $this->RegisterPropertyInteger("PollIntervalWB", 60);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+        
         $this->RegisterTimer("PollerWR", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
-        $this->RegisterPropertyInteger("PollIntervalWB", 60); 
         $this->RegisterTimer("PollerWB", 0, 'FetchWallboxData($_IPS["TARGET"]);');
     }
 
@@ -97,8 +97,8 @@ class Goodwe extends IPSModule
         }
     
         // Timer setzen
-        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger("PollIntervalWR") * 1000);
-        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger("PollIntervalWB") * 1000);
+        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger('PollIntervalWB') * 1000);
         
         $this->FetchAll();
     }
