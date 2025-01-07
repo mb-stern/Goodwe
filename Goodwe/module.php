@@ -19,6 +19,8 @@ class Goodwe extends IPSModule
 
         $this->RegisterPropertyInteger("PollInterval", 5); 
         $this->RegisterTimer("Poller", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        $this->RegisterPropertyInteger("PollIntervalWB", 60); 
+        $this->RegisterTimer("PollerWB", 0, 'FetchWallboxData($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges()
@@ -100,6 +102,12 @@ class Goodwe extends IPSModule
         $this->RequestRead();
     }
     
+    public function FetchAll()
+    {
+        $this->FetchWallboxData();
+        $this->RequestRead();
+
+    }
 
     public function RequestRead()
     {
@@ -198,9 +206,6 @@ class Goodwe extends IPSModule
                 IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
-
-         // Abrufen von Wallbox-Daten
-         $this->FetchWallboxData();
     }
 
     private function FetchWallboxData()
@@ -464,6 +469,12 @@ class Goodwe extends IPSModule
                             "type" => "ValidationTextBox",
                             "name" => "WallboxSerial",
                             "caption" => "Seriennummer",
+                        ],
+                        [
+                            "type"  => "IntervalBox",
+                            "name"  => "PollIntervalWB",
+                            "caption" => "Sekunden",
+                            "suffix" => "s"
                         ]
                     ]
                 ]
@@ -472,7 +483,7 @@ class Goodwe extends IPSModule
                 [
                     "type" => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_RequestRead($id);'
+                    "onClick" => 'Goodwe_FetchAll($id);'
                 ],
                 [
                     "type" => "Label",
