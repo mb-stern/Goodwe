@@ -45,10 +45,13 @@ class Goodwe extends IPSModule
             $ident = "WB_" . $variable['key'];
         
             // Leere Einheit behandeln
-            $unit = $variable['unit'] ?? ""; // Falls das Feld nicht existiert
-            if (empty($unit)) {
-                $unit = "String"; // Standardwert setzen
+            $unit = $variable['unit'] ?? null;
+            if ($unit === null || $unit === "") {
+                $this->SendDebug("Unit Error", "Die Einheit ist leer oder nicht gesetzt für {$variable['key']}.", 0);
+                $unit = "String"; // Fallback auf "String"
             }
+            $this->SendDebug("Unit Set", "Unit für {$variable['key']} ist {$unit}.", 0);
+            
         
             // Details basierend auf der Einheit abrufen
             $details = $this->GetVariableDetails($unit);
