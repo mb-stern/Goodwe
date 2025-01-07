@@ -17,10 +17,10 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyString("WallboxVariableMapping", "[]");
 
-        //$this->RegisterPropertyInteger("PollInterval", 5); 
-        $this->RegisterTimer("PollerWR", 5, 'Goodwe_RequestRead($_IPS["TARGET"]);');
-        //$this->RegisterPropertyInteger("PollIntervalWB", 60); 
-        $this->RegisterTimer("PollerWB", 60, 'FetchWallboxData($_IPS["TARGET"]);');
+        $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+        $this->RegisterTimer("PollerWR", 0, 'Goodwe_RequestRead($_IPS["TARGET"]);');
+        $this->RegisterPropertyInteger("PollIntervalWB", 60); 
+        $this->RegisterTimer("PollerWB", 0, 'FetchWallboxData($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges()
@@ -96,8 +96,10 @@ class Goodwe extends IPSModule
             }
         }
     
-        $this->SetTimerInterval('PollerWR', 1000);
-        $this->SetTimerInterval('PollerWB', 1000);
+        // Timer setzen
+        $this->SetTimerInterval("PollerWR", ReadPropertyInteger("PollIntervalWR") * 1000);
+        $this->SetTimerInterval("PollerWB", ReadPropertyInteger("PollIntervalWB") * 1000);
+        
         $this->FetchAll();
     }
     
@@ -446,7 +448,7 @@ class Goodwe extends IPSModule
                 ],
                 [
                     "type"  => "IntervalBox",
-                    "name"  => "PollerWR",
+                    "name"  => "PollIntervalWR",
                     "caption" => "Sekunden",
                     "suffix" => "s"
                 ],
@@ -471,7 +473,7 @@ class Goodwe extends IPSModule
                         ],
                         [
                             "type"  => "IntervalBox",
-                            "name"  => "PollerWB",
+                            "name"  => "PollIntervalWB",
                             "caption" => "Sekunden",
                             "suffix" => "s"
                         ]
@@ -482,7 +484,7 @@ class Goodwe extends IPSModule
                 [
                     "type" => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchAll($id);'
+                    "onClick" => 'Goodwe_RequestRead($id);'
                 ],
                 [
                     "type" => "Label",
