@@ -41,36 +41,42 @@ class Goodwe extends IPSModule
             if (!$variable['active']) {
                 continue; // Überspringen, wenn die Variable deaktiviert ist
             }
-    
+        
             $ident = "WB_" . $variable['key'];
-    
-            // Variablen-Details basierend auf der Einheit abrufen
-            $variableDetails = $this->GetVariableDetails($variable['unit']);
-            if ($variableDetails === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$variable['unit']} gefunden.", 0);
+        
+            // Leere Einheit behandeln
+            $unit = $variable['unit'] ?? ""; // Falls das Feld nicht existiert
+            if (empty($unit)) {
+                $unit = "String"; // Standardwert setzen
+            }
+        
+            // Details basierend auf der Einheit abrufen
+            $details = $this->GetVariableDetails($unit);
+            if ($details === null) {
+                $this->SendDebug("ApplyChanges", "Unbekannte Einheit {$unit} für Variable {$variable['key']}.", 0);
                 continue;
             }
-    
-            $currentIdents[] = $ident;
-    
-            // Variable erstellen, falls nicht vorhanden
+        
+            // Variable erstellen oder aktualisieren
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($variableDetails['type']) {
+                switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
-                        continue 2;
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$unit}.", 0);
+                        continue;
                 }
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
             }
-        }
+        }        
+    }
     
         // Variablen löschen, die nicht mehr in der aktuellen Liste sind
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
