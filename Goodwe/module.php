@@ -27,94 +27,73 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Timer aktualisieren
-        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        // Variable-Details aus den Registern erstellen
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
     
-        // **Wallbox-Variablen erstellen**
-        $mapping = $this->GetWbVariables();
-
-        foreach ($mapping as $variable) {
-            if (!$variable['active']) {
-                continue; // Überspringen, wenn die Variable deaktiviert ist
-            }
-        
-            $ident = "WB_" . $variable['key'];
-        
-            // Prüfen, ob 'unit' vorhanden ist
-            if (!isset($variable['unit']) || empty($variable['unit'])) {
-                $this->SendDebug("Variable Creation", "Einheit fehlt für Key {$variable['key']}. Eintrag wird übersprungen.", 0);
+        // Variable-Details aus Wallbox-Mapping erstellen
+        $wallboxVariables = $this->GetWbVariables();
+    
+        // Zusammenführen der Variablen aus beiden Quellen
+        $allVariables = array_merge($selectedRegisters, $wallboxVariables);
+    
+        // Liste der aktuellen Register-Identifikatoren
+        $currentIdents = [];
+    
+        foreach ($allVariables as $variable) {
+            // `unit` prüfen, um das Variablenprofil zu bestimmen
+            if (!isset($variable['unit'])) {
+                $this->SendDebug("ApplyChanges", "Kein 'unit' definiert für Variable: " . json_encode($variable), 0);
                 continue;
             }
-        
-            // Details basierend auf der Einheit abrufen
+    
             $details = $this->GetVariableDetails($variable['unit']);
             if ($details === null) {
-                $this->SendDebug("Variable Creation", "Unbekannte Einheit {$variable['unit']} für Key {$variable['key']}.", 0);
-                continue;
-            }
-        
-            $type = $details['type'];
-            $profile = $details['profile'];
-        
-            // Variable erstellen, falls nicht vorhanden
-            if (!@$this->GetIDForIdent($ident)) {
-                switch ($type) {
-                    case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
-                        break;
-                    default:
-                        $this->SendDebug("Variable Creation", "Unbekannter Variablentyp für {$variable['unit']} bei Key {$variable['key']}.", 0);
-                        continue 2;
-                }
-            }
-        }
-        
-        // **Wechselrichter-Variablen erstellen**
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        foreach ($selectedRegisters as $register) {
-            $ident = "Addr" . $register['address'];
-            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
-            // Validierung
-            if (!isset($register['address'], $register['type'], $register['scale'], $register['unit'])) {
-                $this->SendDebug("ApplyChanges", "Ungültiger Registereintrag: " . json_encode($register), 0);
+                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$variable['unit']} gefunden.", 0);
                 continue;
             }
     
-            $details = $this->GetVariableDetails($register['unit']);
-            if ($details === null) {
-                $this->SendDebug("ApplyChanges", "Unbekannte Einheit {$register['unit']}.", 0);
-                continue;
-            }
+            $ident = isset($variable['address']) ? "Addr" . $variable['address'] : "WB_" . $variable['key'];
+            $currentIdents[] = $ident;
     
             // Variable erstellen, falls nicht vorhanden
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $register['name'], $details['profile'], $register['pos']);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $register['name'], $details['profile'], $register['pos']);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $register['name'], $details['profile'], $register['pos']);
+                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$register['unit']}.", 0);
-                        continue 2;
+                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$variable['unit']}.", 0);
+                        continue;
                 }
+                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$variable['name']} und Profil {$details['profile']}.", 0);
+            } else {
+                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     
-        // Initialdaten abrufen
+        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+    
+        // Timer setzen
+        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+    
         $this->FetchAll();
     }
     
