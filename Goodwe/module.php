@@ -243,33 +243,54 @@ class Goodwe extends IPSModule
     
             $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
     
-            // Daten verarbeiten
-            foreach ($data['data'] as $key => $value) {
-                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
-                if (empty($variable)) {
-                    continue; // Überspringen, wenn die Variable deaktiviert ist
-                }
-    
-                $ident = "WB_" . $key;
-    
-                // Variablentyp bestimmen
-                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-    
-                // Variable erstellen oder aktualisieren
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-                }
-    
-                // Wert setzen
-                SetValue($this->GetIDForIdent($ident), $value);
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+// Daten verarbeiten
+foreach ($data['data'] as $key => $value) {
+    $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+    if (empty($variable)) {
+        continue; // Überspringen, wenn die Variable deaktiviert ist
+    }
+
+    $variable = reset($variable); // Erster Eintrag der gefilterten Variablen
+    $ident = "WB_" . $key;
+
+    // Variablentyp bestimmen
+    $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+
+    // Profil bestimmen
+    $profile = "";
+    if (isset($variable['unit']) && !empty($variable['unit'])) {
+        $details = $this->GetVariableDetails($variable['unit']);
+        if ($details !== null) {
+            $profile = $details['profile'];
         }
     }
+
+    // Variable registrieren, falls sie noch nicht existiert
+    if (!@$this->GetIDForIdent($ident)) {
+        switch ($type) {
+            case VARIABLETYPE_INTEGER:
+                $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $profile, 0);
+                break;
+            case VARIABLETYPE_FLOAT:
+                $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $profile, 0);
+                break;
+            case VARIABLETYPE_STRING:
+                $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $profile, 0);
+                break;
+            case VARIABLETYPE_BOOLEAN:
+                $this->RegisterVariableBoolean($ident, "WB-" . ucfirst($key), $profile, 0);
+                break;
+        }
+    }
+
+    // Wert setzen
+    $varID = $this->GetIDForIdent($ident);
+    if ($varID !== false) {
+        SetValue($varID, $value);
+    } else {
+        $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident konnte nicht gefunden oder erstellt werden.", 0);
+    }
+}
 
     private function GoodweFetchData(string $serial): ?string
     {
