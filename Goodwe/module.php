@@ -27,38 +27,45 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register
+        $this->ProcessSelectedRegisters();
+        $this->ProcessWallboxVariables();
+    
+        // Timer setzen
+        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+    
+        $this->FetchAll(); // Daten abrufen
+    }
+    
+    private function ProcessSelectedRegisters()
+    {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
+            $this->SendDebug("ProcessSelectedRegisters", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
-    
-        // Liste der aktuellen Register-Identifikatoren
+
         $currentIdents = [];
-    
         foreach ($selectedRegisters as &$selectedRegister) {
             if (is_string($selectedRegister['address'])) {
                 $decodedRegister = json_decode($selectedRegister['address'], true);
                 if ($decodedRegister !== null) {
                     $selectedRegister = array_merge($selectedRegister, $decodedRegister);
                 } else {
-                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                    $this->SendDebug("ProcessSelectedRegisters", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                     continue;
                 }
             }
-    
+
             $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
             if ($variableDetails === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                $this->SendDebug("ProcessSelectedRegisters", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                 continue;
             }
-    
+
             $ident = "Addr" . $selectedRegister['address'];
             $currentIdents[] = $ident;
 
-            $this->CreateProfile();
-    
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
@@ -71,36 +78,81 @@ class Goodwe extends IPSModule
                         $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
-                        continue 2;
+                        $this->SendDebug("ProcessSelectedRegisters", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
+                        continue;
                 }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
             }
-           // Position der Variable setzen
-           $variableID = $this->GetIDForIdent($ident);
+
+            // Position setzen
+            $variableID = $this->GetIDForIdent($ident);
             if ($variableID !== false) {
                 IPS_SetPosition($variableID, $selectedRegister['pos']);
             } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
+                $this->SendDebug("ProcessSelectedRegisters", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
         }
-    
-        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+
+        // Nicht mehr benötigte Register-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && str_starts_with($object['ObjectIdent'], "Addr") && !in_array($object['ObjectIdent'], $currentIdents)) {
                 $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+                $this->SendDebug("ProcessSelectedRegisters", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+    }
+
+    private function ProcessWallboxVariables()
+    {
+        $wallboxVariables = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+        if (!is_array($wallboxVariables)) {
+            $this->SendDebug("ProcessWallboxVariables", "WallboxVariableMapping ist keine gültige Liste", 0);
+            return;
+        }
+    
+        $currentIdents = [];
+        foreach ($wallboxVariables as $variable) {
+            if (!$variable['active']) {
+                continue; // Überspringe inaktive Variablen
+            }
+    
+            $key = $variable['key'] ?? "";
+            $ident = "WB_" . $key;
+            $currentIdents[] = $ident;
+    
+            $unit = $variable['unit'] ?? "";
+            $details = $this->GetVariableDetails($unit);
+            if ($details === null) {
+                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für Schlüssel: $key", 0);
+                continue;
+            }
+    
+            if (!@$this->GetIDForIdent($ident)) {
+                switch ($details['type']) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        break;
+                    default:
+                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Typ für Einheit: $unit", 0);
+                        continue;
+                }
             }
         }
     
-        // Timer setzen
-        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger('PollIntervalWB') * 1000);
-        
-        $this->FetchAll();
+        // Nicht mehr benötigte Wallbox-Variablen löschen
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && str_starts_with($object['ObjectIdent'], "WB_") && !in_array($object['ObjectIdent'], $currentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ProcessWallboxVariables", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
     }
     
     public function FetchAll()
@@ -457,7 +509,7 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
-            case "String":
+            case "":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
                 return null; // Kein bekanntes Profil oder Typ
