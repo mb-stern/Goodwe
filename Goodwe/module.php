@@ -55,35 +55,40 @@ class Goodwe extends IPSModule
     private function ProcessRegisterVariables()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("ProcessRegisterVariables", "SelectedRegisters ist keine gültige Liste", 0);
+            return;
+        }
     
-        foreach ($selectedRegisters as &$selectedRegister) {
-            $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+        foreach ($selectedRegisters as $register) {
+            // Standardwert für fehlende Unit setzen
+            $unit = $register['unit'] ?? "";
+            $variableDetails = $this->GetVariableDetails($unit);
+    
             if ($variableDetails === null) {
-                $this->SendDebug("ProcessRegisterVariables", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                $this->SendDebug("ProcessRegisterVariables", "Kein Profil oder Typ für Einheit {$unit} gefunden.", 0);
                 continue;
             }
     
-            $ident = "Addr" . $selectedRegister['address'];
-    
-            // Variable erstellen oder aktualisieren
+            $ident = "Addr" . $register['address'];
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $register['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $register['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $register['name'], $variableDetails['profile'], 0);
                         break;
+                    default:
+                        $this->SendDebug("ProcessRegisterVariables", "Unbekannter Variablentyp für {$unit}.", 0);
+                        continue;
                 }
-            }
-    
-            // Position setzen
-            $variableID = $this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, $selectedRegister['pos']);
+                $this->SendDebug("ProcessRegisterVariables", "Variable erstellt: $ident mit Name {$register['name']} und Profil {$variableDetails['profile']}.", 0);
+            } else {
+                $this->SendDebug("ProcessRegisterVariables", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     }
