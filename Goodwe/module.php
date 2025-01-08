@@ -61,7 +61,13 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as $register) {
-            // Standardwert für fehlende Unit setzen
+            // Prüfen, ob `name` vorhanden ist
+            if (!isset($register['name'])) {
+                $this->SendDebug("ProcessRegisterVariables", "Ein Register hat keinen Namen: " . json_encode($register), 0);
+                continue;
+            }
+    
+            // Standardwert für fehlende `unit` setzen
             $unit = $register['unit'] ?? "";
             $variableDetails = $this->GetVariableDetails($unit);
     
@@ -70,7 +76,13 @@ class Goodwe extends IPSModule
                 continue;
             }
     
-            $ident = "Addr" . $register['address'];
+            // Ident generieren und ungültige Zeichen entfernen
+            $ident = preg_replace('/[^a-zA-Z0-9_]/', '', "Addr" . $register['address']);
+            if (empty($ident)) {
+                $this->SendDebug("ProcessRegisterVariables", "Ungültiger Ident für Register: " . json_encode($register), 0);
+                continue;
+            }
+    
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
@@ -84,7 +96,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ProcessRegisterVariables", "Unbekannter Variablentyp für {$unit}.", 0);
-                        continue 2;
+                        continue;
                 }
                 $this->SendDebug("ProcessRegisterVariables", "Variable erstellt: $ident mit Name {$register['name']} und Profil {$variableDetails['profile']}.", 0);
             } else {
