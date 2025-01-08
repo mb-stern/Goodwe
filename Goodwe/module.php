@@ -27,14 +27,30 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        $this->ProcessSelectedRegisters();
-        $this->ProcessWallboxVariables();
-    
         // Timer setzen
         $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
-        $this->FetchAll(); // Daten abrufen
+        // Wallbox-Benutzerdaten prüfen
+        $wallboxUser = $this->ReadPropertyString("WallboxUser");
+        $wallboxPassword = $this->ReadPropertyString("WallboxPassword");
+        $wallboxSerial = $this->ReadPropertyString("WallboxSerial");
+    
+        // Nur Wallbox-Variablen erstellen, wenn alle Felder gefüllt sind
+        if (!empty($wallboxUser) && !empty($wallboxPassword) && !empty($wallboxSerial)) {
+            $this->SendDebug("ApplyChanges", "Wallbox-Daten vollständig, Variablen werden erstellt.", 0);
+    
+            // Abruf der aktuellen Wallbox-Daten
+            $wallboxData = $this->FetchWallboxData();
+            if ($wallboxData !== null) {
+                $this->ProcessWallboxVariables($wallboxData);
+            }
+        } else {
+            $this->SendDebug("ApplyChanges", "Wallbox-Daten unvollständig, keine Variablen werden erstellt.", 0);
+        }
+    
+        // Standard-Register-Variablen verarbeiten
+        $this->RequestRead();
     }
     
     private function ProcessSelectedRegisters()
@@ -102,70 +118,54 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function ProcessWallboxVariables()
+    private function ProcessWallboxVariables(array $wallboxData)
     {
-        $wallboxVariables = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
-        if (!is_array($wallboxVariables)) {
-            $this->SendDebug("ProcessWallboxVariables", "WallboxVariableMapping ist keine gültige Liste", 0);
-            return;
-        }
+        $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
     
-        $currentIdents = [];
-        foreach ($wallboxVariables as $variable) {
-            if (!$variable['active']) {
-                continue; // Überspringe inaktive Variablen
-            }
-    
-            $key = $variable['key'] ?? "";
-            $ident = "WB_" . $key;
-            $currentIdents[] = $ident;
-    
-            $unit = $variable['unit'] ?? "";
-            $details = $this->GetVariableDetails($unit);
-            if ($details === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Einheit $unit für Schlüssel $key nicht erkannt. Übersprungen.", 0);
+        foreach ($wallboxData as $key => $value) {
+            $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+            if (empty($variable)) {
+                $this->SendDebug("ProcessWallboxVariables", "Variable $key ist deaktiviert oder nicht gemappt.", 0);
                 continue;
             }
-            
-            // Debugging: Überprüfen, welcher Typ ermittelt wurde
-            $this->SendDebug("ProcessWallboxVariables", "Schlüssel: $key, Typ: {$details['type']}, Profil: {$details['profile']}", 0);
-            
     
-            // Variable erstellen oder aktualisieren
-            $varID = @$this->GetIDForIdent($ident);
-            if ($varID === false) {
+            // Es sollte immer nur eine gemappte Variable geben
+            $variable = array_shift($variable);
+            $unit = $variable['unit'] ?? "";
+    
+            // Details zur Einheit holen
+            $details = $this->GetVariableDetails($unit);
+            if ($details === null) {
+                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit $unit für Variable $key.", 0);
+                continue;
+            }
+    
+            $ident = "WB_" . $key;
+    
+            // Variable registrieren, falls nicht vorhanden
+            if (!@$this->GetIDForIdent($ident)) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $details['profile'], 0);
-                        break;
-                    case VARIABLETYPE_BOOLEAN:
-                        $this->RegisterVariableBoolean($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
                         break;
                     default:
-                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Variablentyp für Einheit: $unit", 0);
+                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Variablentyp für $key.", 0);
                         continue 2;
                 }
+                $this->SendDebug("ProcessWallboxVariables", "Variable $ident mit Typ {$details['type']} erstellt.", 0);
             }
     
-            // Debugging: Erfolgsmeldung
-            $this->SendDebug("ProcessWallboxVariables", "Variable erstellt/aktualisiert: $ident mit Typ {$details['type']} und Profil {$details['profile']}", 0);
-        }
-    
-        // Nicht mehr benötigte Wallbox-Variablen löschen
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-            $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && str_starts_with($object['ObjectIdent'], "WB_") && !in_array($object['ObjectIdent'], $currentIdents)) {
-                $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ProcessWallboxVariables", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
-            }
+            // Wert der Variable setzen
+            SetValue($this->GetIDForIdent($ident), $value);
         }
     }
+    
     
     public function FetchAll()
     {
@@ -272,7 +272,7 @@ class Goodwe extends IPSModule
         }
     }
 
-    public function FetchWallboxData()
+    private function FetchWallboxData(): ?array
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
@@ -280,7 +280,7 @@ class Goodwe extends IPSModule
     
         if (empty($user) || empty($password) || empty($serial)) {
             $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-            return;
+            return null;
         }
     
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
@@ -290,51 +290,29 @@ class Goodwe extends IPSModule
             $loginResponse = $this->GoodweLogin($user, $password);
             if (!$loginResponse) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
+                return null;
             }
     
             $apiResponse = $this->GoodweFetchData($serial);
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
+                return null;
             }
     
             $data = json_decode($apiResponse, true);
             if (!isset($data['data'])) {
                 $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
+                return null;
             }
     
-            $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
-    
-            // Daten verarbeiten
-            foreach ($data['data'] as $key => $value) {
-                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
-                if (empty($variable)) {
-                    continue; // Überspringen, wenn die Variable deaktiviert ist
-                }
-    
-                $ident = "WB_" . $key;
-    
-                // Variablentyp bestimmen
-                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
-    
-                // Variable erstellen oder aktualisieren
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
-                }
-    
-                // Wert setzen
-                SetValue($this->GetIDForIdent($ident), $value);
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich abgerufen.", 0);
+            return $data['data']; // Wallbox-Daten zurückgeben
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+            return null;
         }
     }
-
+    
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
