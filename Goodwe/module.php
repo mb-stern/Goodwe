@@ -84,7 +84,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ProcessRegisterVariables", "Unbekannter Variablentyp für {$unit}.", 0);
-                        continue;
+                        continue 2;
                 }
                 $this->SendDebug("ProcessRegisterVariables", "Variable erstellt: $ident mit Name {$register['name']} und Profil {$variableDetails['profile']}.", 0);
             } else {
