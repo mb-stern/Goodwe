@@ -79,7 +79,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ProcessSelectedRegisters", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
-                        continue;
+                        continue 2;
                 }
             }
 
@@ -140,7 +140,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ProcessWallboxVariables", "Unbekannter Typ für Einheit: $unit", 0);
-                        continue;
+                        continue 2;
                 }
             }
         }
