@@ -145,7 +145,7 @@ class Goodwe extends IPSModule
                         break;
                     default:
                         $this->SendDebug("ProcessWallboxVariables", "Unbekannter Variablentyp für Einheit: $unit", 0);
-                        continue;
+                        continue 2;
                 }
             }
     
