@@ -123,11 +123,13 @@ class Goodwe extends IPSModule
             $unit = $variable['unit'] ?? "";
             $details = $this->GetVariableDetails($unit);
             if ($details === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für Schlüssel: $key", 0);
+                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für Schlüssel: $key, Einheit: $unit", 0);
                 continue;
             }
     
-            if (!@$this->GetIDForIdent($ident)) {
+            // Variable erstellen oder aktualisieren
+            $varID = @$this->GetIDForIdent($ident);
+            if ($varID === false) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
                         $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $details['profile'], 0);
@@ -138,11 +140,17 @@ class Goodwe extends IPSModule
                     case VARIABLETYPE_STRING:
                         $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $details['profile'], 0);
                         break;
+                    case VARIABLETYPE_BOOLEAN:
+                        $this->RegisterVariableBoolean($ident, "WB-" . ucfirst($key), $details['profile'], 0);
+                        break;
                     default:
-                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Typ für Einheit: $unit", 0);
-                        continue 2;
+                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Variablentyp für Einheit: $unit", 0);
+                        continue;
                 }
             }
+    
+            // Debugging: Erfolgsmeldung
+            $this->SendDebug("ProcessWallboxVariables", "Variable erstellt/aktualisiert: $ident mit Typ {$details['type']} und Profil {$details['profile']}", 0);
         }
     
         // Nicht mehr benötigte Wallbox-Variablen löschen
