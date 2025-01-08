@@ -27,14 +27,19 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Wallbox-Variablen nur erstellen, wenn Zugangsdaten vollständig
+        // Wallbox-Variablen nur erstellen, wenn Zugangsdaten vollständig sind
         $wallboxUser = $this->ReadPropertyString("WallboxUser");
         $wallboxPassword = $this->ReadPropertyString("WallboxPassword");
         $wallboxSerial = $this->ReadPropertyString("WallboxSerial");
     
         if (!empty($wallboxUser) && !empty($wallboxPassword) && !empty($wallboxSerial)) {
-            //$dummyWallboxData = $this->FetchDummyWallboxData(); // Testdaten für Debugging
-            //$this->ProcessWallboxVariables($dummyWallboxData);
+            // Wallbox-Daten abrufen
+            $wallboxData = $this->FetchWallboxData();
+            if ($wallboxData) {
+                $this->ProcessWallboxVariables($wallboxData);
+            } else {
+                $this->SendDebug("ApplyChanges", "Keine Wallbox-Daten abgerufen. Variablen werden nicht erstellt.", 0);
+            }
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Zugangsdaten unvollständig. Variablen nicht erstellt.", 0);
         }
