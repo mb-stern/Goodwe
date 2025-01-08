@@ -121,52 +121,50 @@ class Goodwe extends IPSModule
 
     private function ProcessWallboxVariables(array $wallboxData)
     {
-        $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
+        $mapping = $this->GetWbVariables();
     
         foreach ($wallboxData as $key => $value) {
             $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
             if (empty($variable)) {
-                $this->SendDebug("ProcessWallboxVariables", "Variable $key ist deaktiviert oder nicht gemappt.", 0);
-                continue;
+                continue; // Überspringen, wenn die Variable deaktiviert ist
             }
     
-            // Es sollte immer nur eine gemappte Variable geben
-            $variable = array_shift($variable);
-            $unit = $variable['unit'] ?? "";
-    
-            // Details zur Einheit holen
-            $details = $this->GetVariableDetails($unit);
-            if ($details === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit $unit für Variable $key.", 0);
-                continue;
-            }
-    
+            $variable = reset($variable); // Erstes Ergebnis nehmen
             $ident = "WB_" . $key;
     
-            // Variable registrieren, falls nicht vorhanden
-            if (!@$this->GetIDForIdent($ident)) {
-                switch ($details['type']) {
-                    case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $details['profile'], 0);
-                        break;
-                    case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $details['profile'], 0);
-                        break;
-                    case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $details['profile'], 0);
-                        break;
-                    default:
-                        $this->SendDebug("ProcessWallboxVariables", "Unbekannter Variablentyp für $key.", 0);
-                        continue 2;
-                }
-                $this->SendDebug("ProcessWallboxVariables", "Variable $ident mit Typ {$details['type']} erstellt.", 0);
+            // Einheit prüfen und Variablentyp bestimmen
+            $unit = $variable['unit'] ?? "";
+            $variableDetails = $this->GetVariableDetails($unit);
+            if ($variableDetails === null) {
+                $this->SendDebug("ProcessWallboxVariables", "Kein Profil oder Typ für Einheit $unit gefunden.", 0);
+                continue;
             }
     
-            // Wert der Variable setzen
-            SetValue($this->GetIDForIdent($ident), $value);
+            $this->SendDebug("ProcessWallboxVariables", "Erstelle oder aktualisiere Variable $ident mit Typ {$variableDetails['type']} und Profil {$variableDetails['profile']}.", 0);
+    
+            // Variable erstellen oder aktualisieren
+            $varID = @$this->GetIDForIdent($ident);
+            if ($varID === false) {
+                switch ($variableDetails['type']) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        break;
+                }
+            }
+    
+            // Wert setzen
+            $variableID = $this->GetIDForIdent($ident);
+            if ($variableID !== false) {
+                SetValue($variableID, $value);
+            }
         }
     }
-    
     
     public function FetchAll()
     {
@@ -483,6 +481,7 @@ class Goodwe extends IPSModule
     
     private function GetVariableDetails(string $unit): ?array
     {
+        $this->SendDebug("GetVariableDetails", "Ermittle Details für Einheit: $unit", 0);
         switch ($unit) {
             case "V":
                 return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
@@ -500,10 +499,10 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
-            case "":
-                return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
-                return null; // Kein bekanntes Profil oder Typ
+                // Leere Einheit oder unbekannter Wert: Standard auf String
+                $this->SendDebug("GetVariableDetails", "Einheit nicht bekannt oder leer, Standard auf String.", 0);
+                return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
         }
     }
 
