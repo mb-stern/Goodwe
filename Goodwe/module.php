@@ -27,29 +27,22 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Wallbox-Variablen nur erstellen, wenn Zugangsdaten vollständig sind
+        // Verarbeitung der Register-Variablen
+        $this->ProcessRegisterVariables();
+    
+        // Verarbeitung der Wallbox-Variablen nur, wenn Benutzer, Passwort und Seriennummer gesetzt sind
         $wallboxUser = $this->ReadPropertyString("WallboxUser");
         $wallboxPassword = $this->ReadPropertyString("WallboxPassword");
         $wallboxSerial = $this->ReadPropertyString("WallboxSerial");
     
         if (!empty($wallboxUser) && !empty($wallboxPassword) && !empty($wallboxSerial)) {
-            // Wallbox-Daten abrufen
             $wallboxData = $this->FetchWallboxData();
-            if ($wallboxData) {
+            if ($wallboxData !== null) {
                 $this->ProcessWallboxVariables($wallboxData);
-            } else {
-                $this->SendDebug("ApplyChanges", "Keine Wallbox-Daten abgerufen. Variablen werden nicht erstellt.", 0);
             }
         } else {
-            $this->SendDebug("ApplyChanges", "Wallbox-Zugangsdaten unvollständig. Variablen nicht erstellt.", 0);
+            $this->SendDebug("ApplyChanges", "Wallbox-Daten nicht vollständig konfiguriert.", 0);
         }
-    
-        // Register-Variablen erstellen
-        $this->ProcessRegisterVariables();
-    
-        // Timer setzen
-        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger("PollIntervalWR") * 1000);
-        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger("PollIntervalWB") * 1000);
     }
     
     private function ProcessRegisterVariables()
@@ -61,14 +54,12 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as $register) {
-            // Prüfen, ob `name` vorhanden ist
-            if (!isset($register['name'])) {
-                $this->SendDebug("ProcessRegisterVariables", "Ein Register hat keinen Namen: " . json_encode($register), 0);
+            if (!isset($register['name'], $register['address'])) {
+                $this->SendDebug("ProcessRegisterVariables", "Fehlende Felder in Register: " . json_encode($register), 0);
                 continue;
             }
     
-            // Standardwert für fehlende `unit` setzen
-            $unit = $register['unit'] ?? "";
+            $unit = $register['unit'] ?? ""; // Standardwert für fehlende Einheit
             $variableDetails = $this->GetVariableDetails($unit);
     
             if ($variableDetails === null) {
@@ -76,13 +67,7 @@ class Goodwe extends IPSModule
                 continue;
             }
     
-            // Ident generieren und ungültige Zeichen entfernen
             $ident = preg_replace('/[^a-zA-Z0-9_]/', '', "Addr" . $register['address']);
-            if (empty($ident)) {
-                $this->SendDebug("ProcessRegisterVariables", "Ungültiger Ident für Register: " . json_encode($register), 0);
-                continue;
-            }
-    
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
@@ -94,13 +79,7 @@ class Goodwe extends IPSModule
                     case VARIABLETYPE_STRING:
                         $this->RegisterVariableString($ident, $register['name'], $variableDetails['profile'], 0);
                         break;
-                    default:
-                        $this->SendDebug("ProcessRegisterVariables", "Unbekannter Variablentyp für {$unit}.", 0);
-                        continue 2;
                 }
-                $this->SendDebug("ProcessRegisterVariables", "Variable erstellt: $ident mit Name {$register['name']} und Profil {$variableDetails['profile']}.", 0);
-            } else {
-                $this->SendDebug("ProcessRegisterVariables", "Variable mit Ident $ident existiert bereits.", 0);
             }
         }
     }
@@ -112,43 +91,35 @@ class Goodwe extends IPSModule
         foreach ($wallboxData as $key => $value) {
             $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
             if (empty($variable)) {
-                continue; // Überspringen, wenn die Variable deaktiviert ist
+                continue; // Überspringen, wenn die Variable nicht aktiv ist
             }
     
-            $variable = reset($variable); // Erstes Ergebnis nehmen
-            $ident = "WB_" . $key;
-    
-            // Einheit prüfen und Typ bestimmen
-            $unit = $variable['unit'] ?? "";
+            $variable = reset($variable);
+            $unit = $variable['unit'] ?? ""; // Standardwert für fehlende Einheit
             $variableDetails = $this->GetVariableDetails($unit);
+    
             if ($variableDetails === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Kein Profil oder Typ für Einheit $unit gefunden.", 0);
+                $this->SendDebug("ProcessWallboxVariables", "Kein Profil oder Typ für Einheit {$unit} gefunden.", 0);
                 continue;
             }
     
-            $this->SendDebug("ProcessWallboxVariables", "Erstelle oder aktualisiere Variable $ident mit Typ {$variableDetails['type']} und Profil {$variableDetails['profile']}.", 0);
-    
-            // Variable erstellen oder aktualisieren
-            $varID = @$this->GetIDForIdent($ident);
-            if ($varID === false) {
+            $ident = preg_replace('/[^a-zA-Z0-9_]/', '', "WB_" . $key);
+            if (!@$this->GetIDForIdent($ident)) {
                 switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $variableDetails['profile'], 0);
                         break;
                 }
             }
     
             // Wert setzen
-            $variableID = $this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                SetValue($variableID, $value);
-            }
+            SetValue($this->GetIDForIdent($ident), $value);
         }
     }
     
@@ -272,26 +243,14 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
         try {
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return null;
-            }
-    
+            // Hier API-Aufruf implementieren
             $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+            if ($apiResponse === null) {
                 return null;
             }
     
             $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return null;
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich abgerufen.", 0);
-            return $data['data']; // Wallbox-Daten zurückgeben
+            return $data['data'] ?? null;
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
             return null;
