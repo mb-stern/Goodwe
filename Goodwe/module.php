@@ -33,8 +33,8 @@ class Goodwe extends IPSModule
         $wallboxSerial = $this->ReadPropertyString("WallboxSerial");
     
         if (!empty($wallboxUser) && !empty($wallboxPassword) && !empty($wallboxSerial)) {
-            $dummyWallboxData = $this->FetchDummyWallboxData(); // Testdaten für Debugging
-            $this->ProcessWallboxVariables($dummyWallboxData);
+            //$dummyWallboxData = $this->FetchDummyWallboxData(); // Testdaten für Debugging
+            //$this->ProcessWallboxVariables($dummyWallboxData);
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Zugangsdaten unvollständig. Variablen nicht erstellt.", 0);
         }
