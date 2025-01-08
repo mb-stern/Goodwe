@@ -40,10 +40,11 @@ class Goodwe extends IPSModule
         if (!empty($wallboxUser) && !empty($wallboxPassword) && !empty($wallboxSerial)) {
             $this->SendDebug("ApplyChanges", "Wallbox-Daten vollständig, Variablen werden erstellt.", 0);
     
-            // Abruf der aktuellen Wallbox-Daten
             $wallboxData = $this->FetchWallboxData();
             if ($wallboxData !== null) {
                 $this->ProcessWallboxVariables($wallboxData);
+            } else {
+                $this->SendDebug("ApplyChanges", "Wallbox-Datenabruf fehlgeschlagen. Variablen nicht erstellt.", 0);
             }
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Daten unvollständig, keine Variablen werden erstellt.", 0);
@@ -286,7 +287,6 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
         try {
-            // Login und Datenabruf
             $loginResponse = $this->GoodweLogin($user, $password);
             if (!$loginResponse) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
