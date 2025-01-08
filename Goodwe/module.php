@@ -195,22 +195,30 @@ class Goodwe extends IPSModule
     private function ProcessWallboxVariables(array $wallboxData)
     {
         $mapping = $this->GetWbVariables();
-
+    
         foreach ($wallboxData as $key => $value) {
-            $variableMapping = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+            $variableMapping = array_filter($mapping, fn($var) => isset($var['key']) && $var['key'] === $key && $var['active']);
             if (empty($variableMapping)) {
+                $this->SendDebug("ProcessWallboxVariables", "Keine aktive Zuordnung für Schlüssel: $key", 0);
                 continue;
             }
-
+    
             $variableMapping = reset($variableMapping); // Erstes Element des gefilterten Arrays
-            $ident = "WB_" . $key;
+    
+            // Überprüfen, ob 'unit' gesetzt ist und nicht leer
+            if (!isset($variableMapping['unit']) || empty($variableMapping['unit'])) {
+                $this->SendDebug("ProcessWallboxVariables", "Keine Einheit für Schlüssel: $key", 0);
+                continue;
+            }
+    
             $details = $this->GetVariableDetails($variableMapping['unit']);
-
             if ($details === null) {
                 $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für {$key}: {$variableMapping['unit']}", 0);
                 continue;
             }
-
+    
+            $ident = "WB_" . $key;
+    
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
@@ -224,12 +232,11 @@ class Goodwe extends IPSModule
                         break;
                 }
             }
-
+    
             SetValue($this->GetIDForIdent($ident), $value);
         }
     }
-
-
+    
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
