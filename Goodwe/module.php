@@ -170,7 +170,8 @@ class Goodwe extends IPSModule
     
     public function FetchAll()
     {
-        $this->FetchWallboxData();
+        $wallboxData = $this->FetchWallboxData();
+        $this->ProcessWallboxVariables($wallboxData);
         $this->RequestRead();
     }
 
