@@ -123,9 +123,13 @@ class Goodwe extends IPSModule
             $unit = $variable['unit'] ?? "";
             $details = $this->GetVariableDetails($unit);
             if ($details === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für Schlüssel: $key, Einheit: $unit", 0);
+                $this->SendDebug("ProcessWallboxVariables", "Einheit $unit für Schlüssel $key nicht erkannt. Übersprungen.", 0);
                 continue;
             }
+            
+            // Debugging: Überprüfen, welcher Typ ermittelt wurde
+            $this->SendDebug("ProcessWallboxVariables", "Schlüssel: $key, Typ: {$details['type']}, Profil: {$details['profile']}", 0);
+            
     
             // Variable erstellen oder aktualisieren
             $varID = @$this->GetIDForIdent($ident);
