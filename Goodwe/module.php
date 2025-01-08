@@ -125,10 +125,16 @@ class Goodwe extends IPSModule
     
     public function FetchAll()
     {
+        $this->ProcessRegisterVariables();
+    
+        // Wallbox-Daten nur verarbeiten, wenn gültige Daten abgerufen werden
         $wallboxData = $this->FetchWallboxData();
-        $this->ProcessWallboxVariables($wallboxData);
-        $this->RequestRead();
-    }
+        if ($wallboxData !== null && is_array($wallboxData)) {
+            $this->ProcessWallboxVariables($wallboxData);
+        } else {
+            $this->SendDebug("FetchAll", "Keine gültigen Wallbox-Daten erhalten.", 0);
+        }
+    }    
 
     public function RequestRead()
     {
@@ -243,14 +249,18 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
         try {
-            // Hier API-Aufruf implementieren
             $apiResponse = $this->GoodweFetchData($serial);
             if ($apiResponse === null) {
                 return null;
             }
     
             $data = json_decode($apiResponse, true);
-            return $data['data'] ?? null;
+            if (!isset($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Ungültige oder fehlende 'data'-Struktur im API-Response.", 0);
+                return null;
+            }
+    
+            return $data['data'];
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
             return null;
