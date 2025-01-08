@@ -89,36 +89,34 @@ class Goodwe extends IPSModule
         $mapping = $this->GetWbVariables();
     
         foreach ($wallboxData as $key => $value) {
-            $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
-            if (empty($variable)) {
-                continue; // Überspringen, wenn die Variable nicht aktiv ist
-            }
-    
-            $variable = reset($variable);
-            $unit = $variable['unit'] ?? ""; // Standardwert für fehlende Einheit
-            $variableDetails = $this->GetVariableDetails($unit);
-    
-            if ($variableDetails === null) {
-                $this->SendDebug("ProcessWallboxVariables", "Kein Profil oder Typ für Einheit {$unit} gefunden.", 0);
+            $variableMapping = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
+            if (empty($variableMapping)) {
                 continue;
             }
     
-            $ident = preg_replace('/[^a-zA-Z0-9_]/', '', "WB_" . $key);
+            $variableMapping = reset($variableMapping); // Erstes Element des gefilterten Arrays
+            $ident = "WB_" . $key;
+            $details = $this->GetVariableDetails($variableMapping['unit']);
+    
+            if ($details === null) {
+                $this->SendDebug("ProcessWallboxVariables", "Unbekannte Einheit für {$key}: {$variableMapping['unit']}", 0);
+                continue;
+            }
+    
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($variableDetails['type']) {
+                switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variableMapping['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variableMapping['name'], $details['profile'], 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $variableMapping['name'], $details['profile'], 0);
                         break;
                 }
             }
     
-            // Wert setzen
             SetValue($this->GetIDForIdent($ident), $value);
         }
     }
@@ -144,98 +142,44 @@ class Goodwe extends IPSModule
             return;
         }
     
-        // Prüfen, ob eine Verbindung zum Parent besteht
-        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-        if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
-            $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            IPS_LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
-            return;
-        }
-    
-        // Prüfen, ob der Parent geöffnet ist (sofern relevant für den Parent-Typ)
-        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
-        if ($parentStatus !== IS_ACTIVE) {
-            $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            IPS_LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
-            return;
-        }
-    
-        foreach ($selectedRegisters as &$register) {
-            if (is_string($register['address'])) {
-                $decodedRegister = json_decode($register['address'], true);
-                if ($decodedRegister !== null) {
-                    $register = array_merge($register, $decodedRegister);
-                } else {
-                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
-                    continue;
-                }
-            }
-    
-            // Validierung der Felder
-            if (!isset($register['address'], $register['type'], $register['scale'])) {
-                $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $register['address'];
-            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
-            try {
-                $response = $this->SendDataToParent(json_encode([
-                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                    "Function" => 3,
-                    "Address"  => $register['address'],
-                    "Quantity" => $quantity,
-                    "Data"     => ""
-                ]));
-    
-                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
-                    continue;
-                }
-    
-                $data = unpack("n*", substr($response, 2));
-                $value = 0;
-    
-                switch ($register['type']) {
-                    case "U16":
-                        $value = $data[1];
-                        break;
-                    case "S16":
-                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                        break;
-                    case "U32":
-                        $value = ($data[1] << 16) | $data[2];
-                        break;
-                    case "S32":
-                        $combined = ($data[1] << 16) | $data[2];
-                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                        break;
-                }
-    
-                if ($register['scale'] == 0) {
-                    $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
-                    continue;
-                }
-    
-                $scaledValue = $value * $register['scale'];
-    
-                $variableID = @$this->GetIDForIdent($ident);
-                if ($variableID === false) {
-                    $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
-                    continue;
-                }
-    
-                SetValue($variableID, $scaledValue);
-                $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
-            } catch (Exception $e) {
-                $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
-                IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
-            }
+        foreach ($selectedRegisters as $register) {
+            $this->ProcessRegisterVariable($register);
         }
     }
-
-    private function FetchWallboxData(): ?array
+    
+    private function ProcessRegisterVariable(array $register)
+    {
+        if (!isset($register['address'], $register['type'], $register['scale'])) {
+            $this->SendDebug("ProcessRegisterVariable", "Ungültiger Registereintrag: " . json_encode($register), 0);
+            return;
+        }
+    
+        $ident = "Addr" . $register['address'];
+        $details = $this->GetVariableDetails($register['unit']);
+    
+        if ($details === null) {
+            $this->SendDebug("ProcessRegisterVariable", "Unbekannte Einheit für Register {$register['address']}", 0);
+            return;
+        }
+    
+        if (!@$this->GetIDForIdent($ident)) {
+            switch ($details['type']) {
+                case VARIABLETYPE_INTEGER:
+                    $this->RegisterVariableInteger($ident, $register['name'], $details['profile'], 0);
+                    break;
+                case VARIABLETYPE_FLOAT:
+                    $this->RegisterVariableFloat($ident, $register['name'], $details['profile'], 0);
+                    break;
+                case VARIABLETYPE_STRING:
+                    $this->RegisterVariableString($ident, $register['name'], $details['profile'], 0);
+                    break;
+            }
+        }
+    
+        $this->SendDebug("ProcessRegisterVariable", "Variable $ident erstellt/aktualisiert.", 0);
+    }
+    
+    public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
@@ -243,27 +187,33 @@ class Goodwe extends IPSModule
     
         if (empty($user) || empty($password) || empty($serial)) {
             $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-            return null;
+            return;
         }
     
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
         try {
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
+            }
+    
             $apiResponse = $this->GoodweFetchData($serial);
-            if ($apiResponse === null) {
-                return null;
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
             }
     
             $data = json_decode($apiResponse, true);
             if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Ungültige oder fehlende 'data'-Struktur im API-Response.", 0);
-                return null;
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                return;
             }
     
-            return $data['data'];
+            $this->ProcessWallboxVariables($data['data']);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
-            return null;
         }
     }
     
