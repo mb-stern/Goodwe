@@ -290,6 +290,8 @@ foreach ($data['data'] as $key => $value) {
     } else {
         $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident konnte nicht gefunden oder erstellt werden.", 0);
     }
+}
+}
 
 
     private function GoodweFetchData(string $serial): ?string
