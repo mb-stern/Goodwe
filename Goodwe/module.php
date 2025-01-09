@@ -247,10 +247,13 @@ class Goodwe extends IPSModule
             foreach ($data['data'] as $key => $value) {
                 $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
                 if (empty($variable)) {
+                    $this->SendDebug("FetchWallboxData", "Variable für Key '$key' nicht gefunden oder inaktiv. Überspringe.", 0);
                     continue; // Überspringen, wenn die Variable deaktiviert ist
                 }
-    
                 $variable = reset($variable); // Erster Eintrag der gefilterten Variablen
+                
+                $this->SendDebug("FetchWallboxData", "Gefundene Variable für Key '$key': " . json_encode($variable), 0);
+                
                 $ident = "WB_" . $key;
     
                 // Variablentyp und Profil bestimmen
