@@ -27,47 +27,56 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // 1. Verarbeitung der Wallbox-Variablen
-        $mapping = $this->GetWbVariables();
+        // Wallbox-Benutzerinformationen lesen
+        $user = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial = $this->ReadPropertyString("WallboxSerial");
+    
+        // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
         $wbCurrentIdents = [];
+        if (!empty($user) && !empty($password) && !empty($serial)) {
+            $mapping = $this->GetWbVariables();
     
-        foreach ($mapping as $variable) {
-            if (!$variable['active']) {
-                continue; // Überspringen, wenn die Variable deaktiviert ist
-            }
+            foreach ($mapping as $variable) {
+                if (!$variable['active']) {
+                    continue; // Überspringen, wenn die Variable deaktiviert ist
+                }
     
-            $ident = "WB_" . $variable['key'];
-            $wbCurrentIdents[] = $ident;
+                $ident = "WB_" . $variable['key'];
+                $wbCurrentIdents[] = $ident;
     
-            $type = VARIABLETYPE_STRING;
-            $profile = "";
+                $type = VARIABLETYPE_STRING;
+                $profile = "";
     
-            if (!empty($variable['unit'])) {
-                $details = $this->GetVariableDetails($variable['unit']);
-                if ($details !== null) {
-                    $type = $details['type'];
-                    $profile = $details['profile'];
+                if (!empty($variable['unit'])) {
+                    $details = $this->GetVariableDetails($variable['unit']);
+                    if ($details !== null) {
+                        $type = $details['type'];
+                        $profile = $details['profile'];
+                    }
+                }
+    
+                // Variable erstellen oder aktualisieren
+                if (!@$this->GetIDForIdent($ident)) {
+                    switch ($type) {
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
+                            break;
+                        case VARIABLETYPE_STRING:
+                            $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
+                            break;
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($ident, $variable['name'], $profile, 0);
+                            break;
+                    }
+                    $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
                 }
             }
-    
-            // Variable erstellen oder aktualisieren
-            if (!@$this->GetIDForIdent($ident)) {
-                switch ($type) {
-                    case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
-                        break;
-                    case VARIABLETYPE_BOOLEAN:
-                        $this->RegisterVariableBoolean($ident, $variable['name'], $profile, 0);
-                        break;
-                }
-                $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
-            }
+        } else {
+            $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
         }
     
         // Nicht mehr benötigte Wallbox-Variablen löschen
