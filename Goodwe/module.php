@@ -286,7 +286,7 @@ class Goodwe extends IPSModule
                 if ($varID !== false) {
                     SetValue($varID, $value);
                 } else {
-                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
+                    //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
                 }
             }
     
