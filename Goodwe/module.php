@@ -483,6 +483,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
             case "kWh":
                 return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
+            case "kW":
+                return ["profile" => "~Power", "type" => VARIABLETYPE_FLOAT];
             case "°C":
                 return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
             case "%":
