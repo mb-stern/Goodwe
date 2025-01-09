@@ -595,28 +595,34 @@ class Goodwe extends IPSModule
         ];
 
 
-    // Standardwerte mit dem vorhandenen Mapping mergen
-    foreach ($defaultMapping as $defaultEntry) {
-        $exists = false;
-        foreach ($mapping as $entry) {
-            if ($entry['key'] === $defaultEntry['key']) {
-                $exists = true;
-                break;
+        // Standardwerte mit dem vorhandenen Mapping mergen
+        foreach ($defaultMapping as $defaultEntry) {
+            $exists = false;
+            foreach ($mapping as $entry) {
+                if ($entry['key'] === $defaultEntry['key']) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $mapping[] = $defaultEntry;
             }
         }
-        if (!$exists) {
-            $mapping[] = $defaultEntry;
+
+        // Debug-Ausgabe des endgültigen Mappings
+        $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($mapping), 0);
+
+        // Nur aktualisieren, wenn sich das Mapping geändert hat
+        $currentMapping = $this->ReadPropertyString("WallboxVariableMapping");
+        $newMapping = json_encode($mapping);
+        if ($currentMapping !== $newMapping) {
+            $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
+            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
+            IPS_ApplyChanges($this->InstanceID);
         }
+
+        return $mapping;
     }
-
-    // Debug-Ausgabe des endgültigen Mappings
-    $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($mapping), 0);
-
-    // Property immer aktualisieren
-    IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
-
-    return $mapping;
-}
     
     private function GetRegisters()
     {
