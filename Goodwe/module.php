@@ -537,7 +537,7 @@ class Goodwe extends IPSModule
         if (empty($mapping)) {
             // Standardwerte, falls Mapping leer ist
             $mapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
+            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "gugus", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
             ["key" => "state", "name" => "State", "unit" => "", "active" => true],
