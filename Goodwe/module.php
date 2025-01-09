@@ -594,11 +594,10 @@ class Goodwe extends IPSModule
         ];
 
 
-        // Standardwerte mit dem vorhandenen Mapping mergen
         foreach ($defaultMapping as $defaultEntry) {
             $exists = false;
             foreach ($mapping as $entry) {
-                if ($entry['key'] === $defaultEntry['key']) {
+                if ($entry === $defaultEntry) {
                     $exists = true;
                     break;
                 }
