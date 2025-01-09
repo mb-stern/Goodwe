@@ -597,7 +597,12 @@ class Goodwe extends IPSModule
         foreach ($defaultMapping as $defaultEntry) {
             $exists = false;
             foreach ($mapping as $entry) {
-                if ($this->arraysAreEqual($entry, $defaultEntry)) {
+                if (
+                    $entry['key'] === $defaultEntry['key'] &&
+                    $entry['name'] === $defaultEntry['name'] &&
+                    $entry['unit'] === $defaultEntry['unit'] &&
+                    $entry['active'] === $defaultEntry['active']
+                ) {
                     $exists = true;
                     break;
                 }
