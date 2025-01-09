@@ -27,31 +27,30 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die Konfiguration
-        $mapping = $this->GetWbVariables(); // Ruft das Mapping auf, wie du es definiert hast
+        // 1. Verarbeitung der Wallbox-Variablen
+        $mapping = $this->GetWbVariables();
+        $wbCurrentIdents = [];
     
-        $currentIdents = [];
-    
-        // Variablen anlegen oder aktualisieren
         foreach ($mapping as $variable) {
             if (!$variable['active']) {
-                continue; // Überspringe inaktive Variablen
+                continue; // Überspringen, wenn die Variable deaktiviert ist
             }
     
             $ident = "WB_" . $variable['key'];
-            $currentIdents[] = $ident;
+            $wbCurrentIdents[] = $ident;
     
-            // Details für das Variablenprofil abrufen
-            $details = $this->GetVariableDetails($variable['unit']);
             $type = VARIABLETYPE_STRING;
             $profile = "";
     
-            if ($details !== null) {
-                $type = $details['type'];
-                $profile = $details['profile'];
+            if (!empty($variable['unit'])) {
+                $details = $this->GetVariableDetails($variable['unit']);
+                if ($details !== null) {
+                    $type = $details['type'];
+                    $profile = $details['profile'];
+                }
             }
     
-            // Variable registrieren, falls sie nicht existiert
+            // Variable erstellen oder aktualisieren
             if (!@$this->GetIDForIdent($ident)) {
                 switch ($type) {
                     case VARIABLETYPE_INTEGER:
@@ -67,20 +66,79 @@ class Goodwe extends IPSModule
                         $this->RegisterVariableBoolean($ident, $variable['name'], $profile, 0);
                         break;
                 }
+                $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
             }
         }
     
-        // Variablen löschen, die nicht mehr im aktuellen Mapping enthalten sind
+        // Nicht mehr benötigte Wallbox-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
-            if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
+            if (strpos($object['ObjectIdent'], 'WB_') === 0 && !in_array($object['ObjectIdent'], $wbCurrentIdents)) {
                 $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Wallbox-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
     
-        // Timer setzen, falls erforderlich
-        $pollInterval = $this->ReadPropertyInteger("PollIntervalWB");
-        $this->SetTimerInterval("PollerWB", $pollInterval > 0 ? $pollInterval * 1000 : 0);
+        // 2. Verarbeitung der Registervariablen
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $registerCurrentIdents = [];
+    
+        if (is_array($selectedRegisters)) {
+            foreach ($selectedRegisters as &$selectedRegister) {
+                if (is_string($selectedRegister['address'])) {
+                    $decodedRegister = json_decode($selectedRegister['address'], true);
+                    if ($decodedRegister !== null) {
+                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                        continue;
+                    }
+                }
+    
+                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+                if ($variableDetails === null) {
+                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                    continue;
+                }
+    
+                $ident = "Addr" . $selectedRegister['address'];
+                $registerCurrentIdents[] = $ident;
+    
+                if (!@$this->GetIDForIdent($ident)) {
+                    switch ($variableDetails['type']) {
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            break;
+                        case VARIABLETYPE_STRING:
+                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            break;
+                    }
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
+                }
+    
+                // Position setzen
+                $variableID = $this->GetIDForIdent($ident);
+                if ($variableID !== false) {
+                    IPS_SetPosition($variableID, $selectedRegister['pos']);
+                }
+            }
+        }
+    
+        // Nicht mehr benötigte Register-Variablen löschen
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if (strpos($object['ObjectIdent'], 'Addr') === 0 && !in_array($object['ObjectIdent'], $registerCurrentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+    
+        // 3. Timer setzen
+        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     }
     
     public function FetchAll()
