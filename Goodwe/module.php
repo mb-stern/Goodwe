@@ -260,12 +260,19 @@ class Goodwe extends IPSModule
                 $type = VARIABLETYPE_STRING;
                 $profile = "";
                 if (isset($variable['unit']) && !empty($variable['unit'])) {
+                    $this->SendDebug("FetchWallboxData", "Unit gefunden: '{$variable['unit']}' für Key '{$variable['key']}'", 0);
                     $details = $this->GetVariableDetails($variable['unit']);
                     if ($details !== null) {
                         $type = $details['type'];
                         $profile = $details['profile'];
+                        $this->SendDebug("FetchWallboxData", "Details für Unit '{$variable['unit']}': Typ = $type, Profil = $profile", 0);
+                    } else {
+                        $this->SendDebug("FetchWallboxData", "Keine Details für Unit '{$variable['unit']}' gefunden.", 0);
                     }
+                } else {
+                    $this->SendDebug("FetchWallboxData", "Keine oder leere Unit für Key '{$variable['key']}' gefunden.", 0);
                 }
+                
     
                 // Variable registrieren, falls sie noch nicht existiert
                 if (!@$this->GetIDForIdent($ident)) {
