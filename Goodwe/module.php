@@ -591,7 +591,6 @@ class Goodwe extends IPSModule
         }
 
         return $mapping;
-    }
     
     private function GetRegisters()
     {
