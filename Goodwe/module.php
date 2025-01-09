@@ -242,6 +242,7 @@ class Goodwe extends IPSModule
             }
     
             $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
+            $this->SendDebug("FetchWallboxData", "Mapping Inhalt: " . json_encode($mapping, JSON_PRETTY_PRINT), 0);
     
             // Daten verarbeiten
             foreach ($data['data'] as $key => $value) {
@@ -258,7 +259,7 @@ class Goodwe extends IPSModule
                 // Variablentyp und Profil bestimmen
                 $type = VARIABLETYPE_STRING;
                 $profile = "";
-                if (isset($variable['unit'])) {
+                if (isset($variable['unit']) && !empty($variable['unit'])) {
                     $this->SendDebug("FetchWallboxData", "Unit gefunden: '{$variable['unit']}' für Key '{$variable['key']}'", 0);
                     $details = $this->GetVariableDetails($variable['unit']);
                     if ($details !== null) {
