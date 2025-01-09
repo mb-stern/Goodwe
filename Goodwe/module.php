@@ -531,13 +531,6 @@ class Goodwe extends IPSModule
     private function GetWbVariables(): array
     {
         $this->SendDebug("GetWbVariables", "Lese Property WallboxVariableMapping...", 0);
-        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
-    
-        // Falls das Decoding fehlschlägt oder ungültig ist, wird ein leeres Array verwendet
-        if ($mapping === null || !is_array($mapping)) {
-            $this->SendDebug("GetWbVariables", "JSON-Decode fehlgeschlagen. Initialisiere leeres Mapping.", 0);
-            $mapping = [];
-        }
     
         // Standardwerte definieren
         $defaultMapping = [
@@ -594,37 +587,17 @@ class Goodwe extends IPSModule
         ];
 
 
-        foreach ($defaultMapping as $defaultEntry) {
-            $exists = false;
-            foreach ($mapping as $entry) {
-                if (
-                    $entry['key'] === $defaultEntry['key'] &&
-                    $entry['name'] === $defaultEntry['name'] &&
-                    $entry['unit'] === $defaultEntry['unit'] &&
-                    $entry['active'] === $defaultEntry['active']
-                ) {
-                    $exists = true;
-                    break;
-                }
-            }
-            if (!$exists) {
-                $mapping[] = $defaultEntry;
-            }
-        }
+        // Mapping überschreiben
+        $this->SendDebug("GetWbVariables", "Überschreibe Mapping mit Standardwerten.", 0);
 
-        // Debug-Ausgabe des endgültigen Mappings
-        $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($mapping), 0);
-
-        // Nur aktualisieren, wenn sich das Mapping geändert hat
-        $currentMapping = $this->ReadPropertyString("WallboxVariableMapping");
-        $newMapping = json_encode($mapping);
-        if ($currentMapping !== $newMapping) {
-            $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
-            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
-            IPS_ApplyChanges($this->InstanceID);
-        }
-
-        return $mapping;
+        // Aktuelles Mapping in die Property schreiben
+        IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($defaultMapping));
+        IPS_ApplyChanges($this->InstanceID);
+    
+        // Debug-Ausgabe des neuen Mappings
+        $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($defaultMapping), 0);
+    
+        return $defaultMapping;
     }
     
     private function GetRegisters()
