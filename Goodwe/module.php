@@ -60,16 +60,16 @@ class Goodwe extends IPSModule
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
+                            $this->RegisterVariableInteger($ident, "WB-" . $variable['name'], $profile, 0);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
+                            $this->RegisterVariableFloat($ident, "WB-" . $variable['name'], $profile, 0);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
+                            $this->RegisterVariableString($ident, "WB-" . $variable['name'], $profile, 0);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, $variable['name'], $profile, 0);
+                            $this->RegisterVariableBoolean($ident, "WB-" . $variable['name'], $profile, 0);
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
