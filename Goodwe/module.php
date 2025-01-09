@@ -190,24 +190,53 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $data = $this->FetchApiData(); // Deine Methode für den API-Abruf
+        $user = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial = $this->ReadPropertyString("WallboxSerial");
     
-        if ($data === null) {
-            $this->SendDebug("FetchWallboxData", "Keine Daten von der API erhalten.", 0);
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
             return;
         }
     
-        foreach ($data as $key => $value) {
-            $ident = "WB_" . $key;
-            $varID = @$this->GetIDForIdent($ident);
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
     
-            if ($varID !== false) {
-                SetValue($varID, $value);
-            } else {
-                $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
+        try {
+            // Login und Datenabruf
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
             }
+    
+            $apiResponse = $this->GoodweFetchData($serial);
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
+            }
+    
+            $data = json_decode($apiResponse, true);
+            if (!isset($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                return;
+            }
+    
+            foreach ($data['data'] as $key => $value) {
+                $ident = "WB_" . $key;
+                $varID = @$this->GetIDForIdent($ident);
+    
+                if ($varID !== false) {
+                    SetValue($varID, $value);
+                } else {
+                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
+                }
+            }
+    
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
-    }    
+    }
     
     private function GoodweFetchData(string $serial): ?string
     {
