@@ -531,13 +531,8 @@ class Goodwe extends IPSModule
 
     private function GetWbVariables(): array
     {
-        // Zuordnungstabelle mit Standardwerten
-        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
-
-        if (empty($mapping)) {
-            // Standardwerte, falls Mapping leer ist
-            $mapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "gugus", "active" => false],
+         $mapping = [
+            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
             ["key" => "state", "name" => "State", "unit" => "", "active" => true],
