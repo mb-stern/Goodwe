@@ -531,8 +531,17 @@ class Goodwe extends IPSModule
 
     private function GetWbVariables(): array
     {
-         {
-            $mapping = [
+        $this->SendDebug("GetWbVariables", "Lese Property WallboxVariableMapping...", 0);
+        $mapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+    
+        // Falls das Decoding fehlschlägt oder ungültig ist, wird ein leeres Array verwendet
+        if ($mapping === null || !is_array($mapping)) {
+            $this->SendDebug("GetWbVariables", "JSON-Decode fehlgeschlagen. Initialisiere leeres Mapping.", 0);
+            $mapping = [];
+        }
+    
+        // Standardwerte definieren
+        $defaultMapping = [
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
@@ -584,13 +593,31 @@ class Goodwe extends IPSModule
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "active" => false],
         ];
- 
-            IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
-            IPS_ApplyChanges($this->InstanceID);
-        }
 
-        return $mapping;
+
+    // Standardwerte mit dem vorhandenen Mapping mergen
+    foreach ($defaultMapping as $defaultEntry) {
+        $exists = false;
+        foreach ($mapping as $entry) {
+            if ($entry['key'] === $defaultEntry['key']) {
+                $exists = true;
+                break;
+            }
+        }
+        if (!$exists) {
+            $mapping[] = $defaultEntry;
+        }
     }
+
+    // Debug-Ausgabe des endgültigen Mappings
+    $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($mapping), 0);
+
+    // Property immer aktualisieren
+    IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
+    IPS_ApplyChanges($this->InstanceID);
+
+    return $mapping;
+}
     
     private function GetRegisters()
     {
