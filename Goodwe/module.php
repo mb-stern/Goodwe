@@ -531,7 +531,8 @@ class Goodwe extends IPSModule
 
     private function GetWbVariables(): array
     {
-         $mapping = [
+         {
+            $mapping = [
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
@@ -583,14 +584,13 @@ class Goodwe extends IPSModule
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "active" => false],
         ];
-
-
-            // Property aktualisieren, falls leer
+ 
             IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
             IPS_ApplyChanges($this->InstanceID);
         }
 
         return $mapping;
+    }
     
     private function GetRegisters()
     {
