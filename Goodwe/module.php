@@ -586,20 +586,30 @@ class Goodwe extends IPSModule
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "active" => false],
         ];
 
+    // Aktuelles Mapping auslesen
+    $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
 
-        // Mapping überschreiben
-        $this->SendDebug("GetWbVariables", "Überschreibe Mapping mit Standardwerten.", 0);
-
-        // Aktuelles Mapping in die Property schreiben
-        IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($defaultMapping));
-        IPS_ApplyChanges($this->InstanceID);
-    
-        // Debug-Ausgabe des neuen Mappings
-        $this->SendDebug("GetWbVariables", "Finales Mapping: " . json_encode($defaultMapping), 0);
-    
-        return $defaultMapping;
+    // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
+    if ($currentMapping === null || !is_array($currentMapping)) {
+        $this->SendDebug("GetWbVariables", "Aktuelles Mapping ungültig, setze Standardwerte.", 0);
+        $currentMapping = [];
     }
-    
+
+    // Vergleich der Mappings
+    $newMapping = json_encode($defaultMapping);
+    $currentMappingJson = json_encode($currentMapping);
+
+    if ($currentMappingJson !== $newMapping) {
+        $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
+        IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
+        IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
+    } else {
+        $this->SendDebug("GetWbVariables", "Mapping unverändert. Keine Aktion erforderlich.", 0);
+    }
+
+    return $defaultMapping;
+    }
+        
     private function GetRegisters()
     {
         return [
