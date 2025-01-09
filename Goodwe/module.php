@@ -27,80 +27,60 @@ class Goodwe extends IPSModule
     {
         parent::ApplyChanges();
     
-        // Lese die ausgewählten Register
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("ApplyChanges", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
+        // Lese die Konfiguration
+        $mapping = $this->GetWbVariables(); // Ruft das Mapping auf, wie du es definiert hast
     
-        // Liste der aktuellen Register-Identifikatoren
         $currentIdents = [];
     
-        foreach ($selectedRegisters as &$selectedRegister) {
-            if (is_string($selectedRegister['address'])) {
-                $decodedRegister = json_decode($selectedRegister['address'], true);
-                if ($decodedRegister !== null) {
-                    $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                    continue;
-                }
+        // Variablen anlegen oder aktualisieren
+        foreach ($mapping as $variable) {
+            if (!$variable['active']) {
+                continue; // Überspringe inaktive Variablen
             }
     
-            $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
-            if ($variableDetails === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
-                continue;
-            }
-    
-            $ident = "Addr" . $selectedRegister['address'];
+            $ident = "WB_" . $variable['key'];
             $currentIdents[] = $ident;
-
-            $this->CreateProfile();
     
+            // Details für das Variablenprofil abrufen
+            $details = $this->GetVariableDetails($variable['unit']);
+            $type = VARIABLETYPE_STRING;
+            $profile = "";
+    
+            if ($details !== null) {
+                $type = $details['type'];
+                $profile = $details['profile'];
+            }
+    
+            // Variable registrieren, falls sie nicht existiert
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($variableDetails['type']) {
+                switch ($type) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableInteger($ident, $variable['name'], $profile, 0);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableFloat($ident, $variable['name'], $profile, 0);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                        $this->RegisterVariableString($ident, $variable['name'], $profile, 0);
                         break;
-                    default:
-                        $this->SendDebug("ApplyChanges", "Unbekannter Variablentyp für {$selectedRegister['unit']}.", 0);
-                        continue 2;
+                    case VARIABLETYPE_BOOLEAN:
+                        $this->RegisterVariableBoolean($ident, $variable['name'], $profile, 0);
+                        break;
                 }
-                $this->SendDebug("ApplyChanges", "Variable erstellt: $ident mit Name {$selectedRegister['name']} und Profil {$variableDetails['profile']}.", 0);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident existiert bereits.", 0);
-            }
-           // Position der Variable setzen
-           $variableID = $this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, $selectedRegister['pos']);
-            } else {
-                $this->SendDebug("ApplyChanges", "Variable mit Ident $ident nicht gefunden, Position konnte nicht gesetzt werden.", 0);
             }
         }
     
-        // Variablen löschen, die nicht mehr in der aktuellen Liste sind
+        // Variablen löschen, die nicht mehr im aktuellen Mapping enthalten sind
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
             if ($object['ObjectType'] === OBJECTTYPE_VARIABLE && !in_array($object['ObjectIdent'], $currentIdents)) {
                 $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
     
-        // Timer setzen
-        $this->SetTimerInterval("PollerWR",  $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB",  $this->ReadPropertyInteger('PollIntervalWB') * 1000);
-        
-        $this->FetchAll();
+        // Timer setzen, falls erforderlich
+        $pollInterval = $this->ReadPropertyInteger("PollIntervalWB");
+        $this->SetTimerInterval("PollerWB", $pollInterval > 0 ? $pollInterval * 1000 : 0);
     }
     
     public function FetchAll()
@@ -210,103 +190,24 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $user = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
+        $data = $this->FetchApiData(); // Deine Methode für den API-Abruf
     
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        if ($data === null) {
+            $this->SendDebug("FetchWallboxData", "Keine Daten von der API erhalten.", 0);
             return;
         }
     
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+        foreach ($data as $key => $value) {
+            $ident = "WB_" . $key;
+            $varID = @$this->GetIDForIdent($ident);
     
-        try {
-            // Login und Datenabruf
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
+            if ($varID !== false) {
+                SetValue($varID, $value);
+            } else {
+                $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
             }
-    
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
-    
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
-    
-            $mapping = $this->GetWbVariables(); // Zuordnungstabelle abrufen
-            $this->SendDebug("FetchWallboxData", "Mapping Inhalt: " . json_encode($mapping, JSON_PRETTY_PRINT), 0);
-    
-            // Daten verarbeiten
-            foreach ($data['data'] as $key => $value) {
-                $variable = array_filter($mapping, fn($var) => $var['key'] === $key && $var['active']);
-                if (empty($variable)) {
-                    continue; // Überspringen, wenn die Variable deaktiviert ist
-                }
-                $variable = reset($variable); // Erster Eintrag der gefilterten Variablen
-                
-                $this->SendDebug("FetchWallboxData", "Gefundene Variable für Key '$key': " . json_encode($variable), 0);
-                
-                $ident = "WB_" . $key;
-    
-                // Variablentyp und Profil bestimmen
-                $type = VARIABLETYPE_STRING;
-                $profile = "";
-                if (isset($variable['unit']) && !empty($variable['unit'])) {
-                    $this->SendDebug("FetchWallboxData", "Unit gefunden: '{$variable['unit']}' für Key '{$variable['key']}'", 0);
-                    $details = $this->GetVariableDetails($variable['unit']);
-                    if ($details !== null) {
-                        $type = $details['type'];
-                        $profile = $details['profile'];
-                        $this->SendDebug("FetchWallboxData", "Details für Unit '{$variable['unit']}': Typ = $type, Profil = $profile", 0);
-                    } else {
-                        $this->SendDebug("FetchWallboxData", "Keine Details für Unit '{$variable['unit']}' gefunden.", 0);
-                    }
-                } else {
-                    $this->SendDebug("FetchWallboxData", "Keine oder leere Unit für Key '{$variable['key']}' gefunden.", 0);
-                }
-                
-    
-                // Variable registrieren, falls sie noch nicht existiert
-                if (!@$this->GetIDForIdent($ident)) {
-                    switch ($type) {
-                        case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $profile, 0);
-                            break;
-                        case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $profile, 0);
-                            break;
-                        case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $profile, 0);
-                            break;
-                        case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, "WB-" . ucfirst($key), $profile, 0);
-                            break;
-                    }
-                    $this->SendDebug("FetchWallboxData", "Variable $ident mit Profil $profile erstellt.", 0);
-                }
-    
-                // Wert setzen
-                $varID = $this->GetIDForIdent($ident);
-                if ($varID !== false) {
-                    SetValue($varID, $value);
-                } else {
-                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident konnte nicht gefunden oder erstellt werden.", 0);
-                }
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
-    }
+    }    
     
     private function GoodweFetchData(string $serial): ?string
     {
