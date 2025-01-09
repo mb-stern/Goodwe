@@ -614,7 +614,6 @@ class Goodwe extends IPSModule
 
     // Property immer aktualisieren
     IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", json_encode($mapping));
-    IPS_ApplyChanges($this->InstanceID);
 
     return $mapping;
 }
