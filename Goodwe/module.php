@@ -250,19 +250,46 @@ class Goodwe extends IPSModule
                     continue; // Überspringen, wenn die Variable deaktiviert ist
                 }
     
+                $variable = reset($variable); // Erster Eintrag der gefilterten Variablen
                 $ident = "WB_" . $key;
     
-                // Variablentyp bestimmen
-                $type = is_numeric($value) ? VARIABLETYPE_FLOAT : (is_bool($value) ? VARIABLETYPE_BOOLEAN : VARIABLETYPE_STRING);
+                // Variablentyp und Profil bestimmen
+                $type = VARIABLETYPE_STRING;
+                $profile = "";
+                if (isset($variable['unit']) && !empty($variable['unit'])) {
+                    $details = $this->GetVariableDetails($variable['unit']);
+                    if ($details !== null) {
+                        $type = $details['type'];
+                        $profile = $details['profile'];
+                    }
+                }
     
-                // Variable erstellen oder aktualisieren
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->MaintainVariable($ident, "WB-" . ucfirst($key), $type, "", 0, true);
+                // Variable registrieren, falls sie noch nicht existiert
+                if (!@$this->GetIDForIdent($ident)) {
+                    switch ($type) {
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($ident, "WB-" . ucfirst($key), $profile, 0);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($ident, "WB-" . ucfirst($key), $profile, 0);
+                            break;
+                        case VARIABLETYPE_STRING:
+                            $this->RegisterVariableString($ident, "WB-" . ucfirst($key), $profile, 0);
+                            break;
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($ident, "WB-" . ucfirst($key), $profile, 0);
+                            break;
+                    }
+                    $this->SendDebug("FetchWallboxData", "Variable $ident mit Profil $profile erstellt.", 0);
                 }
     
                 // Wert setzen
-                SetValue($this->GetIDForIdent($ident), $value);
+                $varID = $this->GetIDForIdent($ident);
+                if ($varID !== false) {
+                    SetValue($varID, $value);
+                } else {
+                    $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident konnte nicht gefunden oder erstellt werden.", 0);
+                }
             }
     
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten verarbeitet und gespeichert.", 0);
@@ -270,7 +297,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
-
+    
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
@@ -508,7 +535,7 @@ class Goodwe extends IPSModule
             ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
             ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
-            ["key" => "model", "name" => "Modell", "unit" => "", "active" => false],
+            ["key" => "model", "name" => "Modell", "unit" => "", "active" => false], 
             ["key" => "fireware", "name" => "Firmware", "unit" => "", "active" => false],
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
