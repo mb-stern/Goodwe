@@ -56,7 +56,6 @@ class Goodwe extends IPSModule
                     }
                 }
     
-                // Variable erstellen oder aktualisieren
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
