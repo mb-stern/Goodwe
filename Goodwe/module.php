@@ -493,6 +493,10 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_mode":
+                return ["profile" => "Goodwe.WB_Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_state":
+                return ["profile" => "Goodwe.WB_State", "type" => VARIABLETYPE_INTEGER];
             case "String":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
@@ -551,8 +555,8 @@ class Goodwe extends IPSModule
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
-            ["key" => "state", "name" => "Ladekabel", "unit" => "Goodwe.WB_State", "active" => true],
-            ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
+            ["key" => "state", "name" => "Ladekabel", "unit" => "", "active" => true],
+            ["key" => "status", "name" => "Status", "unit" => "wb_state", "active" => false],
             ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
             ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
@@ -565,7 +569,7 @@ class Goodwe extends IPSModule
             ["key" => "current", "name" => "Strom", "unit" => "A", "active" => true],
             ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "Goodwe.WB_Mode", "active" => true],
+            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "wb_mode", "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
             ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
             ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
