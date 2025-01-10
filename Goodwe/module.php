@@ -26,6 +26,8 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        this->CreateProfile();
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
