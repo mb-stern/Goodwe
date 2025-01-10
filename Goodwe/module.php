@@ -509,6 +509,20 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Zwangsladung', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
         }
+        if (!IPS_VariableProfileExists('Goodwe.WB_State')){
+            IPS_CreateVariableProfile('Goodwe.WB_State', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '2', 'gesteckt und lädt', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_State', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Mode')){
+            IPS_CreateVariableProfile('Goodwe.WB_Mode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PC & Batterie', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
+        }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie', '', -1);
@@ -537,7 +551,7 @@ class Goodwe extends IPSModule
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
-            ["key" => "state", "name" => "Ladekabel", "unit" => "", "active" => true],
+            ["key" => "state", "name" => "Ladekabel", "unit" => "Goodwe.WB_State", "active" => true],
             ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
             ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
@@ -551,7 +565,7 @@ class Goodwe extends IPSModule
             ["key" => "current", "name" => "Strom", "unit" => "A", "active" => true],
             ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "", "active" => true],
+            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "Goodwe.WB_Mode", "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
             ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
             ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
