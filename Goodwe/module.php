@@ -55,22 +55,23 @@ class Goodwe extends IPSModule
                     if ($details !== null) {
                         $type = $details['type'];
                         $profile = $details['profile'];
+                        $pos = $details['pos'];
                     }
                 }
 
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, "WB-" . $variable['name'], $profile, 0);
+                            $this->RegisterVariableInteger($ident, "WB-" . $variable['name'], $profile, $pos['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, "WB-" . $variable['name'], $profile, 0);
+                            $this->RegisterVariableFloat($ident, "WB-" . $variable['name'], $profile, $pos['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, "WB-" . $variable['name'], $profile, 0);
+                            $this->RegisterVariableString($ident, "WB-" . $variable['name'], $profile, $pos['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, "WB-" . $variable['name'], $profile, 0);
+                            $this->RegisterVariableBoolean($ident, "WB-" . $variable['name'], $profile, $pos['pos']);
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
@@ -840,7 +841,7 @@ class Goodwe extends IPSModule
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
-            ["key" => "state", "name" => "Ladekabel", "unit" => "wb_state", "active" => true],
+            ["key" => "state", "name" => "Ladekabel", "unit" => "wb_state", "pos" => 6, "active" => true],
             ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
             ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
@@ -849,12 +850,12 @@ class Goodwe extends IPSModule
             ["key" => "fireware", "name" => "Firmware", "unit" => "", "active" => false],
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
-            ["key" => "chargeEnergy", "name" => "Geladene Energie", "unit" => "kWh", "active" => true],
-            ["key" => "power", "name" => "Leistung", "unit" => "kW", "active" => true],
-            ["key" => "current", "name" => "Strom", "unit" => "A", "active" => true],
+            ["key" => "chargeEnergy", "name" => "Geladene Energie", "unit" => "kWh", "pos" => 8, "active" => true],
+            ["key" => "power", "name" => "Leistung", "unit" => "kW", "pos" => 4, "active" => true],
+            ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 7, "active" => true],
             ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "wb_mode", "active" => true],
+            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "wb_mode", "pos" => 5, "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
             ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
             ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
