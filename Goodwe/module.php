@@ -80,8 +80,8 @@ class Goodwe extends IPSModule
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB-Ladeleistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
-                ['ident' => 'WB_ChargeMode', 'name' => 'WB-Lademodus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB-Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode', 'name' => 'WB-Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
 
             foreach ($specialVariables as $var) {
@@ -850,11 +850,11 @@ class Goodwe extends IPSModule
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 8, "active" => true],
-            ["key" => "power", "name" => "Leistung", "unit" => "kW", "pos" => 4, "active" => true],
+            ["key" => "power", "name" => "Leistung Ist", "unit" => "kW", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 7, "active" => true],
             ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
-            ["key" => "chargeMode", "name" => "Lademodus", "unit" => "wb_mode", "pos" => 5, "active" => true],
+            ["key" => "chargeMode", "name" => "Modus Ist", "unit" => "wb_mode", "pos" => 5, "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
             ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
             ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
