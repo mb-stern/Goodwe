@@ -218,17 +218,29 @@ class Goodwe extends IPSModule
                 }
                 break;
 
-            case 'WB_ChargePower':
-                $chargePower = round($value, 1);
-                $data = [
-                    'sn' => $serial,
-                    'charge_power' => $chargePower
-                ];
-                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                if ($response !== null) {
-                    SetValue($this->GetIDForIdent($ident), $value);
-                }
-                break;
+                case 'WB_ChargePower':
+                    // Begrenzung des Wertes zwischen 4.1 und 11
+                    $chargePower = round($value, 1);
+                    if ($chargePower < 4.1) {
+                        $chargePower = 4.1;
+                    } elseif ($chargePower > 11) {
+                        $chargePower = 11;
+                    }
+                
+                    // Daten für die API-Anfrage vorbereiten
+                    $data = [
+                        'sn' => $serial,
+                        'charge_power' => $chargePower
+                    ];
+                
+                    // API-Anfrage senden
+                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                    if ($response !== null) {
+                        // Variable aktualisieren mit dem möglicherweise korrigierten Wert
+                        SetValue($this->GetIDForIdent($ident), $chargePower);
+                    }
+                    break;
+                
     
             default:
                 throw new Exception("Invalid Ident");
