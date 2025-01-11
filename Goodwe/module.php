@@ -766,6 +766,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
             case "W":
                 return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
+            case "dur":
+                return ["profile" => "~Duration", "type" => VARIABLETYPE_INTEGER];
             case "kWh":
                 return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
             case "kW":
@@ -859,7 +861,7 @@ class Goodwe extends IPSModule
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 8, "active" => true],
             ["key" => "power", "name" => "Leistung Ist", "unit" => "kW", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 7, "active" => true],
-            ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
+            ["key" => "time", "name" => "lädt seit", "unit" => "dur", "pos" => 9, "active" => true],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
             ["key" => "chargeMode", "name" => "Modus Ist", "unit" => "wb_mode", "pos" => 5, "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
