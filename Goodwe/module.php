@@ -198,18 +198,25 @@ class Goodwe extends IPSModule
                     SetValue($this->GetIDForIdent($ident), $value);
                 }
                 break;
-    
+        
             case 'WB_ChargeMode':
-                $data = [
-                    'sn' => $serial,
-                    'mode' => $value
-                ];
-                $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
-                if ($response !== null) {
+                // Sicherstellen, dass der Ladevorgang nur gestartet wird, wenn WB_Charging aktiv ist
+                if (GetValue($this->GetIDForIdent('WB_Charging'))) {
+                    $data = [
+                        'sn' => $serial,
+                        'mode' => $value
+                    ];
+                    $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
+                    if ($response !== null) {
+                        SetValue($this->GetIDForIdent($ident), $value);
+                    }
+                } else {
+                    // Nur den Modus speichern, ohne den Ladevorgang zu starten
                     SetValue($this->GetIDForIdent($ident), $value);
+                    $this->SendDebug("RequestAction", "WB_ChargeMode geändert, aber WB_Charging ist nicht aktiv. Ladevorgang wurde nicht gestartet.", 0);
                 }
                 break;
-    
+
             case 'WB_ChargePower':
                 $chargePower = round($value, 1);
                 $data = [
