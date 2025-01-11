@@ -196,22 +196,16 @@ class Goodwe extends IPSModule
                 }
                 break;
 
-                case 'WB_ChargeMode':
-                    $chargePower = GetValue($this->GetIDForIdent('WB_ChargePower'));
-                    if ($chargePower < 4.2) {
-                        $chargePower = 4.2; // Mindestwert für Ladeleistung setzen
-                    }
-                
-                    $data = [
-                        'sn' => $serial,
-                        'charge_power' => round($chargePower, 1), // In kW gerundet
-                        'mode' => $value
-                    ];
-                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                    if ($response !== null) {
-                        SetValue($this->GetIDForIdent($ident), $value);
-                    }
-                    break;
+            case 'WB_ChargeMode':
+                $data = [
+                    'sn' => $serial,
+                    'mode' => $value
+                ];
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
                 
 
             default:
