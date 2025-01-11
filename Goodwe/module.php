@@ -201,7 +201,7 @@ class Goodwe extends IPSModule
                     'sn' => $serial,
                     'mode' => $value
                 ];
-                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StopCharging');
                 if ($response !== null) {
                     SetValue($this->GetIDForIdent($ident), $value);
                 }
