@@ -172,33 +172,30 @@ class Goodwe extends IPSModule
     
         switch ($ident) {
             case 'WB_Charging':
-                // Starten oder Stoppen des Ladevorgangs (v4)
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
-    
-                // Modus immer übergeben
-                $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                $data['mode'] = $mode;
-    
+                
+                // Modus nur beim Starten des Ladens übergeben
+                if ($value) {
+                    $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                    $data['mode'] = $mode;
+                }
+                
                 $response = $this->SendWallboxRequest($data, $endpoint);
-    
-                if ($response !== null && isset($response['code']) && $response['code'] === 0) {
+                if ($response !== null && $response['code'] === "0") {
                     SetValue($this->GetIDForIdent($ident), $value);
                 } else {
-                    $this->SendDebug("RequestAction", "Fehler beim Starten/Stoppen des Ladevorgangs: " . json_encode($response), 0);
+                    $this->SendDebug("RequestAction", "Fehler beim Starten/Stoppen: " . json_encode($response), 0);
                 }
                 break;
     
             case 'WB_ChargeMode':
-                // Lademodus ändern (v4 -> StartCharging)
                 $data = [
                     'sn' => $serial,
                     'mode' => $value
                 ];
-    
                 $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
-    
-                if ($response !== null && isset($response['code']) && $response['code'] === 0) {
+                if ($response !== null && $response['code'] === "0") {
                     SetValue($this->GetIDForIdent($ident), $value);
                 } else {
                     $this->SendDebug("RequestAction", "Fehler beim Ändern des Lademodus: " . json_encode($response), 0);
@@ -206,16 +203,13 @@ class Goodwe extends IPSModule
                 break;
     
             case 'WB_ChargePower':
-                // Setzen der Ladeleistung (v3)
                 $chargePower = round($value, 1);
                 $data = [
                     'sn' => $serial,
                     'charge_power' => $chargePower
                 ];
-    
                 $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-    
-                if ($response !== null && isset($response['code']) && $response['code'] === 0) {
+                if ($response !== null && $response['code'] === "0") {
                     SetValue($this->GetIDForIdent($ident), $value);
                 } else {
                     $this->SendDebug("RequestAction", "Fehler beim Setzen der Ladeleistung: " . json_encode($response), 0);
