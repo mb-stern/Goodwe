@@ -174,18 +174,12 @@ class Goodwe extends IPSModule
             case 'WB_Charging':
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
-                
-                // Modus nur beim Starten des Ladens übergeben
                 if ($value) {
-                    $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                    $data['mode'] = $mode;
+                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
-                
                 $response = $this->SendWallboxRequest($data, $endpoint);
-                if ($response !== null && $response['code'] === "0") {
+                if ($response !== null) {
                     SetValue($this->GetIDForIdent($ident), $value);
-                } else {
-                    $this->SendDebug("RequestAction", "Fehler beim Starten/Stoppen: " . json_encode($response), 0);
                 }
                 break;
     
@@ -195,10 +189,8 @@ class Goodwe extends IPSModule
                     'mode' => $value
                 ];
                 $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
-                if ($response !== null && $response['code'] === "0") {
+                if ($response !== null) {
                     SetValue($this->GetIDForIdent($ident), $value);
-                } else {
-                    $this->SendDebug("RequestAction", "Fehler beim Ändern des Lademodus: " . json_encode($response), 0);
                 }
                 break;
     
@@ -209,10 +201,8 @@ class Goodwe extends IPSModule
                     'charge_power' => $chargePower
                 ];
                 $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                if ($response !== null && $response['code'] === "0") {
+                if ($response !== null) {
                     SetValue($this->GetIDForIdent($ident), $value);
-                } else {
-                    $this->SendDebug("RequestAction", "Fehler beim Setzen der Ladeleistung: " . json_encode($response), 0);
                 }
                 break;
     
@@ -548,7 +538,7 @@ class Goodwe extends IPSModule
             return null;
         }
     
-        // Login durchführen
+        // Login zur Wallbox
         if (!$this->LoginToWallbox($email, $password)) {
             $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
             return null;
@@ -571,7 +561,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Wiederverwendung der Login-Cookies
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies für Session-Reuse
     
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -584,14 +574,13 @@ class Goodwe extends IPSModule
     
         $decodedResponse = json_decode($response, true);
     
-        // Debug-Ausgabe der Antwort
-        $this->SendDebug("SendWallboxRequest", "Antwort: " . json_encode($decodedResponse), 0);
-    
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
+        // API-Erfolgsprüfung
+        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
             return null;
         }
     
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decodedResponse), 0);
         return $decodedResponse;
     }
     
