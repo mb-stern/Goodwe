@@ -93,7 +93,7 @@ class Goodwe extends IPSModule
         $this->RegisterVariableBoolean('WB_Charging', 'Wallbox Charging', '', 1);
         $this->EnableAction('WB_Charging');
 
-        $this->RegisterVariableFloat('WB_ChargePower', 'Wallbox Charge Power', '~Watt', 2);
+        $this->RegisterVariableFloat('WB_ChargePower', 'Wallbox Charge Power', '~Power', 2);
         $this->EnableAction('WB_ChargePower');
 
         $this->RegisterVariableInteger('WB_ChargeMode', 'Wallbox Charge Mode', 'Goodwe.WB_Mode', 3);
