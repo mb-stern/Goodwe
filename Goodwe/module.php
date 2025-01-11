@@ -185,7 +185,7 @@ class Goodwe extends IPSModule
                 break;
 
             case 'WB_ChargePower':
-                $chargePower = round($value / 1000, 1); // Umrechnung in kW
+                $chargePower = round($value, 1); // Umrechnung in kW
                 $data = [
                     'sn' => $serial,
                     'charge_power' => $chargePower
