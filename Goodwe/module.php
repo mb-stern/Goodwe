@@ -525,7 +525,7 @@ class Goodwe extends IPSModule
             IPS_CreateVariableProfile('Goodwe.WB_Mode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV & Batterie', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
