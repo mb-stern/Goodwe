@@ -76,6 +76,32 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
                 }
             }
+
+            // Spezielle Variablen für Start/Stopp, Ladeleistung und Modus
+            $specialVariables = [
+                ['ident' => 'WB_Charging', 'name' => 'Wallbox Charging', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '', 'pos' => 1],
+                ['ident' => 'WB_ChargePower', 'name' => 'Wallbox Charge Power', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode', 'name' => 'Wallbox Charge Mode', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+            ];
+
+            foreach ($specialVariables as $var) {
+                $wbCurrentIdents[] = $var['ident'];
+                if (!@$this->GetIDForIdent($var['ident'])) {
+                    switch ($var['type']) {
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                    }
+                    $this->EnableAction($var['ident']);
+                    $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: {$var['ident']} mit Profil {$var['profile']}.", 0);
+                }
+            }
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
         }
@@ -89,16 +115,6 @@ class Goodwe extends IPSModule
             }
         }
 
-        // 2. Variablen für Start/Stopp und Ladeleistung erstellen
-        $this->RegisterVariableBoolean('WB_Charging', 'Wallbox Charging', '', 1);
-        $this->EnableAction('WB_Charging');
-
-        $this->RegisterVariableFloat('WB_ChargePower', 'Wallbox Charge Power', '~Power', 2);
-        $this->EnableAction('WB_ChargePower');
-
-        $this->RegisterVariableInteger('WB_ChargeMode', 'Wallbox Charge Mode', 'Goodwe.WB_Mode', 3);
-        $this->EnableAction('WB_ChargeMode');
-            
         // 2. Verarbeitung der Registervariablen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
