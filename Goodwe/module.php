@@ -532,8 +532,10 @@ class Goodwe extends IPSModule
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
+        // API-URL vorbereiten
         $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
     
+        // Request-Body erstellen
         $body = "str=" . urlencode(json_encode([
             "api" => $endpoint,
             "param" => $data
@@ -541,6 +543,7 @@ class Goodwe extends IPSModule
     
         $this->SendDebug("SendWallboxRequest", "Sende Anfrage: URL=$url, Daten=" . json_encode($data), 0);
     
+        // CURL-Session initialisieren
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -550,16 +553,20 @@ class Goodwe extends IPSModule
         ]);
         curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
     
+        // Anfrage senden und Antwort empfangen
         $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
     
-        if ($response === false) {
+        if ($response === false || $httpCode !== 200) {
             $this->SendDebug("SendWallboxRequest", "Fehler bei der Anfrage: " . curl_error($ch), 0);
             return null;
         }
     
+        // Antwort dekodieren
         $responseData = json_decode($response, true);
     
+        // Fehler oder Erfolg prüfen
         if (isset($responseData['hasError']) && $responseData['hasError']) {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($responseData), 0);
             return null;
@@ -568,22 +575,25 @@ class Goodwe extends IPSModule
     
             // Werte in Variablen setzen
             if (isset($data['charge_power'])) {
-                $chargePowerID = $this->GetIDForIdent('WB_ChargePower');
-                SetValue($chargePowerID, $data['charge_power']);
+                $chargePowerID = @$this->GetIDForIdent('WB_ChargePower');
+                if ($chargePowerID !== false) {
+                    SetValue($chargePowerID, $data['charge_power']);
+                    $this->SendDebug("SendWallboxRequest", "Variable WB_ChargePower auf {$data['charge_power']} gesetzt.", 0);
+                }
             }
     
             if (isset($data['type'])) {
-                $chargeModeID = $this->GetIDForIdent('WB_ChargeMode');
-                SetValue($chargeModeID, $data['type']);
+                $chargeModeID = @$this->GetIDForIdent('WB_ChargeMode');
+                if ($chargeModeID !== false) {
+                    SetValue($chargeModeID, $data['type']);
+                    $this->SendDebug("SendWallboxRequest", "Variable WB_ChargeMode auf {$data['type']} gesetzt.", 0);
+                }
             }
     
             return $responseData;
         }
     }
     
-        return $decodedResponse;
-    }
-
     private function LoginToWallbox(string $email, string $password): bool
     {
         $headers = [
