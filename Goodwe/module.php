@@ -530,54 +530,55 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function SendWallboxRequest(array $data, string $endpoint, string $ident = null)
+    private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
-        $url = "https://eu.semsportal.com/GopsApi/Post?s=" . urlencode($endpoint);
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0",
-        ];
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
     
-        $body = json_encode($data);
+        $body = "str=" . urlencode(json_encode([
+            "api" => $endpoint,
+            "param" => $data
+        ]));
     
-        $this->SendDebug("SendWallboxRequest", "Sende Anfrage: URL=$url, Daten=$body", 0);
+        $this->SendDebug("SendWallboxRequest", "Sende Anfrage: URL=$url, Daten=" . json_encode($data), 0);
     
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies verwenden
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8"
+        ]);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
     
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
     
-        if ($response === false || $httpCode !== 200) {
-            $this->SendDebug("SendWallboxRequest", "HTTP-Fehler: Code $httpCode", 0);
+        if ($response === false) {
+            $this->SendDebug("SendWallboxRequest", "Fehler bei der Anfrage: " . curl_error($ch), 0);
             return null;
         }
     
         $responseData = json_decode($response, true);
-        if ($responseData === null || !is_array($responseData)) {
-            $this->SendDebug("SendWallboxRequest", "Ungültige API-Antwort: $response", 0);
-            return null;
-        }
     
-        $this->SendDebug("SendWallboxRequest", "API-Antwort: " . json_encode($responseData), 0);
-    
-        // Erfolg prüfen
-        if (isset($responseData['code']) && $responseData['code'] === 0) {
-            $this->SendDebug("SendWallboxRequest", "Erfolg: " . $responseData['msg'], 0);
-            if ($ident !== null) {
-                SetValue($this->GetIDForIdent($ident), $data['charge_power']);
-                $this->SendDebug("SendWallboxRequest", "Variable $ident auf {$data['charge_power']} gesetzt.", 0);
-            }
-        } else {
+        if (isset($responseData['hasError']) && $responseData['hasError']) {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($responseData), 0);
-        }
+            return null;
+        } else {
+            $this->SendDebug("SendWallboxRequest", "Erfolg in der API-Antwort: " . json_encode($responseData), 0);
     
-        return $responseData;
+            // Werte in Variablen setzen
+            if (isset($data['charge_power'])) {
+                $chargePowerID = $this->GetIDForIdent('WB_ChargePower');
+                SetValue($chargePowerID, $data['charge_power']);
+            }
+    
+            if (isset($data['type'])) {
+                $chargeModeID = $this->GetIDForIdent('WB_ChargeMode');
+                SetValue($chargeModeID, $data['type']);
+            }
+    
+            return $responseData;
+        }
     }
     
     private function LoginToWallbox(string $email, string $password): bool
