@@ -540,7 +540,7 @@ class Goodwe extends IPSModule
             return null;
         }
     
-        // Zuerst einloggen
+        // Login durchführen
         if (!$this->LoginToWallbox($email, $password)) {
             $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
             return null;
@@ -575,6 +575,9 @@ class Goodwe extends IPSModule
         }
     
         $decodedResponse = json_decode($response, true);
+    
+        // Debug-Ausgabe der Antwort
+        $this->SendDebug("SendWallboxRequest", "Antwort: " . json_encode($decodedResponse), 0);
     
         if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
