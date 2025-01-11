@@ -221,8 +221,8 @@ class Goodwe extends IPSModule
                 case 'WB_ChargePower':
                     // Begrenzung des Wertes zwischen 4.1 und 11
                     $chargePower = round($value, 1);
-                    if ($chargePower < 4.1) {
-                        $chargePower = 4.1;
+                    if ($chargePower < 4.2) {
+                        $chargePower = 4.2;
                     } elseif ($chargePower > 11) {
                         $chargePower = 11;
                     }
