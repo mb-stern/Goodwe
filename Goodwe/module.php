@@ -834,7 +834,7 @@ class Goodwe extends IPSModule
 
     private function GetWbVariables(): array
     {
-        $this->SendDebug("GetWbVariables", "Lese Property WallboxVariableMapping...", 0);
+        //$this->SendDebug("GetWbVariables", "Lese Property WallboxVariableMapping...", 0);
     
         // Standardwerte definieren
         $defaultMapping = [
@@ -908,7 +908,7 @@ class Goodwe extends IPSModule
         IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
         IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
     } else {
-        $this->SendDebug("GetWbVariables", "Mapping unverändert. Keine Aktion erforderlich.", 0);
+        //$this->SendDebug("GetWbVariables", "Mapping unverändert. Keine Aktion erforderlich.", 0);
     }
 
     return $defaultMapping;
