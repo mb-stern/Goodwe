@@ -200,7 +200,10 @@ class Goodwe extends IPSModule
                 break;
         
             case 'WB_ChargeMode':
-                // Sicherstellen, dass der Ladevorgang nur gestartet wird, wenn WB_Charging aktiv ist
+                // Modus immer ändern
+                SetValue($this->GetIDForIdent($ident), $value);
+        
+                // Laden nur starten, wenn WB_Charging aktiv ist
                 if (GetValue($this->GetIDForIdent('WB_Charging'))) {
                     $data = [
                         'sn' => $serial,
@@ -208,12 +211,10 @@ class Goodwe extends IPSModule
                     ];
                     $response = $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
                     if ($response !== null) {
-                        SetValue($this->GetIDForIdent($ident), $value);
+                        $this->SendDebug("RequestAction", "WB_ChargeMode geändert und Ladevorgang gestartet.", 0);
                     }
                 } else {
-                    // Nur den Modus speichern, ohne den Ladevorgang zu starten
-                    SetValue($this->GetIDForIdent($ident), $value);
-                    $this->SendDebug("RequestAction", "WB_ChargeMode geändert, aber WB_Charging ist nicht aktiv. Ladevorgang wurde nicht gestartet.", 0);
+                    $this->SendDebug("RequestAction", "WB_ChargeMode geändert, aber WB_Charging ist nicht aktiv. Kein Ladevorgang gestartet.", 0);
                 }
                 break;
 
