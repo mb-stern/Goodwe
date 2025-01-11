@@ -79,7 +79,7 @@ class Goodwe extends IPSModule
 
             // Spezielle Variablen für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
-                ['ident' => 'WB_Charging', 'name' => 'WB-Start/Stopp', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '', 'pos' => 1],
+                ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
                 ['ident' => 'WB_ChargePower', 'name' => 'WB-Ladeleistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
                 ['ident' => 'WB_ChargeMode', 'name' => 'WB-Lademodus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
