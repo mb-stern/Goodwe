@@ -241,7 +241,6 @@ class Goodwe extends IPSModule
                     }
                     break;
                 
-    
             default:
                 throw new Exception("Invalid Ident");
         }
