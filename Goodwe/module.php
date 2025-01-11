@@ -80,7 +80,7 @@ class Goodwe extends IPSModule
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB-Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB-Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
                 ['ident' => 'WB_ChargeMode', 'name' => 'WB-Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
 
@@ -811,6 +811,13 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Power')){
+            IPS_CreateVariableProfile('Goodwe.WB_Power', VARIABLETYPE_FLOAT);
+            IPS_SetVariableProfileValues("WPLUX.Pres", 4.2, 11, 0.1); //Min, Max, Schritt
+            IPS_SetVariableProfileDigits("WPLUX.Pres", 1); //Nachkommastellen
+            IPS_SetVariableProfileText("WPLUX.Pres", "", " kW"); //Präfix, Suffix
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
