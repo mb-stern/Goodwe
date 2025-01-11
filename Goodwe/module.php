@@ -185,7 +185,7 @@ class Goodwe extends IPSModule
                 break;
 
             case 'WB_ChargePower':
-                $chargePower = round($value, 1); // Umrechnung in kW
+                $chargePower = round($value, 1);
                 $data = [
                     'sn' => $serial,
                     'charge_power' => $chargePower
@@ -532,54 +532,54 @@ class Goodwe extends IPSModule
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
-        $email = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
     
-        if (empty($email) || empty($password)) {
-            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
-            return null;
-        }
+        $body = "str=" . urlencode(json_encode([
+            "api" => $endpoint,
+            "param" => $data
+        ]));
     
-        // Zuerst einloggen
-        if (!$this->LoginToWallbox($email, $password)) {
-            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
-            return null;
-        }
+        $this->SendDebug("SendWallboxRequest", "Sende Anfrage: URL=$url, Daten=" . json_encode($data), 0);
     
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        ];
-    
-        $body = json_encode([
-            "str" => json_encode([
-                "api" => $endpoint,
-                "param" => $data
-            ])
-        ]);
-    
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
+        $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Wiederverwendung der Login-Cookies
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8"
+        ]);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
     
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
     
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
+        if ($response === false) {
+            $this->SendDebug("SendWallboxRequest", "Fehler bei der Anfrage: " . curl_error($ch), 0);
             return null;
         }
     
-        $decodedResponse = json_decode($response, true);
+        $responseData = json_decode($response, true);
     
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
-            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
+        if (isset($responseData['hasError']) && $responseData['hasError']) {
+            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($responseData), 0);
             return null;
+        } else {
+            $this->SendDebug("SendWallboxRequest", "Erfolg in der API-Antwort: " . json_encode($responseData), 0);
+    
+            // Werte in Variablen setzen
+            if (isset($data['charge_power'])) {
+                $chargePowerID = $this->GetIDForIdent('WB_ChargePower');
+                SetValue($chargePowerID, $data['charge_power']);
+            }
+    
+            if (isset($data['type'])) {
+                $chargeModeID = $this->GetIDForIdent('WB_ChargeMode');
+                SetValue($chargeModeID, $data['type']);
+            }
+    
+            return $responseData;
         }
+    }
     
         return $decodedResponse;
     }
