@@ -814,9 +814,9 @@ class Goodwe extends IPSModule
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Power')){
             IPS_CreateVariableProfile('Goodwe.WB_Power', VARIABLETYPE_FLOAT);
-            IPS_SetVariableProfileValues("Goodwe.WB_Power", 4.2, 11, 0.1); //Min, Max, Schritt
-            IPS_SetVariableProfileDigits("Goodwe.WB_Power", 1); //Nachkommastellen
-            IPS_SetVariableProfileText("Goodwe.WB_Power", "", " kW"); //Präfix, Suffix
+            IPS_SetVariableProfileValues('Goodwe.WB_Power', 4.2, 11, 0.1); //Min, Max, Schritt
+            IPS_SetVariableProfileDigits('Goodwe.WB_Power', 1); //Nachkommastellen
+            IPS_SetVariableProfileText('Goodwe.WB_Power', "", " kW"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
