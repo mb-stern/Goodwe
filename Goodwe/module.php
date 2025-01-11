@@ -77,7 +77,7 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Spezielle Variablen für Start/Stopp, Ladeleistung und Modus
+            // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
                 ['ident' => 'WB_ChargePower', 'name' => 'WB-Ladeleistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => '~Power', 'pos' => 2],
@@ -849,7 +849,7 @@ class Goodwe extends IPSModule
             ["key" => "fireware", "name" => "Firmware", "unit" => "", "active" => false],
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
-            ["key" => "chargeEnergy", "name" => "Geladene Energie", "unit" => "kWh", "pos" => 8, "active" => true],
+            ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 8, "active" => true],
             ["key" => "power", "name" => "Leistung", "unit" => "kW", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 7, "active" => true],
             ["key" => "time", "name" => "Zeit", "unit" => "", "active" => false],
