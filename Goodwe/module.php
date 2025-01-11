@@ -33,23 +33,23 @@ class Goodwe extends IPSModule
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial = $this->ReadPropertyString("WallboxSerial");
-    
+
         // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
         $wbCurrentIdents = [];
         if (!empty($user) && !empty($password) && !empty($serial)) {
             $mapping = $this->GetWbVariables();
-    
+
             foreach ($mapping as $variable) {
                 if (!$variable['active']) {
                     continue; // Überspringen, wenn die Variable deaktiviert ist
                 }
-    
+
                 $ident = "WB_" . $variable['key'];
                 $wbCurrentIdents[] = $ident;
-    
+
                 $type = VARIABLETYPE_STRING;
                 $profile = "";
-    
+
                 if (!empty($variable['unit'])) {
                     $details = $this->GetVariableDetails($variable['unit']);
                     if ($details !== null) {
@@ -57,7 +57,7 @@ class Goodwe extends IPSModule
                         $profile = $details['profile'];
                     }
                 }
-    
+
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
@@ -79,7 +79,7 @@ class Goodwe extends IPSModule
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
         }
-    
+
         // Nicht mehr benötigte Wallbox-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
@@ -88,7 +88,17 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Wallbox-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-    
+
+        // 2. Variablen für Start/Stopp und Ladeleistung erstellen
+        $this->RegisterVariableBoolean('WB_Charging', 'Wallbox Charging', '', 1);
+        $this->EnableAction('WB_Charging');
+
+        $this->RegisterVariableFloat('WB_ChargePower', 'Wallbox Charge Power', '~Watt', 2);
+        $this->EnableAction('WB_ChargePower');
+
+        $this->RegisterVariableInteger('WB_ChargeMode', 'Wallbox Charge Mode', 'Goodwe.WB_Mode', 3);
+        $this->EnableAction('WB_ChargeMode');
+            
         // 2. Verarbeitung der Registervariablen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
@@ -150,7 +160,59 @@ class Goodwe extends IPSModule
         $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     }
-    
+
+    public function RequestAction($ident, $value)
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($serial)) {
+            $this->SendDebug("RequestAction", "Seriennummer fehlt, Aktion abgebrochen.", 0);
+            return;
+        }
+
+        switch ($ident) {
+            case 'WB_Charging':
+                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $data = ['sn' => $serial];
+                if ($value) {
+                    $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                    $data['mode'] = $mode;
+                }
+                $response = $this->SendWallboxRequest($data, $endpoint);
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
+
+            case 'WB_ChargePower':
+                $chargePower = round($value / 1000, 1); // Umrechnung in kW
+                $data = [
+                    'sn' => $serial,
+                    'charge_power' => $chargePower
+                ];
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
+
+            case 'WB_ChargeMode':
+                $data = [
+                    'sn' => $serial,
+                    'charge_power' => GetValue($this->GetIDForIdent('WB_ChargePower')),
+                    'mode' => $value
+                ];
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
+
+            default:
+                throw new Exception("Invalid Ident");
+        }
+    }
+
     public function FetchAll()
     {
         $this->FetchWallboxData();
@@ -370,6 +432,193 @@ class Goodwe extends IPSModule
         }
 
         $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
+        return true;
+    }
+
+    public function StartCharging()
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($serial)) {
+            $this->SendDebug("StartCharging", "Keine Seriennummer angegeben.", 0);
+            return;
+        }
+
+        $mode = GetValue($this->GetIDForIdent("ChargingMode")); // Aktuellen Modus auslesen
+
+        $requestData = [
+            "sn" => $serial,
+            "mode" => $mode // Den ausgewählten Lade-Modus an die API übergeben
+        ];
+
+        $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StartCharging");
+        if ($response) {
+            $this->SendDebug("StartCharging", "Ladevorgang gestartet mit Modus $mode.", 0);
+            SetValue($this->GetIDForIdent("ChargingState"), true); // Ladezustand auf aktiv setzen
+        } else {
+            $this->SendDebug("StartCharging", "Fehler beim Starten des Ladevorgangs.", 0);
+        }
+    }
+
+    public function StopCharging()
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($serial)) {
+            $this->SendDebug("StopCharging", "Keine Seriennummer angegeben.", 0);
+            return;
+        }
+
+        $requestData = [
+            "sn" => $serial
+        ];
+
+        $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StopCharging");
+        if ($response) {
+            $this->SendDebug("StopCharging", "Ladevorgang gestoppt.", 0);
+            SetValue($this->GetIDForIdent("ChargingState"), false); // Ladezustand auf inaktiv setzen
+        } else {
+            $this->SendDebug("StopCharging", "Fehler beim Stoppen des Ladevorgangs.", 0);
+        }
+    }
+    
+    public function SetChargingPower(float $power)
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($serial)) {
+            $this->SendDebug("SetChargingPower", "Keine Seriennummer angegeben.", 0);
+            return;
+        }
+
+        $chargePowerKW = round($power / 1000, 1); // Watt in Kilowatt umrechnen
+
+        $requestData = [
+            "sn" => $serial,
+            "charge_power" => $chargePowerKW
+        ];
+
+        $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
+        if ($response) {
+            $this->SendDebug("SetChargingPower", "Ladeleistung auf {$chargePowerKW} kW gesetzt.", 0);
+            SetValue($this->GetIDForIdent("ChargingPower"), $power);
+        } else {
+            $this->SendDebug("SetChargingPower", "Fehler beim Setzen der Ladeleistung.", 0);
+        }
+    }
+
+    public function SetChargingMode(int $mode)
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($serial)) {
+            $this->SendDebug("SetChargingMode", "Keine Seriennummer angegeben.", 0);
+            return;
+        }
+
+        $requestData = [
+            "sn" => $serial,
+            "mode" => $mode
+        ];
+
+        $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
+        if ($response) {
+            $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
+            SetValue($this->GetIDForIdent("ChargingMode"), $mode);
+        } else {
+            $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
+        }
+    }
+
+    private function SendWallboxRequest(array $data, string $endpoint): ?array
+    {
+        $email = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+    
+        if (empty($email) || empty($password)) {
+            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
+            return null;
+        }
+    
+        // Zuerst einloggen
+        if (!$this->LoginToWallbox($email, $password)) {
+            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+            return null;
+        }
+    
+        $headers = [
+            "Content-Type: application/json",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+    
+        $body = json_encode([
+            "str" => json_encode([
+                "api" => $endpoint,
+                "param" => $data
+            ])
+        ]);
+    
+        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Wiederverwendung der Login-Cookies
+    
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+    
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
+            return null;
+        }
+    
+        $decodedResponse = json_decode($response, true);
+    
+        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
+            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
+            return null;
+        }
+    
+        return $decodedResponse;
+    }
+
+    private function LoginToWallbox(string $email, string $password): bool
+    {
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd" => $password
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
+            return false;
+        }
+
+        $decodedResponse = json_decode($response, true);
+
+        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
+            return false;
+        }
+
+        $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
         return true;
     }
 
