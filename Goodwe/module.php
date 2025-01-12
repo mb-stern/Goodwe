@@ -28,6 +28,9 @@ class Goodwe extends IPSModule
         parent::ApplyChanges();
 
         $this->CreateProfile();
+
+        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
@@ -171,10 +174,6 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-    
-        // 3. Timer setzen
-        $this->SetTimerInterval("PollerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval("PollerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     }
 
     public function RequestAction($ident, $value)
