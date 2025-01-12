@@ -61,16 +61,16 @@ class Goodwe extends IPSModule
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableInteger($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableFloat($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableString($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableBoolean($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
@@ -79,9 +79,9 @@ class Goodwe extends IPSModule
 
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
-                ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB-Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
-                ['ident' => 'WB_ChargeMode', 'name' => 'WB-Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+                ['ident' => 'WB_Charging', 'name' => 'WB - Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
 
             foreach ($specialVariables as $var) {
@@ -390,6 +390,16 @@ class Goodwe extends IPSModule
     
                 if ($varID !== false) {
                     SetValue($varID, $value);
+    
+                    // Aktualisierung von WB_Charging basierend auf workstate
+                    if ($key === "workstate") {
+                        $chargingState = ($value !== 0); // false, wenn 0, true bei allen anderen Werten
+                        $chargingVarID = @$this->GetIDForIdent('WB_Charging');
+                        if ($chargingVarID !== false) {
+                            SetValue($chargingVarID, $chargingState);
+                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
+                        }
+                    }
                 } else {
                     //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
                 }
@@ -782,6 +792,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
             case "wb_mode":
                 return ["profile" => "Goodwe.WB_Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_work":
+                return ["profile" => "Goodwe.WB_Workstate", "type" => VARIABLETYPE_INTEGER];
             case "wb_state":
                 return ["profile" => "Goodwe.WB_State", "type" => VARIABLETYPE_INTEGER];
             case "String":
@@ -817,7 +829,7 @@ class Goodwe extends IPSModule
         if (!IPS_VariableProfileExists('Goodwe.WB_Power')){
             IPS_CreateVariableProfile('Goodwe.WB_Power', VARIABLETYPE_FLOAT);
             IPS_SetVariableProfileValues('Goodwe.WB_Power', 4.2, 11, 0.1); //Min, Max, Schritt
-            IPS_SetVariableProfileDigits('Goodwe.WB_Power', 1); //Nachkommastellen
+            IPS_SetVariableProfileDigits('Goodwe.WB_Power', 2); //Nachkommastellen
             IPS_SetVariableProfileText('Goodwe.WB_Power', "", " kW"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power', 0);
         }
@@ -829,7 +841,15 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Mode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
+            IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang wird startet', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'lädt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang wird beendet', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Watt')){
             IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
@@ -846,56 +866,56 @@ class Goodwe extends IPSModule
     
         // Standardwerte definieren
         $defaultMapping = [
-            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "active" => false],
-            ["key" => "sn", "name" => "Seriennummer", "unit" => "", "active" => false],
-            ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
+            ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "sn", "name" => "Seriennummer", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "name", "name" => "Name", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "state", "name" => "Ladekabel", "unit" => "wb_state", "pos" => 6, "active" => true],
-            ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
-            ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
-            ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
-            ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
-            ["key" => "model", "name" => "Modell", "unit" => "", "active" => false], 
-            ["key" => "fireware", "name" => "Firmware", "unit" => "", "active" => false],
-            ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "active" => false],
-            ["key" => "startStatus", "name" => "Start Status", "unit" => "", "active" => false],
+            ["key" => "status", "name" => "Status", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "workstate", "name" => "Ladestatus", "unit" => "wb_work", "pos" => 10, "active" => true],
+            ["key" => "workstatus", "name" => "Work Status", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "model", "name" => "Modell", "unit" => "", "pos" => 0, "active" => false], 
+            ["key" => "fireware", "name" => "Firmware", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "startStatus", "name" => "Start Status", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 8, "active" => true],
             ["key" => "power", "name" => "Leistung Ist", "unit" => "kW", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 7, "active" => true],
-            ["key" => "time", "name" => "lädt seit", "unit" => "dur", "pos" => 9, "active" => true],
-            ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "active" => false],
+            ["key" => "time", "name" => "lädt seit (sek)", "unit" => "dur", "pos" => 9, "active" => true],
+            ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "chargeMode", "name" => "Modus Ist", "unit" => "wb_mode", "pos" => 5, "active" => true],
-            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "active" => false],
-            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "active" => false],
-            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "active" => false],
-            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "unit" => "", "active" => false],
-            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "unitType", "name" => "Einheitstyp", "unit" => "", "active" => false],
-            ["key" => "factor", "name" => "Faktor", "unit" => "", "active" => false],
-            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "soc", "name" => "State of Charge", "unit" => "", "active" => false],
-            ["key" => "maxEnergy", "name" => "Maximale Energie", "unit" => "", "active" => false],
-            ["key" => "minEnergy", "name" => "Minimale Energie", "unit" => "", "active" => false],
-            ["key" => "finishTime", "name" => "Beendigungszeit", "unit" => "", "active" => false],
-            ["key" => "chargedNow", "name" => "Aktuell Geladen", "unit" => "", "active" => false],
-            ["key" => "dynamicLoad", "name" => "Dynamische Last", "unit" => "", "active" => false],
-            ["key" => "currentLimit", "name" => "Stromlimit", "unit" => "", "active" => false],
-            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "unit" => "", "active" => false],
-            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "unit" => "", "active" => false],
-            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "unit" => "", "active" => false],
-            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "unit" => "", "active" => false],
-            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "unit" => "", "active" => false],
-            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "unit" => "", "active" => false],
-            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "unit" => "", "active" => false],
-            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "unit" => "", "active" => false],
-            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "unit" => "", "active" => false],
-            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "unit" => "", "active" => false],
-            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "unit" => "", "active" => false],
-            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "unit" => "", "active" => false],
-            ["key" => "isPermission", "name" => "Erlaubnis", "unit" => "", "active" => false],
-            ["key" => "local_date", "name" => "Lokales Datum", "unit" => "", "active" => false],
-            ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "active" => false],
-            ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "active" => false],
+            ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "schedule_hour", "name" => "Zeitplan Stunde", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "schedule_minute", "name" => "Zeitplan Minute", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "schedule_total_minute", "name" => "Zeitplan Gesamtzeit (Minuten)", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "max_charge_power", "name" => "Maximale Ladeleistung", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "min_charge_power", "name" => "Minimale Ladeleistung", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "unitType", "name" => "Einheitstyp", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "factor", "name" => "Faktor", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "set_charge_power", "name" => "Eingestellte Ladeleistung", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "soc", "name" => "State of Charge", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "maxEnergy", "name" => "Maximale Energie", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "minEnergy", "name" => "Minimale Energie", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "finishTime", "name" => "Beendigungszeit", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "chargedNow", "name" => "Aktuell Geladen", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "dynamicLoad", "name" => "Dynamische Last", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "currentLimit", "name" => "Stromlimit", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "ensureMinimumChargingPower", "name" => "Mindestladeleistung sicherstellen", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "lockChargingPlug", "name" => "Ladestecker sperren", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "phaseSwitch", "name" => "Phasenumschaltung", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "alwaysReInitiate", "name" => "Immer neu initialisieren", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "schedule_charge_mode", "name" => "Zeitplan Lademodus", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "schedule_charge_power_setted", "name" => "Eingestellte Zeitplan Ladeleistung", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "scheduleSOC", "name" => "Zeitplan SOC", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "scheduleMaxEnergy", "name" => "Zeitplan maximale Energie", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "scheduleMinEnergy", "name" => "Zeitplan minimale Energie", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "scheduleFinishTime", "name" => "Zeitplan Beendigungszeit", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "inverterConnectionStatus", "name" => "Inverterverbindungsstatus", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "midConnectionStatus", "name" => "MID-Verbindungsstatus", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "isPermission", "name" => "Erlaubnis", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "local_date", "name" => "Lokales Datum", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
+            ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
         ];
 
     // Aktuelles Mapping auslesen
@@ -926,43 +946,43 @@ class Goodwe extends IPSModule
     {
         return [
         // Smartmeter
-        ["address" => 36019, "name" => "SM-Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 10],
-        ["address" => 36021, "name" => "SM-Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
-        ["address" => 36023, "name" => "SM-Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
-        ["address" => 36025, "name" => "SM-Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
+        ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 10],
+        ["address" => 36021, "name" => "SM  -Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
+        ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
+        ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
         // Batterie
-        ["address" => 35182, "name" => "BAT-Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
-        ["address" => 35184, "name" => "BAT-Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
-        ["address" => 35206, "name" => "BAT-Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 70],
-        ["address" => 35209, "name" => "BAT-Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
-        ["address" => 37003, "name" => "BAT-Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
-        ["address" => 45356, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
-        ["address" => 45358, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
-        ["address" => 47511, "name" => "BAT-EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
-        ["address" => 47512, "name" => "BAT-EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
-        ["address" => 47903, "name" => "BAT-Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
-        ["address" => 47905, "name" => "BAT-Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
-        ["address" => 47906, "name" => "BAT-Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
-        ["address" => 47907, "name" => "BAT-Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
-        ["address" => 47908, "name" => "BAT-SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
-        ["address" => 47909, "name" => "BAT-SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
+        ["address" => 35182, "name" => "BAT - Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
+        ["address" => 35184, "name" => "BAT - Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
+        ["address" => 35206, "name" => "BAT - Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 70],
+        ["address" => 35209, "name" => "BAT - Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
+        ["address" => 37003, "name" => "BAT - Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
+        ["address" => 45356, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
+        ["address" => 45358, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
+        ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
+        ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
+        ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
+        ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
+        ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
+        ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
+        ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
+        ["address" => 47909, "name" => "BAT - SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
         // Wechslerichter
-        ["address" => 35103, "name" => "WR-Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
-        ["address" => 35104, "name" => "WR-Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
-        ["address" => 35105, "name" => "WR-Leistung String 1", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 220],
-        ["address" => 35107, "name" => "WR-Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
-        ["address" => 35108, "name" => "WR-Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
-        ["address" => 35109, "name" => "WR-Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
-        ["address" => 35174, "name" => "WR-Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
-        ["address" => 35191, "name" => "WR-Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
-        ["address" => 35193, "name" => "WR-Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
-        ["address" => 35301, "name" => "WR-Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
-        ["address" => 35337, "name" => "WR-P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
-        ["address" => 35338, "name" => "WR-P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
-        ["address" => 35339, "name" => "WR-P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
-        ["address" => 35345, "name" => "WR-I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
-        ["address" => 35346, "name" => "WR-I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
-        ["address" => 35347, "name" => "WR-I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
+        ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
+        ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
+        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 220],
+        ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
+        ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
+        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
+        ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
+        ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
+        ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
+        ["address" => 35301, "name" => "WR - Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
+        ["address" => 35337, "name" => "WR - P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
+        ["address" => 35338, "name" => "WR - P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
+        ["address" => 35339, "name" => "WR - P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
+        ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
+        ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
+        ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
     
         ];
     }
