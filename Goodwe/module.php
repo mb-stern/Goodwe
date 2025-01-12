@@ -409,9 +409,10 @@ public function FetchWallboxData()
                         $this->SendDebug("FetchWallboxData", "WB_ChargeMode aktualisiert auf " . (int)$value . ".", 0);
                     }
                 }
-            }
+            } 
+        }
 
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
