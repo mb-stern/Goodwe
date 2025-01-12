@@ -782,6 +782,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
             case "wb_mode":
                 return ["profile" => "Goodwe.WB_Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_work":
+                return ["profile" => "Goodwe.WB_Workstate", "type" => VARIABLETYPE_INTEGER];
             case "wb_state":
                 return ["profile" => "Goodwe.WB_State", "type" => VARIABLETYPE_INTEGER];
             case "String":
@@ -829,7 +831,15 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WRFehler', 0);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Mode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
+            IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang wird startet', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'lädt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang wird beendet', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Watt')){
             IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
@@ -851,7 +861,7 @@ class Goodwe extends IPSModule
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
             ["key" => "state", "name" => "Ladekabel", "unit" => "wb_state", "pos" => 6, "active" => true],
             ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
-            ["key" => "workstate", "name" => "Work State", "unit" => "", "active" => false],
+            ["key" => "workstate", "name" => "Work State", "unit" => "wb_work", "active" => true],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
             ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
             ["key" => "model", "name" => "Modell", "unit" => "", "active" => false], 
