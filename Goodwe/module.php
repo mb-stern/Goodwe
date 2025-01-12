@@ -61,16 +61,16 @@ class Goodwe extends IPSModule
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableInteger($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableFloat($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableString($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, "WB-" . $variable['name'], $profile, $variable['pos']);
+                            $this->RegisterVariableBoolean($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
@@ -79,9 +79,9 @@ class Goodwe extends IPSModule
 
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
-                ['ident' => 'WB_Charging', 'name' => 'WB-Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB-Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
-                ['ident' => 'WB_ChargeMode', 'name' => 'WB-Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+                ['ident' => 'WB_Charging', 'name' => 'WB - Status', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
 
             foreach ($specialVariables as $var) {
@@ -936,43 +936,43 @@ class Goodwe extends IPSModule
     {
         return [
         // Smartmeter
-        ["address" => 36019, "name" => "SM-Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 10],
-        ["address" => 36021, "name" => "SM-Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
-        ["address" => 36023, "name" => "SM-Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
-        ["address" => 36025, "name" => "SM-Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
+        ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 10],
+        ["address" => 36021, "name" => "SM  -Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
+        ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
+        ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
         // Batterie
-        ["address" => 35182, "name" => "BAT-Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
-        ["address" => 35184, "name" => "BAT-Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
-        ["address" => 35206, "name" => "BAT-Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 70],
-        ["address" => 35209, "name" => "BAT-Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
-        ["address" => 37003, "name" => "BAT-Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
-        ["address" => 45356, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
-        ["address" => 45358, "name" => "BAT-Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
-        ["address" => 47511, "name" => "BAT-EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
-        ["address" => 47512, "name" => "BAT-EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
-        ["address" => 47903, "name" => "BAT-Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
-        ["address" => 47905, "name" => "BAT-Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
-        ["address" => 47906, "name" => "BAT-Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
-        ["address" => 47907, "name" => "BAT-Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
-        ["address" => 47908, "name" => "BAT-SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
-        ["address" => 47909, "name" => "BAT-SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
+        ["address" => 35182, "name" => "BAT - Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
+        ["address" => 35184, "name" => "BAT - Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
+        ["address" => 35206, "name" => "BAT - Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 70],
+        ["address" => 35209, "name" => "BAT - Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
+        ["address" => 37003, "name" => "BAT - Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
+        ["address" => 45356, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
+        ["address" => 45358, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
+        ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
+        ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
+        ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
+        ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
+        ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
+        ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
+        ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
+        ["address" => 47909, "name" => "BAT - SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
         // Wechslerichter
-        ["address" => 35103, "name" => "WR-Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
-        ["address" => 35104, "name" => "WR-Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
-        ["address" => 35105, "name" => "WR-Leistung String 1", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 220],
-        ["address" => 35107, "name" => "WR-Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
-        ["address" => 35108, "name" => "WR-Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
-        ["address" => 35109, "name" => "WR-Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
-        ["address" => 35174, "name" => "WR-Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
-        ["address" => 35191, "name" => "WR-Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
-        ["address" => 35193, "name" => "WR-Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
-        ["address" => 35301, "name" => "WR-Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
-        ["address" => 35337, "name" => "WR-P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
-        ["address" => 35338, "name" => "WR-P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
-        ["address" => 35339, "name" => "WR-P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
-        ["address" => 35345, "name" => "WR-I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
-        ["address" => 35346, "name" => "WR-I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
-        ["address" => 35347, "name" => "WR-I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
+        ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
+        ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
+        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 220],
+        ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
+        ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
+        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
+        ["address" => 35174, "name" => "WR - Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
+        ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
+        ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
+        ["address" => 35301, "name" => "WR - Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
+        ["address" => 35337, "name" => "WR - P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
+        ["address" => 35338, "name" => "WR - P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
+        ["address" => 35339, "name" => "WR - P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
+        ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
+        ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
+        ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
     
         ];
     }
