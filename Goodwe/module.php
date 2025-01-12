@@ -861,7 +861,7 @@ class Goodwe extends IPSModule
             ["key" => "name", "name" => "Name", "unit" => "", "active" => false],
             ["key" => "state", "name" => "Ladekabel", "unit" => "wb_state", "pos" => 6, "active" => true],
             ["key" => "status", "name" => "Status", "unit" => "", "active" => false],
-            ["key" => "workstate", "name" => "Work State", "unit" => "wb_work", "active" => true],
+            ["key" => "workstate", "name" => "Work State", "unit" => "wb_work", "pos" => 10, "active" => true],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "active" => false],
             ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "active" => false],
             ["key" => "model", "name" => "Modell", "unit" => "", "active" => false], 
