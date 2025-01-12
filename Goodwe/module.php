@@ -945,7 +945,7 @@ public function FetchWallboxData()
         return [
         // Smartmeter
         ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 15],
-        ["address" => 36021, "name" => "SM  -Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
+        ["address" => 36021, "name" => "SM - Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
         ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
         ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
         // Batterie
