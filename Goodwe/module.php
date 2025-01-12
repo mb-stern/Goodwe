@@ -963,7 +963,7 @@ class Goodwe extends IPSModule
         ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
         ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
         ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
-        ["address" => 35174, "name" => "WR - Wechselrichter Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
+        ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
         ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
         ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
         ["address" => 35301, "name" => "WR - Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
