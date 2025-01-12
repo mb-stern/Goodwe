@@ -668,6 +668,7 @@ public function FetchWallboxData()
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
+        $this->ApplyChanges();
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
