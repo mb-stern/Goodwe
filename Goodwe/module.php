@@ -400,15 +400,6 @@ public function FetchWallboxData()
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
                     }
                 }
-
-                // Aktualisierung von WB_ChargeMode basierend auf chargeMode
-                if ($key === "chargeMode") {
-                    $chargeModeVarID = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($chargeModeVarID !== false) {
-                        SetValue($chargeModeVarID, (int)$value);
-                        $this->SendDebug("FetchWallboxData", "WB_ChargeMode aktualisiert auf " . (int)$value . ".", 0);
-                    }
-                }
             } 
         }
 
