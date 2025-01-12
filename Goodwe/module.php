@@ -844,9 +844,9 @@ public function FetchWallboxData()
         if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
             IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang wird startet', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'lädt', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang wird beendet', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang startet', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'Ladevorgang läuft', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang endet', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Watt')){
