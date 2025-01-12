@@ -351,66 +351,66 @@ class Goodwe extends IPSModule
         }
     }
 
-    public function FetchWallboxData()
-    {
-        $user = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
-    
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+public function FetchWallboxData()
+{
+    $user = $this->ReadPropertyString("WallboxUser");
+    $password = $this->ReadPropertyString("WallboxPassword");
+    $serial = $this->ReadPropertyString("WallboxSerial");
+
+    if (empty($user) || empty($password) || empty($serial)) {
+        $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        return;
+    }
+
+    $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+
+    try {
+        // Login und Datenabruf
+        $loginResponse = $this->GoodweLogin($user, $password);
+        if (!$loginResponse) {
+            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
             return;
         }
-    
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
-    
-        try {
-            // Login und Datenabruf
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
-            }
-    
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
-    
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
-    
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varID = @$this->GetIDForIdent($ident);
-    
-                if ($varID !== false) {
-                    SetValue($varID, $value);
-    
-                    // Aktualisierung von WB_Charging basierend auf workstate
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0); // false, wenn 0, true bei allen anderen Werten
-                        $chargingVarID = @$this->GetIDForIdent('WB_Charging');
-                        if ($chargingVarID !== false) {
-                            SetValue($chargingVarID, $chargingState);
-                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
-                        }
-                    }
-                } else {
-                    //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
-                }
-            }
-    
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+
+        $apiResponse = $this->GoodweFetchData($serial);
+        if (!$apiResponse) {
+            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+            return;
         }
+
+        $data = json_decode($apiResponse, true);
+        if (!isset($data['data'])) {
+            $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+            return;
+        }
+
+        foreach ($data['data'] as $key => $value) {
+            $ident = "WB_" . $key;
+            $varID = @$this->GetIDForIdent($ident);
+
+            if ($varID !== false) {
+                SetValue($varID, $value);
+
+                // Aktualisierung von WB_Charging basierend auf workstate
+                if ($key === "workstate") {
+                    $chargingState = ($value !== 0); // false, wenn 0, true bei allen anderen Werten
+                    $chargingVarID = @$this->GetIDForIdent('WB_Charging');
+                    if ($chargingVarID !== false) {
+                        SetValue($chargingVarID, $chargingState);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
+                    }
+                }
+            } else {
+                $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
+            }
+        }
+
+        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+    } catch (Exception $e) {
+        $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
     }
-    
+}
+
     private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
