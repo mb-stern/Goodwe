@@ -19,8 +19,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         
-        $this->RegisterTimer("PollerWR", 0, 'Goodwe_RequestRead($_IPS[\'TARGET\']);');
-        $this->RegisterTimer("PollerWB", 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
+        $this->RegisterTimer("PollerWR", 0, 'Goodwe_RequestRead(' . $this->InstanceID . ');');
+        $this->RegisterTimer("PollerWB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');
     }
 
     public function ApplyChanges()
@@ -350,18 +350,18 @@ class Goodwe extends IPSModule
         }
     }
 
-public function FetchWallboxData()
-{
-    $user = $this->ReadPropertyString("WallboxUser");
-    $password = $this->ReadPropertyString("WallboxPassword");
-    $serial = $this->ReadPropertyString("WallboxSerial");
+    public function FetchWallboxData()
+    {
+        $user = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial = $this->ReadPropertyString("WallboxSerial");
 
-    if (empty($user) || empty($password) || empty($serial)) {
-        $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-        return;
-    }
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            return;
+        }
 
-    $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
     try {
         // Login und Datenabruf

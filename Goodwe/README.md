@@ -84,9 +84,9 @@ Beachte, dass nur im Konfigurationsformuler (Berechtigungen) freigegebene Scopes
 
 Befehl   | Beschreibung
 ------ | -------
-GoodWe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
-GoodWe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren
-GoodWe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
+Goodwe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
+Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren
+Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
