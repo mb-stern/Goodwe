@@ -24,8 +24,7 @@ Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergeste
 ### 1. Funktionsumfang
 
 * Abfrage der ausgewählten Register des Wechselrichters, gruppiert nach Smartmeter (SM), Batterie (BAT)  und Wechselrichter (WR)
-* Abfrage und Steuerung der Wallbox
-* 
+* Abfrage und Steuerung der Wallbox-Daten. Die Wahl der Ladeleistung (für Schnellladung), des Modus (Schnell, PV-Priorität oder PV&Batterie) ist möglich.
 
 ### 2. Voraussetzungen
 
@@ -45,9 +44,9 @@ __Konfigurationsseite__:
 
 Name     | Beschreibung
 -------- | ------------------
-Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert
+Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Varieblen werden automatisch erstellt oder gelöscht.
 Intervall                  |  Standard ist 5 sek. Intervall für die Abfrage der Modbus-Register
-SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
+SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
 
 ### 5. Statusvariablen und Profile
