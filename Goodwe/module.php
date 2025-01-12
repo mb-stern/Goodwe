@@ -16,7 +16,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyString("WallboxVariableMapping", "[]");
-        $this->RegisterPropertyInteger("PollIntervalWB", 60);
+        $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         
         $this->RegisterTimer("PollerWR", 0, 'Goodwe_RequestRead($_IPS[\'TARGET\']);');
@@ -944,8 +944,8 @@ public function FetchWallboxData()
     {
         return [
         // Smartmeter
-        ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 10],
-        ["address" => 36021, "name" => "SM  -Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
+        ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 15],
+        ["address" => 36021, "name" => "SM - Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
         ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
         ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
         // Batterie
