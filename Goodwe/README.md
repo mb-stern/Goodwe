@@ -87,5 +87,5 @@ GoodWe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 1.0 (15.12.2024)
+Version 1.0 (12.01.2025)
 - Initiale Version
