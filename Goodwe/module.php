@@ -400,16 +400,22 @@ public function FetchWallboxData()
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
                     }
                 }
-            } else {
-                $this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
-            }
-        }
 
-        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-    } catch (Exception $e) {
-        $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+                // Aktualisierung von WB_ChargeMode basierend auf chargeMode
+                if ($key === "chargeMode") {
+                    $chargeModeVarID = @$this->GetIDForIdent('WB_ChargeMode');
+                    if ($chargeModeVarID !== false) {
+                        SetValue($chargeModeVarID, (int)$value);
+                        $this->SendDebug("FetchWallboxData", "WB_ChargeMode aktualisiert auf " . (int)$value . ".", 0);
+                    }
+                }
+            }
+
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        }
     }
-}
 
     private function GoodweFetchData(string $serial): ?string
     {
