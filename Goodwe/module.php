@@ -880,7 +880,7 @@ public function FetchWallboxData()
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 9, "active" => true],
             ["key" => "power", "name" => "Leistung Ist", "unit" => "kW", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 8, "active" => true],
-            ["key" => "time", "name" => "lädt seit (sek)", "unit" => "dur", "pos" => 10, "active" => true],
+            ["key" => "time", "name" => "lädt seit (min)", "unit" => "dur", "pos" => 10, "active" => true],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "chargeMode", "name" => "Modus Ist", "unit" => "wb_mode", "pos" => 5, "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "pos" => 0, "active" => false],
