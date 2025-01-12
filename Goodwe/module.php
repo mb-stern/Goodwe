@@ -956,7 +956,7 @@ public function FetchWallboxData()
         ["address" => 35209, "name" => "BAT - Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
         ["address" => 37003, "name" => "BAT - Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
         ["address" => 45356, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
-        ["address" => 45358, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
+        ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
         ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
         ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
         ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
