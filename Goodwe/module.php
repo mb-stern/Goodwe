@@ -390,16 +390,6 @@ class Goodwe extends IPSModule
     
                 if ($varID !== false) {
                     SetValue($varID, $value);
-    
-                    // Aktualisierung von WB_Charging basierend auf workstate
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0); // false, wenn 0, true bei allen anderen Werten
-                        $chargingVarID = @$this->GetIDForIdent('WB_Charging');
-                        if ($chargingVarID !== false) {
-                            SetValue($chargingVarID, $chargingState);
-                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
-                        }
-                    }
                 } else {
                     //$this->SendDebug("FetchWallboxData", "Variable mit Ident $ident existiert nicht, Wert wird ignoriert.", 0);
                 }
