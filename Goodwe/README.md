@@ -4,7 +4,7 @@ Unterstützt sind Wechselrichter der Serie ET, EH, BH, BT. Andere Goodwe-Wechsel
 Ebenfalls kann die Goodwe Wallbox GW11K-HCA. Andere Goodwe-Wallboxen können möglicherweise ebenfalls funktionieren.
 
 
-### Wichtig zu wissen zur Konfiguration von Smartcar
+### Wichtig zu wissen zur Konfiguration von Goodwe
 Die Verbindung mit dem Goode Wechselrichterder ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgeählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Aktuell können noch keine Ansteuerungen über Modbus gemacht werden.
 
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SAMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
