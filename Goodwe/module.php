@@ -267,7 +267,7 @@ class Goodwe extends IPSModule
             return;
         }
     
-        // Prüfen, ob der Parent geöffnet ist (sofern relevant für den Parent-Typ)
+        // Prüfen, ob der Parent geöffnet ist
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
             $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
