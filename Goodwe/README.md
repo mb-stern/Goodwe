@@ -5,7 +5,7 @@ Ebenfalls kann die Goodwe Wallbox GW11K-HCA. Andere Goodwe-Wallboxen können mö
 
 
 ### Wichtig zu wissen zur Konfiguration von Goodwe
-Die Verbindung mit dem Goode Wechselrichterder ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgeählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Aktuell können noch keine Ansteuerungen über Modbus gemacht werden.
+Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgeählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Aktuell können noch keine Ansteuerungen über Modbus gemacht werden.
 
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
 
