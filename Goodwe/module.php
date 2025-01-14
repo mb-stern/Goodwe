@@ -704,30 +704,38 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
+        // Optionen für die Auswahlliste erstellen
+        $registerOptions = array_filter(array_map(function ($register) use ($selectedRegisters) {
+            // Prüfen, ob das Register bereits ausgewählt ist
+            foreach ($selectedRegisters as $selectedRegister) {
+                if (isset($selectedRegister['address']) && $selectedRegister['address'] == $register['address']) {
+                    return null; // Register bereits in der Liste, nicht hinzufügen
+                }
+            }
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
+                "value" => json_encode($register) // JSON für eindeutige Werte
             ];
-        }, $registers);
-        
+        }, $registers));
+    
+        // Entferne null-Werte aus der Liste
+        $registerOptions = array_values(array_filter($registerOptions));
     
         return json_encode([
             "elements" => [
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
+                    "caption" => "Selected Registers",
                     "rowCount" => 15,
                     "add" => true,
                     "delete" => true,
                     "columns" => [
                         [
-                            "caption" => "Register auswählen",
+                            "caption" => "Address",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
+                            "add" => json_encode($registers[0] ?? ""), // Erster Wert oder leer
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
