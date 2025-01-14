@@ -744,7 +744,7 @@ class Goodwe extends IPSModule
                 ],
                 [
                     "type" => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (Goodwe-Wallbox)",
+                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox erforderlich)",
                     "items" => [
                         [
                             "type" => "ValidationTextBox",
