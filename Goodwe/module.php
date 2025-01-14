@@ -183,10 +183,26 @@ class Goodwe extends IPSModule
 
     public function RequestAction($ident, $value)
     {
-        $serial = $this->ReadPropertyString("WallboxSerial");
+        // Debug-Ausgabe für Ident und Wert
+        $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
     
+        // Logik für Register
+        if (strpos($ident, 'Addr') === 0) { // Ident für Register-Variablen beginnt mit "Addr"
+            $address = intval(substr($ident, 4)); // Extrahiere die Adresse aus dem Ident
+            if ($this->WriteRegister($address, $value)) {
+                SetValue($this->GetIDForIdent($ident), $value);
+                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
+            } else {
+                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
+            }
+            return; // Kein weiterer Code wird ausgeführt
+        }
+    
+        // Logik für Wallbox-Aktionen
+        $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
-            $this->SendDebug("RequestAction", "Seriennummer fehlt, Aktion abgebrochen.", 0);
+            $this->SendDebug("RequestAction", "Keine Seriennummer definiert. Aktion abgebrochen.", 0);
+            IPS_LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
             return;
         }
     
@@ -202,12 +218,9 @@ class Goodwe extends IPSModule
                     SetValue($this->GetIDForIdent($ident), $value);
                 }
                 break;
-        
+    
             case 'WB_ChargeMode':
-                // Modus immer ändern
                 SetValue($this->GetIDForIdent($ident), $value);
-        
-                // Laden nur starten, wenn WB_Charging aktiv ist
                 if (GetValue($this->GetIDForIdent('WB_Charging'))) {
                     $data = [
                         'sn' => $serial,
@@ -221,49 +234,22 @@ class Goodwe extends IPSModule
                     $this->SendDebug("RequestAction", "WB_ChargeMode geändert, aber WB_Charging ist nicht aktiv. Kein Ladevorgang gestartet.", 0);
                 }
                 break;
-
-                case 'WB_ChargePower':
-                    // Begrenzung des Wertes zwischen 4.1 und 11
-                    $chargePower = round($value, 1);
-                    if ($chargePower < 4.2) {
-                        $chargePower = 4.2;
-                    } elseif ($chargePower > 11) {
-                        $chargePower = 11;
-                    }
-                
-                    // Daten für die API-Anfrage vorbereiten
-                    $data = [
-                        'sn' => $serial,
-                        'charge_power' => $chargePower
-                    ];
-                
-                    // API-Anfrage senden
-                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                    if ($response !== null) {
-                        // Variable aktualisieren mit dem möglicherweise korrigierten Wert
-                        SetValue($this->GetIDForIdent($ident), $chargePower);
-                    }
-                    break;
-                
-            default:
-                throw new Exception("Invalid Ident");
-        }
-
-        switch ($ident) {
-            case 'WB_Bat1MinSOCOffline':
-                if ($this->WriteRegister(45358, $value)) {
-                    SetValue($this->GetIDForIdent($ident), $value);
-                }
-                break;
     
-            case 'WB_Bat1MinSOCOnline':
-                if ($this->WriteRegister(45356, $value)) {
-                    SetValue($this->GetIDForIdent($ident), $value);
+            case 'WB_ChargePower':
+                $chargePower = round($value, 1);
+                $chargePower = max(4.2, min($chargePower, 11));
+                $data = [
+                    'sn' => $serial,
+                    'charge_power' => $chargePower
+                ];
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $chargePower);
                 }
                 break;
     
             default:
-                throw new Exception("Invalid Ident: $ident");
+                throw new Exception("Ungültiger Ident: $ident");
         }
     }
     
