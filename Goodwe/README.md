@@ -90,7 +90,7 @@ Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 1.1 (14.01.2025)
-- Steuerung von EMS-Power Mode (Netzladen)
+- Steuerung von EMS-Power Mode (Netzladen der Batterie)
 - Steuerung von SOC online/offline (maximale Entladung der Batterie)
 
 Version 1.0 (12.01.2025)
