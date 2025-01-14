@@ -4,13 +4,13 @@ Unterstützt sind Wechselrichter der Serie ET, EH, BH, BT. Andere Goodwe-Wechsel
 Ebenfalls kann die Goodwe Wallbox GW11K-HCA. Andere Goodwe-Wallboxen können möglicherweise ebenfalls funktionieren.
 
 
-### Wichtig zu wissen zur Konfiguration von Smartcar
-Die Verbindung mit dem Goode Wechselrichterder ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgeählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Aktuell können noch keine Ansteuerungen über Modbus gemacht werden.
-
-Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SAMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
-
-Wärend der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt. Geräte-ID des Wechselrichters ist 247
-Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul verfügt. Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
+### Wichtig zu wissen zur Konfiguration des Moduls
+Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden.
+Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
+Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Geräte-ID des Wechselrichters ist 247.
+Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
+Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefrat wird. 
+Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
 
 
 ### Inhaltsverzeichnis
@@ -26,8 +26,8 @@ Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen 
 
 ### 1. Funktionsumfang
 
-* Abfrage der ausgewählten Register des Wechselrichters, gruppiert nach Smartmeter (SM), Batterie (BAT)  und Wechselrichter (WR)
-* Abfrage und Steuerung der Wallbox-Daten. Die Wahl der Ladeleistung (für Schnellladung), des Modus (Schnell, PV-Priorität oder PV&Batterie) ist möglich.
+* Abfrage und Ansteuerung ausgewählter Register des Wechselrichters, gruppiert nach Smartmeter (SM), Batterie (BAT)  und Wechselrichter (WR). Die Steuerung von SOC online/offline und EMS Power Mode ist möglich.
+* Abfrage und Steuerung der Wallbox. Die Steuerung der Ladeleistung (für Schnellladung), des Modus (Schnell, PV-Priorität oder PV&Batterie) ist möglich.
 
 ### 2. Voraussetzungen
 
@@ -40,14 +40,14 @@ Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen 
 
 ### 4. Einrichten der Instanzen in IP-Symcon
 
-- Unter 'Instanz hinzufügen' kann das 'Smartcar'-Modul mithilfe des Schnellfilters gefunden werden.  
+- Unter 'Instanz hinzufügen' kann das 'SGoodwe'-Modul mithilfe des Schnellfilters gefunden werden.  
 - Weitere Informationen zum Hinzufügen von Instanzen in der [Dokumentation der Instanzen](https://www.symcon.de/service/dokumentation/konzepte/instanzen/#Instanz_hinzufügen)
 
 __Konfigurationsseite__:
 
 Name     | Beschreibung
 -------- | ------------------
-Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Varieblen werden automatisch erstellt oder gelöscht.
+Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Variablen werden automatisch erstellt oder gelöscht.
 Intervall                  |  Standard ist 5 sek. Intervall für die Abfrage der Modbus-Register
 SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
@@ -58,7 +58,10 @@ Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzeln
 
 #### Statusvariablen
 
-Es werden Variablen/Typen je nach Wahl der Scopes erstellt. Es können pro Scope mehrere Variablen erstellt werden. Beim Deaktivieren des jeweiligen Scope werden die Variablen wieder gelöscht.
+Es werden Variablen je nach Wahl der Register erstellt. 
+Bei Abwahl dieses Registers wird die Variable gelöscht.
+Die Variablen der Wallbox werden nach der Eingabe der Zugangsdaten zur SEMS-API erstellt
+Beim löschen eines der Felder für die Zugangsdaten werden die die Variablen wieder gelöscht.
 
 #### Profile
 
@@ -74,21 +77,22 @@ Goodwe.Watt             |  Integer
 
 ### 6. WebFront
 
-Die Variablen zur Steuerung der Fahrzeugfunktion können aus der Visualisierung heraus gesteuert werden.
+Alle Variablen mit Aktion können aus der Visualisierung heraus gesteuert werden.
 
 ### 7. PHP-Befehlsreferenz
-
-Hier findest du die Info, wie geziehlt (zb über einen Ablaufplan) nur bestimmte Endpunkte (Scopes) abgefragt werden, um API-Calls zu sparen. 
-Ein Scenario wäre, dass der SOC nur bei aktiviertem Ladevorgang alle 15min über einen Ablaufplan aktualisiert wird.
-Beachte, dass nur im Konfigurationsformuler (Berechtigungen) freigegebene Scopes abgefragt werden können. Falls über einen Ablaufplan mehere Scopes nacheinander abgerufen werden ist ein Abstand von ca 2 Minuten empfehlensert, da Smartcar bei häufigerer Abfragefrequnz diese blockiert.
 
 Befehl   | Beschreibung
 ------ | -------
 Goodwe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
-Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren
-Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
+Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über SEMS-API)
+Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 1.1 (14.01.2025)
+- Steuerung von EMS-Power Mode (Netzladen der Batterie)
+- Steuerung von SOC online/offline (maximale Entladung der Batterie)
+- Fehlermeldung in Register Auswahlmenu behoben
 
 Version 1.0 (12.01.2025)
 - Initiale Version
