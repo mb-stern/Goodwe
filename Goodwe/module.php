@@ -368,7 +368,11 @@ class Goodwe extends IPSModule
         }
     
         // Binärdaten in einen Hexadezimal-String umwandeln
-        $hexData = sprintf($value); // U16 in einen 4-stelligen Hexadezimal-String umwandeln
+        $binaryData = pack("n", $value);
+        $hexData = bin2hex($binaryData);
+    
+        $this->SendDebug("WriteRegister", "Gepackte Binärdaten: " . bin2hex($binaryData), 0);
+        $this->SendDebug("WriteRegister", "Hexadezimal-String: $hexData", 0);
     
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
