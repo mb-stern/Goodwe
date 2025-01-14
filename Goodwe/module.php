@@ -197,7 +197,7 @@ class Goodwe extends IPSModule
             } else {
                 $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
             }
-            return; // Kein weiterer Code wird ausgeführt
+            return;
         }
     
         // Logik für Wallbox-Aktionen
