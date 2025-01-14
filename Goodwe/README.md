@@ -6,11 +6,11 @@ Ebenfalls kann die Goodwe Wallbox GW11K-HCA. Andere Goodwe-Wallboxen können mö
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
 Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Aktuell können noch keine Ansteuerungen über Modbus gemacht werden.
-
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
-
 Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Geräte-ID des Wechselrichters ist 247.
-Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul verfügt. Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
+Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
+Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefrat wird. 
+Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
 
 
 ### Inhaltsverzeichnis
@@ -77,15 +77,15 @@ Goodwe.Watt             |  Integer
 
 ### 6. WebFront
 
-Die Variablen zur Steuerung der Fahrzeugfunktion können aus der Visualisierung heraus gesteuert werden.
+Alle Variablen mit Aktion können aus der Visualisierung heraus gesteuert werden.
 
 ### 7. PHP-Befehlsreferenz
 
 Befehl   | Beschreibung
 ------ | -------
 Goodwe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
-Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren
-Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
+Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über SEMS-API)
+Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
 
