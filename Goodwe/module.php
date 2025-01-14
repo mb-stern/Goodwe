@@ -718,13 +718,13 @@ class Goodwe extends IPSModule
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
-                    "caption" => "Selected Registers",
+                    "caption" => "Ausgewählte Register",
                     "rowCount" => 15,
                     "add" => true,
                     "delete" => true,
                     "columns" => [
                         [
-                            "caption" => "Address",
+                            "caption" => "Register auswählen",
                             "name" => "address",
                             "width" => "400px",
                             "add" => json_encode($registers[0] ?? ""),
