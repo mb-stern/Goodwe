@@ -729,6 +729,7 @@ class Goodwe extends IPSModule
                     "name"  => "SelectedRegisters",
                     "caption" => "Selected Registers",
                     "rowCount" => 15,
+                    "add" => true,
                     "delete" => true,
                     "columns" => [
                         [
