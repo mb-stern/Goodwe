@@ -727,15 +727,22 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => 0,
+                            "add" => "", // Leerstring als Standardwert beim Hinzufügen
                             "edit" => [
                                 "type" => "Select",
-                                "options" => $registerOptions
+                                "options" => array_map(function ($register) {
+                                    return [
+                                        "caption" => "{$register['address']} - {$register['name']}",
+                                        "value" => $register['address']
+                                    ];
+                                }, $this->GetRegisters()) // Dynamische Registerliste
                             ]
                         ]
                     ],
                     "values" => $selectedRegisters
-                ],
+                ]
+            ]
+        ]);        
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
