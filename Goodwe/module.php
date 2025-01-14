@@ -704,38 +704,30 @@ class Goodwe extends IPSModule
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Optionen für die Auswahlliste erstellen
-        $registerOptions = array_filter(array_map(function ($register) use ($selectedRegisters) {
-            // Prüfen, ob das Register bereits ausgewählt ist
-            foreach ($selectedRegisters as $selectedRegister) {
-                if (isset($selectedRegister['address']) && $selectedRegister['address'] == $register['address']) {
-                    return null; // Register bereits in der Liste, nicht hinzufügen
-                }
-            }
+        // Optionen für die Auswahlliste
+        $registerOptions = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register) // JSON für eindeutige Werte
+                "value" => json_encode($register)
             ];
-        }, $registers));
-    
-        // Entferne null-Werte aus der Liste
-        $registerOptions = array_values(array_filter($registerOptions));
+        }, $registers);
+        
     
         return json_encode([
             "elements" => [
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
-                    "caption" => "Selected Registers",
+                    "caption" => "Ausgewählte Register",
                     "rowCount" => 15,
                     "add" => true,
                     "delete" => true,
                     "columns" => [
                         [
-                            "caption" => "Address",
+                            "caption" => "Register auswählen",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""), // Erster Wert oder leer
+                            "add" => json_encode($registers[0] ?? ""),
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
