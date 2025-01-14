@@ -368,7 +368,7 @@ class Goodwe extends IPSModule
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
             "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => pack("s", $value), // 16-Bit signed Wert packen
+            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
         ];
 
         // Anfrage an Parent senden
