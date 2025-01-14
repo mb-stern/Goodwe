@@ -362,27 +362,34 @@ class Goodwe extends IPSModule
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // Daten für die Modbus-Kommunikation vorbereiten
-        $data = [
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
-            "Function" => 6, // Funktionscode für Schreiben eines Registers
-            "Address"  => $address,
-            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
-        ];
-
-        // Anfrage an Parent senden
-        $response = $this->SendDataToParent(json_encode($data));
-
-        if ($response === false) {
-            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
+        if ($value < 0 || $value > 65535) {
+            $this->SendDebug("WriteRegister", "Wert $value liegt außerhalb des Bereichs für U16 (0-65535)", 0);
             return false;
         }
-
+    
+        // Binärdaten in einen Hexadezimal-String umwandeln
+        $hexData = bin2hex(pack("n", $value));
+    
+        $data = [
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
+            "Function" => 6, // Schreiben eines einzelnen Registers
+            "Address"  => $address,
+            "Quantity" => 1,
+            "Data"     => $hexData, // Hexadezimal-String für JSON-Kompatibilität
+        ];
+    
+        // Anfrage an den Parent senden
+        $response = $this->SendDataToParent(json_encode($data));
+    
+        if ($response === false) {
+            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address mit Wert $value", 0);
+            return false;
+        }
+    
         $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
         return true;
     }
-
+    
     public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
