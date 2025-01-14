@@ -157,6 +157,11 @@ class Goodwe extends IPSModule
                     }
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
                 }
+
+                
+                //Hier die Akttionsvariablen
+                $this->EnableAction('Addr45358');
+                $this->EnableAction('Addr45356');
     
                 // Position setzen
                 $variableID = $this->GetIDForIdent($ident);
@@ -242,6 +247,23 @@ class Goodwe extends IPSModule
                 
             default:
                 throw new Exception("Invalid Ident");
+        }
+
+        switch ($ident) {
+            case 'WB_Bat1MinSOCOffline':
+                if ($this->WriteRegister(45358, $value)) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
+    
+            case 'WB_Bat1MinSOCOnline':
+                if ($this->WriteRegister(45356, $value)) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
+    
+            default:
+                throw new Exception("Invalid Ident: $ident");
         }
     }
     
@@ -348,6 +370,29 @@ class Goodwe extends IPSModule
                 IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
+    }
+
+    private function WriteRegister(int $address, int $value): bool
+    {
+        // Daten für die Modbus-Kommunikation vorbereiten
+        $data = [
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
+            "Function" => 6, // Funktionscode für Schreiben eines Registers
+            "Address"  => $address,
+            "Quantity" => 1,
+            "Data"     => pack("n", $value), // 16-Bit-Wert als Big-Endian packen
+        ];
+
+        // Anfrage an Parent senden
+        $response = $this->SendDataToParent(json_encode($data));
+
+        if ($response === false) {
+            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
+            return false;
+        }
+
+        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        return true;
     }
 
     public function FetchWallboxData()
