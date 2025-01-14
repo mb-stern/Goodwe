@@ -700,37 +700,45 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
-        $this->ApplyChanges();
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
+        // Optionen für die Auswahlliste erstellen
+        $selectedAddresses = array_column($selectedRegisters, 'address'); // Alle ausgewählten Adressen sammeln
+    
+        $registerOptions = array_filter($registers, function ($register) use ($selectedAddresses) {
+            // Nur Register anzeigen, die noch nicht ausgewählt sind
+            return !in_array($register['address'], $selectedAddresses);
+        });
+    
+        // Optionen für die Dropdown-Liste erstellen
+        $options = array_map(function ($register) {
             return [
                 "caption" => "{$register['address']} - {$register['name']}",
                 "value" => json_encode($register)
             ];
-        }, $registers);
-        
+        }, $registerOptions);
+    
+        // Fallback, falls keine Register mehr verfügbar sind
+        $addDefault = empty($registerOptions) ? "" : json_encode($registerOptions[0]);
     
         return json_encode([
             "elements" => [
                 [
                     "type"  => "List",
                     "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
+                    "caption" => "Selected Registers",
                     "rowCount" => 15,
-                    "add" => true,
+                    "add" => $addDefault,
                     "delete" => true,
                     "columns" => [
                         [
-                            "caption" => "Register auswählen",
+                            "caption" => "Address",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
                             "edit" => [
                                 "type" => "Select",
-                                "options" => $registerOptions
+                                "options" => $options
                             ]
                         ]
                     ],
