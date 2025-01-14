@@ -727,7 +727,7 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => 0,
+                            "add" => json_encode(["address" => 45356, "name" => "BAT - Min SOC ONLINE", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100]),
                             "edit" => [
                                 "type" => "Select",
                                 "options" => $registerOptions
