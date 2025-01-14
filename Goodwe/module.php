@@ -367,7 +367,7 @@ class Goodwe extends IPSModule
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1,
+            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
             "Data"     => pack("n", $value), // 16-Bit-Wert als Big-Endian packen
         ];
 
