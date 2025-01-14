@@ -727,21 +727,15 @@ class Goodwe extends IPSModule
                             "caption" => "Address",
                             "name" => "address",
                             "width" => "400px",
-                            "add" => "",
+                            "add" => json_encode($registers[0] ?? ""),
                             "edit" => [
                                 "type" => "Select",
-                                "options" => array_map(function ($register) {
-                                    return [
-                                        "caption" => "{$register['address']} - {$register['name']}",
-                                        "value" => $register['address']
-                                    ];
-                                }, $this->GetRegisters())
+                                "options" => $registerOptions
                             ]
                         ]
                     ],
                     "values" => $selectedRegisters
-                ]
-                ],     
+                ],
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
