@@ -362,35 +362,27 @@ class Goodwe extends IPSModule
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // Konvertiere negatives signed zu unsigned
-        if ($value < 0) {
-            $value = 0xFFFF & $value;
-        }
-    
-        // Daten für Modbus vorbereiten
+        // Daten für die Modbus-Kommunikation vorbereiten
         $data = [
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6,
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
+            "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1,
-            "Data"     => pack("n", $value), // Big-Endian 16-Bit-Wert
+            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
+            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
         ];
-    
-        // Debugging: Zeige die gesendeten Daten
-        $this->SendDebug("WriteRegister", "Daten: " . bin2hex(pack("n", $value)), 0);
-    
+
         // Anfrage an Parent senden
         $response = $this->SendDataToParent(json_encode($data));
-    
+
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
             return false;
         }
-    
+
         $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
         return true;
     }
-    
+
     public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
