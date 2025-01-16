@@ -362,23 +362,25 @@ class Goodwe extends IPSModule
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // Konvertiere den Wert in ASCII-Darstellung (für Debug)
-        $asciiValue = preg_replace('/[^\x20-\x7E]/', '.', pack("n", $value)); // Big-Endian-Darstellung, nicht druckbare Zeichen durch '.' ersetzen
-        $this->SendDebug("WriteRegister", "Schreibe Wert: $value (ASCII: $asciiValue)", 0);
+        // Binärdaten erstellen und Base64 kodieren
+        $binaryData = pack("v", $value); // Little-Endian-Darstellung
+        $base64Data = base64_encode($binaryData);
+        $this->SendDebug("WriteRegister", "Binärdaten: " . bin2hex($binaryData), 0);
+        $this->SendDebug("WriteRegister", "Base64-Daten: $base64Data", 0);
     
-        // Daten für die Modbus-Kommunikation vorbereiten
+        // JSON-Daten vorbereiten
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 6,
             "Address"  => $address,
             "Quantity" => 1,
-            "Data"     => base64_encode(pack("n", $value)), // Little-Endian Base64-Kodierung
+            "Data"     => $base64Data, // Base64-Daten einfügen
         ];
     
         $jsonData = json_encode($data);
         if ($jsonData === false) {
             $this->SendDebug("WriteRegister", "JSON-Fehler: " . json_last_error_msg(), 0);
-            return false; // Fehlerfall
+            return false;
         }
     
         $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $jsonData", 0);
@@ -388,11 +390,11 @@ class Goodwe extends IPSModule
     
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
-            return false; // Fehlerfall
+            return false;
         }
     
-        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value (ASCII: $asciiValue)", 0);
-        return true; // Erfolg
+        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        return true;
     }
     
     public function FetchWallboxData()
