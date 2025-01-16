@@ -363,7 +363,7 @@ class Goodwe extends IPSModule
     private function WriteRegister(int $address, int $value): bool
     {
         // Binärdaten erstellen und Base64 kodieren
-        $binaryData = pack("v", $value); // Little-Endian-Darstellung
+        $binaryData = pack("n", $value); // Little-Endian-Darstellung
         $base64Data = base64_encode($binaryData);
         $this->SendDebug("WriteRegister", "Binärdaten: " . bin2hex($binaryData), 0);
         $this->SendDebug("WriteRegister", "Base64-Daten: $base64Data", 0);
