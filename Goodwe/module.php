@@ -364,16 +364,21 @@ class Goodwe extends IPSModule
     {
         // Daten für die Modbus-Kommunikation vorbereiten
         $data = [
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
-            "Function" => 6, // Funktionscode für Schreiben eines Registers
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 6,
             "Address"  => $address,
-            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
+            "Quantity" => 1,
+            "Data"     => base64_encode(pack("n", $value)), // Base64-Kodierung
         ];
-
-        // Anfrage an Parent senden
-        $response = $this->SendDataToParent(json_encode($data));
-        $this->SendDebug("WriteRegister", "Anfrage an Parent senden: " . json_encode($data), 0);
+        
+        $jsonData = json_encode($data);
+        if ($jsonData === false) {
+            $this->SendDebug("WriteRegister", "JSON-Fehler: " . json_last_error_msg(), 0);
+            return;
+        }
+        
+        $response = $this->SendDataToParent($jsonData);
+        $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $jsonData", 0);
 
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
