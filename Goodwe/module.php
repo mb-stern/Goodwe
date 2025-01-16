@@ -362,13 +362,17 @@ class Goodwe extends IPSModule
 
     private function WriteRegister(int $address, int $value): bool
     {
+        // Konvertiere den Wert in ASCII-Darstellung (für Debug)
+        $asciiValue = preg_replace('/[^\x20-\x7E]/', '.', pack("n", $value)); // Big-Endian-Darstellung, nicht druckbare Zeichen durch '.' ersetzen
+        $this->SendDebug("WriteRegister", "Schreibe Wert: $value (ASCII: $asciiValue)", 0);
+    
         // Daten für die Modbus-Kommunikation vorbereiten
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 6,
             "Address"  => $address,
             "Quantity" => 1,
-            "Data"     => base64_encode(pack("v", $value)), // Base64-Kodierung
+            "Data"     => base64_encode(pack("v", $value)), // Little-Endian Base64-Kodierung
         ];
     
         $jsonData = json_encode($data);
@@ -377,15 +381,17 @@ class Goodwe extends IPSModule
             return false; // Fehlerfall
         }
     
-        $response = $this->SendDataToParent($jsonData);
         $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $jsonData", 0);
+    
+        // Anfrage senden
+        $response = $this->SendDataToParent($jsonData);
     
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
             return false; // Fehlerfall
         }
     
-        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value (ASCII: $asciiValue)", 0);
         return true; // Erfolg
     }
     
