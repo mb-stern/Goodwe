@@ -368,7 +368,7 @@ class Goodwe extends IPSModule
             "Function" => 6,
             "Address"  => $address,
             "Quantity" => 1,
-            "Data"     => base64_encode(pack("n", $value)), // Base64-Kodierung
+            "Data"     => base64_encode(pack("v", $value)), // Base64-Kodierung
         ];
     
         $jsonData = json_encode($data);
