@@ -368,13 +368,13 @@ class Goodwe extends IPSModule
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
             "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => base64_encode(pack("n", $value)), // 16-Bit signed Wert packen
+            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
         ];
 
         // Anfrage an Parent senden
         $response = $this->SendDataToParent(json_encode($data));
         $this->SendDebug("WriteRegister", "Anfrage an Parent senden: " . json_encode($data), 0);
-        
+
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
             return false;
