@@ -159,7 +159,7 @@ class Goodwe extends IPSModule
                 }
 
                 
-                //Hier die Aktionsvariablen
+                //Hier die Akttionsvariablen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
                 $this->EnableAction('Addr47511');
@@ -365,19 +365,14 @@ class Goodwe extends IPSModule
         // Daten für die Modbus-Kommunikation vorbereiten
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
-            "Function" => 6, // Funktionscode
+            "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1, // Schreibe ein Register
-            "Data"     => base64_encode(pack("n", $value)), // Base64-Kodierung des 16-Bit-Werts
+            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
+            "Data"     => base64_encode(pack("n", $value)), // 16-Bit signed Wert packen
         ];
-        
-        $jsonData = json_encode($data);
-        if ($jsonData === false) {
-            $this->SendDebug("RequestAction", "JSON-Fehler: " . json_last_error_msg(), 0);
-            return;
-        }
-        
-        $response = $this->SendDataToParent($jsonData);
+
+        // Anfrage an Parent senden
+        $response = $this->SendDataToParent(json_encode($data));
 
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
