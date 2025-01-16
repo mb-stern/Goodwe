@@ -159,7 +159,7 @@ class Goodwe extends IPSModule
                 }
 
                 
-                //Hier die Akttionsvariablen
+                //Hier die Aktionsvariablen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
                 $this->EnableAction('Addr47511');
@@ -368,7 +368,7 @@ class Goodwe extends IPSModule
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
             "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => pack("n", $value), // 16-Bit signed Wert packen
+            "Data"     => pack("N", $value), // 16-Bit signed Wert packen
         ];
 
         // Anfrage an Parent senden
