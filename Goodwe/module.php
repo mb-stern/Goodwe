@@ -370,24 +370,25 @@ class Goodwe extends IPSModule
             "Quantity" => 1,
             "Data"     => base64_encode(pack("n", $value)), // Base64-Kodierung
         ];
-        
+    
         $jsonData = json_encode($data);
         if ($jsonData === false) {
             $this->SendDebug("WriteRegister", "JSON-Fehler: " . json_last_error_msg(), 0);
-            return;
+            return false; // Fehlerfall
         }
-        
+    
         $response = $this->SendDataToParent($jsonData);
         $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $jsonData", 0);
-
+    
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
-            return false;
+            return false; // Fehlerfall
         }
-
+    
         $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
-        return true;
+        return true; // Erfolg
     }
+    
 
     public function FetchWallboxData()
     {
