@@ -373,7 +373,7 @@ class Goodwe extends IPSModule
 
         // Anfrage an Parent senden
         $response = $this->SendDataToParent(json_encode($data));
-        $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $response", 0);
+        $this->SendDebug("WriteRegister", "Anfrage an Parent senden: $data", 0);
 
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
