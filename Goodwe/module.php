@@ -372,7 +372,7 @@ class Goodwe extends IPSModule
             "Function" => 6,
             "Address"  => $address,
             "Quantity" => 1,
-            "Data"     => base64_encode(pack("v", $value)), // Little-Endian Base64-Kodierung
+            "Data"     => base64_encode(pack("n", $value)), // Little-Endian Base64-Kodierung
         ];
     
         $jsonData = json_encode($data);
