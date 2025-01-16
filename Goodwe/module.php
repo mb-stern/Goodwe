@@ -389,7 +389,6 @@ class Goodwe extends IPSModule
         return true; // Erfolg
     }
     
-
     public function FetchWallboxData()
     {
         $user = $this->ReadPropertyString("WallboxUser");
