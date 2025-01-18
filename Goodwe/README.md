@@ -74,6 +74,7 @@ Goodwe.WB_Power         |  Float
 Goodwe.Mode             |  Integer
 Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
+Goodwe.Percent          |  Integer
 
 ### 6. WebFront
 
@@ -88,6 +89,9 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 1.2 (18.01.2025)
+- Eigenes Variablenprofil für Prozent auf 1% abgestuft
 
 Version 1.1 (14.01.2025)
 - Steuerung von EMS-Power Mode (Netzladen der Batterie)
