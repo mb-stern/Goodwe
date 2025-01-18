@@ -815,7 +815,7 @@ class Goodwe extends IPSModule
             case "°C":
                 return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
             case "%":
-                return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
+                return ["profile" => "Goodwe.Percent", "type" => VARIABLETYPE_INTEGER];
             case "ems":
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
             case "mode":
@@ -887,6 +887,13 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
             IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.Percent')){
+            IPS_CreateVariableProfile('Goodwe.Percent', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.Percent', '', ' %');
+            IPS_SetVariableProfileDigits('Goodwe.Percent', 0);
+            IPS_SetVariableProfileValues('Goodwe.Percent', 0, 100, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Percent', 0);
         }
     }
 
