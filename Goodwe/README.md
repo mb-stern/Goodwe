@@ -86,12 +86,13 @@ Befehl   | Beschreibung
 ------ | -------
 Goodwe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
 Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über SEMS-API)
-Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
+Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
 
 Version 1.2 (19.01.2025)
 - Eigenes Variablenprofil für Prozent auf 1% abgestuft
+- Interne Umbenennung einiger Funktionen und Timer
 
 Version 1.1 (14.01.2025)
 - Steuerung von EMS-Power Mode (Netzladen der Batterie)
