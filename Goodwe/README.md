@@ -1,4 +1,4 @@
-# Modul für Goodwe für IP-Symcon
+### Modul für Goodwe für IP-Symcon
 Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie und/oder einer Goodwe Wallbox abzufragen. 
 
 Unterstützt sind folgende Komponenten:
