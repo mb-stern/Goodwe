@@ -832,7 +832,7 @@ class Goodwe extends IPSModule
             case "°C":
                 return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
             case "%":
-                return ["profile" => "Goodwe.Percent", "type" => VARIABLETYPE_INTEGER];
+                return ["profile" => "~Battery.100", "type" => VARIABLETYPE_INTEGER];
             case "ems":
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
             case "mode":
