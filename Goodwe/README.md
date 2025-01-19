@@ -43,7 +43,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher über RS485 mit dem We
 
 ### 4. Einrichten der Instanzen in IP-Symcon
 
-- Unter 'Instanz hinzufügen' kann das 'SGoodwe'-Modul mithilfe des Schnellfilters gefunden werden.  
+- Unter 'Instanz hinzufügen' kann das 'Goodwe'-Modul mithilfe des Schnellfilters gefunden werden.  
 - Weitere Informationen zum Hinzufügen von Instanzen in der [Dokumentation der Instanzen](https://www.symcon.de/service/dokumentation/konzepte/instanzen/#Instanz_hinzufügen)
 
 __Konfigurationsseite__:
