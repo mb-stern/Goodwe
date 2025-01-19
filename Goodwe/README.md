@@ -90,7 +90,7 @@ Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 1.2 (18.01.2025)
+Version 1.2 (19.01.2025)
 - Eigenes Variablenprofil für Prozent auf 1% abgestuft
 
 Version 1.1 (14.01.2025)
