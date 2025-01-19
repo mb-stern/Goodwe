@@ -159,7 +159,7 @@ class Goodwe extends IPSModule
                 }
 
                 
-                //Hier die Akttionsvariablen
+                //Hier die Aktionsvariablen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
                 $this->EnableAction('Addr47511');
