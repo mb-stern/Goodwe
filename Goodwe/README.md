@@ -10,7 +10,7 @@ Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergeste
 Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Geräte-ID des Wechselrichters ist 247.
 Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
 Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefragt wird. 
-Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
+Ansonsten den Port des Modbus-Adapters verwenden, welcher über RS485 mit dem Wechselrichter verbunden ist.
 
 
 ### Inhaltsverzeichnis
