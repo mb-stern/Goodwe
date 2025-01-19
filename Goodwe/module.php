@@ -19,8 +19,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         
-        $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');
-        $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');
+        $this->RegisterTimer("TimerWR", 0, "Goodwe_FetchInverterData(' . $this->InstanceID . ');");
+        $this->RegisterTimer("TimerWB", 0, "Goodwe_FetchWallboxData(' . $this->InstanceID . ');");
     }
 
     public function ApplyChanges()
