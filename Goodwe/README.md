@@ -1,7 +1,10 @@
 # Modul für Goodwe für IP-Symcon
-Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher und/oder einer Goodwe Wallbox abzufragen. 
-Unterstützt sind Wechselrichter der Serie ET, EH, BH, BT. Andere Goodwe-Wechselrichter können möglicherweise funktionieren.
-Ebenfalls kann die Goodwe Wallbox GW11K-HCA. Andere Goodwe-Wallboxen können möglicherweise ebenfalls funktionieren.
+Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie und/oder einer Goodwe Wallbox abzufragen. 
+
+Unterstützt sind folgende Komponenten:
+Goodwe Wechselrichter (in meinem Fall ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
+Goodwe Wallbox (in meinem Fall GW11K-HCA). Andere Goodwe-Wallboxen (insbesondere alle derHCA Serie) dürften ebenfalls kompatibel sein.
+Goodwe Batterie (in meinem Fall Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
@@ -9,8 +12,8 @@ Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wi
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
 Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Geräte-ID des Wechselrichters ist 247.
 Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
-Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefrat wird. 
-Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter kommuniziert.
+Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefragt wird. 
+Ansonsten den Port des Modbus-Adapters verwenden, welcher über RS485 mit dem Wechselrichter verbunden ist.
 
 
 ### Inhaltsverzeichnis
@@ -32,7 +35,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit d
 ### 2. Voraussetzungen
 
 - IP-Symcon ab Version 7.0
-- Goodwe Wechselrichter der ET-, EH-, BH-, oder BT-Serie und/oder eine Goodwe Wallbox GW11K-HCA
+- Goodwe Wechselrichter der ET-, EH-, BH-, oder BT-Serie mit/ohne Batterie und/oder eine Goodwe Wallbox GW11K-HCA.
 
 ### 3. Software-Installation
 
@@ -74,6 +77,7 @@ Goodwe.WB_Power         |  Float
 Goodwe.Mode             |  Integer
 Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
+Goodwe.Percent          |  Integer
 
 ### 6. WebFront
 
@@ -85,9 +89,14 @@ Befehl   | Beschreibung
 ------ | -------
 Goodwe_FetchAll(12345);         |   Alle Datenpunkte aktualisieren
 Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über SEMS-API)
-Goodwe_RequestRead(12345);      |   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
+Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 1.2 (19.01.2025)
+- Eigenes Variablenprofil für Prozent auf 1% abgestuft
+- Interne Umbenennung einiger Funktionen und Timer
+- Doku angepasst
 
 Version 1.1 (14.01.2025)
 - Steuerung von EMS-Power Mode (Netzladen der Batterie)
