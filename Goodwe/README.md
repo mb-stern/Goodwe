@@ -96,6 +96,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 Version 1.2 (19.01.2025)
 - Eigenes Variablenprofil für Prozent auf 1% abgestuft
 - Interne Umbenennung einiger Funktionen und Timer
+- Doku angepasst
 
 Version 1.1 (14.01.2025)
 - Steuerung von EMS-Power Mode (Netzladen der Batterie)
