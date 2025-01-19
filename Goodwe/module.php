@@ -26,35 +26,33 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-    
-        // Profile erstellen
+
         $this->CreateProfile();
-    
-        // Timer konfigurieren
+
         $this->SetTimerInterval("TimerWR", $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval("TimerWB", $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
-        // Wallbox-Benutzerinformationen
+        // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial = $this->ReadPropertyString("WallboxSerial");
-    
-        // 1. Verarbeitung der Wallbox-Variablen
+
+        // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
         $wbCurrentIdents = [];
         if (!empty($user) && !empty($password) && !empty($serial)) {
             $mapping = $this->GetWbVariables();
-    
+
             foreach ($mapping as $variable) {
                 if (!$variable['active']) {
                     continue; // Überspringen, wenn die Variable deaktiviert ist
                 }
-    
+
                 $ident = "WB_" . $variable['key'];
                 $wbCurrentIdents[] = $ident;
-    
+
                 $type = VARIABLETYPE_STRING;
                 $profile = "";
-    
+
                 if (!empty($variable['unit'])) {
                     $details = $this->GetVariableDetails($variable['unit']);
                     if ($details !== null) {
@@ -62,11 +60,8 @@ class Goodwe extends IPSModule
                         $profile = $details['profile'];
                     }
                 }
-    
-                $variableID = @$this->GetIDForIdent($ident);
-    
-                if ($variableID === false) {
-                    // Neue Variable erstellen
+
+                if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
                             $this->RegisterVariableInteger($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
@@ -82,29 +77,19 @@ class Goodwe extends IPSModule
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
-                } else {
-                    // Profil aktualisieren, falls notwendig
-                    $currentCustomProfile = IPS_GetVariable($variableID)['VariableCustomProfile'];
-                    if ($currentCustomProfile !== $profile) {
-                        IPS_SetVariableCustomProfile($variableID, $profile);
-                        $this->SendDebug("ApplyChanges", "Profil von $ident aktualisiert: $profile.", 0);
-                    }
                 }
             }
-    
-            // Spezialvariablen für Aktionen (Start/Stopp, Leistung, Modus)
+
+            // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB - Ladevorgang', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
                 ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
                 ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
-    
+
             foreach ($specialVariables as $var) {
                 $wbCurrentIdents[] = $var['ident'];
-                $variableID = @$this->GetIDForIdent($var['ident']);
-    
-                if ($variableID === false) {
-                    // Neue Variable mit Aktion erstellen
+                if (!@$this->GetIDForIdent($var['ident'])) {
                     switch ($var['type']) {
                         case VARIABLETYPE_BOOLEAN:
                             $this->RegisterVariableBoolean($var['ident'], $var['name'], $var['profile'], $var['pos']);
@@ -117,20 +102,13 @@ class Goodwe extends IPSModule
                             break;
                     }
                     $this->EnableAction($var['ident']);
-                    $this->SendDebug("ApplyChanges", "Spezialvariable erstellt: {$var['ident']} mit Profil {$var['profile']}.", 0);
-                } else {
-                    // Profil aktualisieren, falls notwendig
-                    $currentCustomProfile = IPS_GetVariable($variableID)['VariableCustomProfile'];
-                    if ($currentCustomProfile !== $var['profile']) {
-                        IPS_SetVariableCustomProfile($variableID, $var['profile']);
-                        $this->SendDebug("ApplyChanges", "Profil von Spezialvariable {$var['ident']} aktualisiert: {$var['profile']}.", 0);
-                    }
+                    $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: {$var['ident']} mit Profil {$var['profile']}.", 0);
                 }
             }
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
         }
-    
+
         // Nicht mehr benötigte Wallbox-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
@@ -139,48 +117,58 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Wallbox-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-    
-        // 2. Verarbeitung der Register-Variablen
+
+        // 2. Verarbeitung der Registervariablen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as &$selectedRegister) {
+                if (is_string($selectedRegister['address'])) {
+                    $decodedRegister = json_decode($selectedRegister['address'], true);
+                    if ($decodedRegister !== null) {
+                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                        continue;
+                    }
+                }
+    
+                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+                if ($variableDetails === null) {
+                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                    continue;
+                }
+    
                 $ident = "Addr" . $selectedRegister['address'];
                 $registerCurrentIdents[] = $ident;
     
-                $variableDetails = null;
-                if (!empty($selectedRegister['unit'])) {
-                    $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
-                }
-                if ($variableDetails === null) {
-                    // Standardwerte verwenden, wenn keine Details verfügbar sind
-                    $variableDetails = ['type' => VARIABLETYPE_STRING, 'profile' => ''];
-                }
-    
-                $variableID = @$this->GetIDForIdent($ident);
-    
-                if ($variableID === false) {
-                    // Neue Variable erstellen
+                if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
-                } else {
-                    // Profil aktualisieren, falls notwendig
-                    $currentCustomProfile = IPS_GetVariable($variableID)['VariableCustomProfile'];
-                    if ($currentCustomProfile !== $variableDetails['profile']) {
-                        IPS_SetVariableCustomProfile($variableID, $variableDetails['profile']);
-                        $this->SendDebug("ApplyChanges", "Profil von Register-Variable $ident aktualisiert: {$variableDetails['profile']}.", 0);
-                    }
+                }
+
+                
+                //Hier die Akttionsvariablen
+                $this->EnableAction('Addr45358');
+                $this->EnableAction('Addr45356');
+                $this->EnableAction('Addr47511');
+                $this->EnableAction('Addr47512');
+    
+                // Position setzen
+                $variableID = $this->GetIDForIdent($ident);
+                if ($variableID !== false) {
+                    IPS_SetPosition($variableID, $selectedRegister['pos']);
                 }
             }
         }
@@ -194,7 +182,7 @@ class Goodwe extends IPSModule
             }
         }
     }
-    
+
     public function RequestAction($ident, $value)
     {
         // Debug-Ausgabe für Ident und Wert
