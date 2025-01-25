@@ -1001,10 +1001,10 @@ class Goodwe extends IPSModule
         // Wechslerichter
         ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
         ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
-        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 0.1, "pos" => 220],
+        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 220],
         ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
         ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
-        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "U32", "unit" => "W", "scale" => 0.1, "pos" => 250],
+        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 250],
         ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
         ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
         ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
