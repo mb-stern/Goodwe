@@ -899,9 +899,6 @@ class Goodwe extends IPSModule
 
     private function GetWbVariables(): array
     {
-        //$this->SendDebug("GetWbVariables", "Lese Property WallboxVariableMapping...", 0);
-    
-        // Standardwerte definieren
         $defaultMapping = [
             ["key" => "powerStationId", "name" => "Power Station ID", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "sn", "name" => "Seriennummer", "unit" => "", "pos" => 0, "active" => false],
@@ -953,30 +950,28 @@ class Goodwe extends IPSModule
             ["key" => "local_date", "name" => "Lokales Datum", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
-        ];
+            ];
 
-    // Aktuelles Mapping auslesen
-    $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+            // Aktuelles Mapping auslesen
+            $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
 
-    // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
-    if ($currentMapping === null || !is_array($currentMapping)) {
-        $this->SendDebug("GetWbVariables", "Aktuelles Mapping ungültig, setze Standardwerte.", 0);
-        $currentMapping = [];
-    }
+            // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
+            if ($currentMapping === null || !is_array($currentMapping)) {
+                $this->SendDebug("GetWbVariables", "Aktuelles Mapping ungültig, setze Standardwerte.", 0);
+                $currentMapping = [];
+            }
 
-    // Vergleich der Mappings
-    $newMapping = json_encode($defaultMapping);
-    $currentMappingJson = json_encode($currentMapping);
+            // Vergleich der Mappings
+            $newMapping = json_encode($defaultMapping);
+            $currentMappingJson = json_encode($currentMapping);
 
-    if ($currentMappingJson !== $newMapping) {
-        $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
-        IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
-        IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
-    } else {
-        //$this->SendDebug("GetWbVariables", "Mapping unverändert. Keine Aktion erforderlich.", 0);
-    }
+            if ($currentMappingJson !== $newMapping) {
+                $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
+                IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
+                IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
+            } 
 
-    return $defaultMapping;
+        return $defaultMapping;
     }
         
     private function GetRegisters()
@@ -1006,10 +1001,10 @@ class Goodwe extends IPSModule
         // Wechslerichter
         ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
         ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
-        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 220],
+        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 0.1, "pos" => 220],
         ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
         ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
-        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "S16", "unit" => "W", "scale" => 0.1, "pos" => 250],
+        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "U32", "unit" => "W", "scale" => 0.1, "pos" => 250],
         ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
         ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
         ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
@@ -1020,7 +1015,6 @@ class Goodwe extends IPSModule
         ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
         ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
         ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
-    
         ];
     }
 }
