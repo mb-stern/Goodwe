@@ -93,6 +93,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 1.3 (25.01.2025)
+- Register 3505 und 3509 war falsch konfiguriert und lieferte keinen Wert
+
 Version 1.2 (19.01.2025)
 - Eigenes Variablenprofil für Prozent auf 1% abgestuft
 - Interne Umbenennung einiger Funktionen und Timer
