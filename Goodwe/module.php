@@ -44,7 +44,7 @@ class Goodwe extends IPSModule
 
             foreach ($mapping as $variable) {
                 if (!$variable['active']) {
-                    continue; // Überspringen, wenn die Variable deaktiviert ist
+                    continue;
                 }
 
                 $ident = "WB_" . $variable['key'];
