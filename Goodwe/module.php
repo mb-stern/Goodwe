@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 class Goodwe extends IPSModule
 {
     public function Create()
