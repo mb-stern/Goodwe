@@ -758,7 +758,7 @@ class Goodwe extends IPSModule
                         [
                             "type" => "ValidationTextBox",
                             "name" => "WallboxSerial",
-                            "caption" => "Seriennummer",
+                            "caption" => "Seriennummer Wallbox",
                         ],
                         [
                             "type"  => "IntervalBox",

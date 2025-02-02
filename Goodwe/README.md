@@ -2,18 +2,18 @@
 Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie und/oder einer Goodwe Wallbox abzufragen. 
 
 Unterstützt sind folgende Komponenten:
-Goodwe Wechselrichter (in meinem Fall ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
-Goodwe Wallbox (in meinem Fall GW11K-HCA). Andere Goodwe-Wallboxen (insbesondere alle derHCA Serie) dürften ebenfalls kompatibel sein.
-Goodwe Batterie (in meinem Fall Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
+Goodwe Wechselrichter (ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
+Goodwe Wallbox (GW11K-HCA). Andere Goodwe-Wallboxen (insbesondere alle derHCA Serie) dürften ebenfalls kompatibel sein.
+Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
-Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden.
+Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Gerne erweitere ich aber die Auswahl bei Bedarf.
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
-Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Geräte-ID des Wechselrichters ist 247.
+Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Besteht bereteits ein Gateway, kann dieses ausgewählt werden. Die Geräte-ID des Wechselrichters ist 247.
 Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
 Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefragt wird. 
-Ansonsten den Port des Modbus-Adapters verwenden, welcher über RS485 mit dem Wechselrichter verbunden ist.
+Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter verbunden ist.
 
 
 ### Inhaltsverzeichnis
@@ -39,7 +39,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher über RS485 mit dem We
 
 ### 3. Software-Installation
 
-* Über den Module Store kann das Modul noch nicht installiert werden da noch beta. Es muss im Store nach dem genauen Modulnamen gesucht werden.
+* Das Modul kann über den Modul-Store installiert werden.
 
 ### 4. Einrichten der Instanzen in IP-Symcon
 
@@ -63,7 +63,7 @@ Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzeln
 
 Es werden Variablen je nach Wahl der Register erstellt. 
 Bei Abwahl dieses Registers wird die Variable gelöscht.
-Die Variablen der Wallbox werden nach der Eingabe der Zugangsdaten zur SEMS-API erstellt
+Die Variablen der Wallbox werden nach der Eingabe der Zugangsdaten zur SEMS-API automatisch erstellt.
 Beim löschen eines der Felder für die Zugangsdaten werden die die Variablen wieder gelöscht.
 
 #### Profile
@@ -92,6 +92,10 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 2.0 (02.02.2025)
+- Readme und Code aktualisiert.
+- Version um die Store-Kompatibilität zu erlangen.
 
 Version 1.3 (25.01.2025)
 - Register 35105 und 35109 war falsch konfiguriert und lieferte keinen Wert.
