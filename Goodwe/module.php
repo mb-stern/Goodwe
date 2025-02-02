@@ -1,4 +1,5 @@
 <?php
+
 class GoodWeModule extends IPSModule
 {
     public function Create()
