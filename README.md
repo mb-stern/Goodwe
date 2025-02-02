@@ -1,3 +1,8 @@
+# Modul für Goodwe für IP-Symcon
+Folgende Funktionen beinhaltet das Goodwe Symcon Repository
+
+- __Goodwe__ ([Dokumentation](Goodwe))   
+
 Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie und/oder einer Goodwe Wallbox abzufragen. 
 
 Unterstützt sind folgende Komponenten:
