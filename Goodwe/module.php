@@ -1,6 +1,7 @@
 <?php
 
 class Goodwe extends IPSModule
+{
     public function Create()
     {
         parent::Create();
