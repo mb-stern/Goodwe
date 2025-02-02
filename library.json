@@ -1,12 +1,12 @@
 {
-    "id": "{D1086D5A-8D52-4E19-AAAD-EFADC81633BD}",
-    "name": "Goodwe",
-    "author": "Stefan Künzli",
-    "url": "https://github.com/mb-stern/goodwe-integration",
-    "compatibility": {
-        "version": "7.0"
-    },
-    "version": "1.0",
-    "build": 0,
-    "date": 0
+  "id": "{D1086D5A-8D52-4E19-AAAD-EFADC81633BD}",
+  "name": "Goodwe",
+  "author": "Stefan Künzli",
+  "url": "https://github.com/mb-stern/goodwe",
+  "compatibility": {
+      "version": "7.0"
+  },
+  "version": "2.0",
+  "build": 0,
+  "date": 0
 }
