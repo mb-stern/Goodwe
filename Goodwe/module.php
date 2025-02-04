@@ -19,6 +19,8 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData($_IPS["TARGET"]);');
         $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData($_IPS["TARGET"]);');
+
+        $this->ApplyChanges();
     }
 
     public function ApplyChanges()
@@ -255,7 +257,6 @@ class Goodwe extends IPSModule
     
     public function FetchAll()
     {
-        $this->ApplyChanges();
         $this->FetchWallboxData();
         $this->FetchInverterData();
     }
@@ -999,6 +1000,7 @@ class Goodwe extends IPSModule
         ["address" => 36021, "name" => "SM - Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
         ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
         ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
+        ["address" => 36026, "name" => "Test", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 45],
         // Batterie
         ["address" => 35182, "name" => "BAT - Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
         ["address" => 35184, "name" => "BAT - Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
