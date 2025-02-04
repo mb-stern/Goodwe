@@ -837,9 +837,19 @@ class Goodwe extends IPSModule
     {
         if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
             IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Automatikmodus', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Batteriestandby', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Zwangsladung', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0', 'Stoped', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Auto', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '2', 'Charge-PV', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '3', 'Discharge+PV', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '4', 'Import-AC', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '5', 'Export-AC', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '6', 'Conserve', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '7', 'Off-Grid', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Battery-Standby', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '9', 'Buy-Power', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '10', 'Sell-Power', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_State')){
@@ -892,7 +902,7 @@ class Goodwe extends IPSModule
             IPS_CreateVariableProfile('Goodwe.WattEMS', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileText('Goodwe.WattEMS', '', ' W');
             IPS_SetVariableProfileDigits('Goodwe.WattEMS', 0);
-            IPS_SetVariableProfileValues('Goodwe.WattEMS', 0, 1000, 1);
+            IPS_SetVariableProfileValues('Goodwe.WattEMS', 0, 10000, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WattEMS', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Percent')){
