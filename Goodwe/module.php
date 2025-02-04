@@ -27,6 +27,9 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
+        $this->SetTimerInterval('TimerWR', 0);
+        $this->SetTimerInterval('TimerWB', 0);
+
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
