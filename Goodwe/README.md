@@ -95,8 +95,8 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.0 (04.02.2025)
-- Neues Variablenprofil für die Regelung von EMSPowerSet.
-- EMSPowermode um viele Modis erweitert.
+- Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe).
+- EMSPowermode (Priorität der Energiequelle) um viele Modis erweitert.
 - Version um die Store-Kompatibilität zu erlangen.
 
 Version 1.3 (25.01.2025)
