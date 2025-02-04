@@ -697,6 +697,7 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
+        $this->ApplyChanges();
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
