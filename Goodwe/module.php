@@ -156,6 +156,7 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
                 }
 
+                
                 //Hier die Akttionsvariablen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
@@ -1013,7 +1014,7 @@ class Goodwe extends IPSModule
         ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
         ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
         ["address" => 47909, "name" => "BAT - SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
-        // Wechslerichter
+        // Wechselrichter
         ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
         ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
         ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 220],
