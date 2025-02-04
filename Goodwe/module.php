@@ -700,13 +700,6 @@ class Goodwe extends IPSModule
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-        // Prüfen, ob die gespeicherten Register von den aktuellen abweichen
-        if (json_encode($registers) !== $this->ReadPropertyString("Registers")) {
-            IPS_SetProperty($this->InstanceID, "Registers", json_encode($registers));
-            IPS_ApplyChanges($this->InstanceID);  // Änderungen sofort anwenden
-            return ""; // Leere Rückgabe, damit die GUI sich neu lädt
-        }
     
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
@@ -1005,7 +998,6 @@ class Goodwe extends IPSModule
         ["address" => 36021, "name" => "SM - Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
         ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
         ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
-        ["address" => 36026, "name" => "Test", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
         // Batterie
         ["address" => 35182, "name" => "BAT - Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
         ["address" => 35184, "name" => "BAT - Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
