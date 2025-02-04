@@ -120,6 +120,23 @@ class Goodwe extends IPSModule
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
     
+        if (is_array($selectedRegisters)) {
+            foreach ($selectedRegisters as &$selectedRegister) {
+                if (is_string($selectedRegister['address'])) {
+                    $decodedRegister = json_decode($selectedRegister['address'], true);
+                    if ($decodedRegister !== null) {
+                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                        continue;
+                    }
+                }
+    
+                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+                if ($variableDetails === null) {
+                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                    continue;
+                }
     
                 $ident = "Addr" . $selectedRegister['address'];
                 $registerCurrentIdents[] = $ident;
@@ -162,6 +179,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
+    }
 
     public function RequestAction($ident, $value)
     {
@@ -682,23 +700,6 @@ class Goodwe extends IPSModule
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$selectedRegister) {
-                if (is_string($selectedRegister['address'])) {
-                    $decodedRegister = json_decode($selectedRegister['address'], true);
-                    if ($decodedRegister !== null) {
-                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                        continue;
-                    }
-                }
-    
-                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
-                if ($variableDetails === null) {
-                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
-                    continue;
-                }
     
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
