@@ -19,8 +19,6 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData($_IPS["TARGET"]);');
         $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData($_IPS["TARGET"]);');
-
-        $this->ApplyChanges();
     }
 
     public function ApplyChanges()
@@ -700,8 +698,8 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
-        $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $registers = $this->GetRegisters();
     
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
