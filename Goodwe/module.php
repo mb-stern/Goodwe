@@ -156,6 +156,7 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
                 }
 
+                
                 //Hier die Akttionsvariablen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
