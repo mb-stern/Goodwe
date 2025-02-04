@@ -816,6 +816,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "Goodwe.Percent", "type" => VARIABLETYPE_INTEGER];
             case "ems":
                 return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
+            case "watt_ems":
+                return ["profile" => "Goodwe.WattEMS", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
             case "wb_mode":
@@ -885,6 +887,13 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
             IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WattEMS')){
+            IPS_CreateVariableProfile('Goodwe.WattEMS', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.WattEMS', '', ' W');
+            IPS_SetVariableProfileDigits('Goodwe.WattEMS', 0);
+            IPS_SetVariableProfileValues('Goodwe.WattEMS', 0, 1000, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WattEMS', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Percent')){
             IPS_CreateVariableProfile('Goodwe.Percent', VARIABLETYPE_INTEGER);
@@ -989,7 +998,7 @@ class Goodwe extends IPSModule
         ["address" => 45356, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
         ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
         ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
-        ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "W", "scale" => 1, "pos" => 130],
+        ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "watt_ems", "scale" => 1, "pos" => 130],
         ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
         ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
         ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],

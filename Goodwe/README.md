@@ -78,6 +78,7 @@ Goodwe.Mode             |  Integer
 Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
 Goodwe.Percent          |  Integer
+Goodwe.WattEMS          |  Integer
 
 ### 6. WebFront
 
@@ -95,6 +96,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 Version 2.0 (02.02.2025)
 - Readme und Code aktualisiert.
+- Neues Variablenprofil für die Regelung des Batterieladestroms (EMSPowerSet).
 - Version um die Store-Kompatibilität zu erlangen.
 
 Version 1.3 (25.01.2025)
