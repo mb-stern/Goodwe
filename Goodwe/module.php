@@ -711,6 +711,8 @@ class Goodwe extends IPSModule
                         $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                         continue;
                     }
+                }
+            }
     
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
