@@ -713,6 +713,7 @@ class Goodwe extends IPSModule
                     }
                 }
             }
+        }
     
         // Optionen für die Auswahlliste
         $registerOptions = array_map(function ($register) {
