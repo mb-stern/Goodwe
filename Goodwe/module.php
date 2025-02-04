@@ -162,7 +162,6 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-    }
 
     public function RequestAction($ident, $value)
     {
