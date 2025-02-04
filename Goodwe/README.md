@@ -95,7 +95,6 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.0 (04.02.2025)
-- Readme und Code aktualisiert.
 - Neues Variablenprofil für die Regelung des Batterieladestroms (EMSPowerSet).
 - Version um die Store-Kompatibilität zu erlangen.
 
