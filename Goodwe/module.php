@@ -19,13 +19,13 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
         $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
+
+        $this->CreateProfile();
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        $this->CreateProfile();
 
         $this->SetTimerInterval('TimerWR', 0);
         $this->SetTimerInterval('TimerWB', 0);
@@ -837,7 +837,7 @@ class Goodwe extends IPSModule
 
     private function CreateProfile()
     {
-        if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
+            IPS_DeleteVariableProfile('Goodwe.EMSPowerMode');
             IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0', 'Stoped', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Auto', '', -1);
@@ -853,8 +853,8 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.WB_State')){
+        
+            IPS_DeleteVariableProfile('Goodwe.WB_State');
             IPS_CreateVariableProfile('Goodwe.WB_State', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt', '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt', '', -1);
