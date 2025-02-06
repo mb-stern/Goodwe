@@ -27,6 +27,7 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
+        //Timer erst auf 0 stellen um das Problem mit dem mehrfachen anlegen derselben Timer zu umgehen.
         $this->SetTimerInterval('TimerWR', 0);
         $this->SetTimerInterval('TimerWB', 0);
 
