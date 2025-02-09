@@ -57,7 +57,7 @@ Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefr
 
 ### 5. Statusvariablen und Profile
 
-Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzelner kann zu Fehlfunktionen führen.
+Die Statusvariablen/Kategorien werden automatisch angelegt bzw. gelöscht, je nach Auswahl der Register im Konfigurationsformulars.
 Aktuell sind folgende Ansteuerung möglich:
 Wallbox:
 WB - Ladevorgang (Starten oder Stoppen des Ladevorganges)
@@ -66,8 +66,8 @@ WB - Modus Soll (Soll Modus der Wallbox (Scnell, PV-Rriorität, PV&Batterie))
 Batterie/Wechselrichter:
 BAT - Min SOC online (Minimaler SOC der Batterie bei vorhandener Stromnetz-Verbindung)
 BAT - Min SOC offline (Minimaler SOC der Batterie bei nicht vorhandener Stromnetz-Verbindung)
-BAT - EMSPowerMode (Modus des EnergieManagentSystems in Zusammenhang mit der Batterie)
-BAT - EMSPowerSet (Leistung des EnergieManagentSystems in Zusammenhang mit der Batterie)
+BAT - EMSPowerMode (Modus des EnergieManagentSystems in Zusammenhang mit der Batterie (wenn du weist was du tust, der Modus 'Auto' ist zu bevorzugen))
+BAT - EMSPowerSet (zugehörige Leistung bei Auswahl eines anderen EMSPowerMode als 'Auto' (max. 10000 Watt)).
 
 #### Statusvariablen
 
@@ -105,7 +105,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.0 (09.02.2025)
-- Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf max. 10000W beschränkt.
+- Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
 - EMSPowermode (Priorität der Energiequelle) auf alle möglichen Modis erweitert.
 - Version um die Store-Kompatibilität zu erlangen.
 - Doku angepasst
