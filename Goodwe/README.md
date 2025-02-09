@@ -8,7 +8,7 @@ Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Bat
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
-Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Gerne erweitere ich aber die Auswahl bei Bedarf.
+Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Gerne erweitere ich aber die Auswahl bei Bedarf. 
 Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
 Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Besteht bereteits ein Gateway, kann dieses ausgewählt werden. Die Geräte-ID des Wechselrichters ist 247.
 Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
@@ -51,13 +51,23 @@ __Konfigurationsseite__:
 Name     | Beschreibung
 -------- | ------------------
 Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Variablen werden automatisch erstellt oder gelöscht.
-Intervall                  |  Standard ist 5 sek. Intervall für die Abfrage der Modbus-Register
+Intervall                  |  Intervall für die Abfrage der Modbus-Register. Standard ist 5 sek.
 SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
 
 ### 5. Statusvariablen und Profile
 
 Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzelner kann zu Fehlfunktionen führen.
+Aktuell sind folgende Ansteuerung möglich:
+Wallbox:
+WB - Ladevorgang (Starten oder Stoppen des Ladevorganges)
+WB - Leistung Soll (Soll Leistung der Wallbox (4.2-11kW))
+WB - Modus Soll (Soll Modus der Wallbox (Scnell, PV-Rriorität, PV&Batterie))
+Batterie/Wechselrichter:
+BAT - Min SOC online (Minimaler SOC der Batterie bei vorhandener Stromnetz-Verbindung)
+BAT - Min SOC offline (Minimaler SOC der Batterie bei nicht vorhandener Stromnetz-Verbindung)
+BAT - EMSPowerMode (Modus des EnergieManagentSystems in Zusammenhang mit der Batterie)
+BAT - EMSPowerSet (Leistung des EnergieManagentSystems in Zusammenhang mit der Batterie)
 
 #### Statusvariablen
 
@@ -94,10 +104,11 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.0 (04.02.2025)
-- Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe).
-- EMSPowermode (Priorität der Energiequelle) um viele Modis erweitert.
+Version 2.0 (09.02.2025)
+- Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf max. 10000W beschränkt.
+- EMSPowermode (Priorität der Energiequelle) auf alle möglichen Modis erweitert.
 - Version um die Store-Kompatibilität zu erlangen.
+- Doku angepasst
 
 Version 1.3 (25.01.2025)
 - Register 35105 und 35109 war falsch konfiguriert und lieferte keinen Wert.
