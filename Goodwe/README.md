@@ -60,6 +60,9 @@ Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefr
 ### 5. Statusvariablen und Profile
 
 Die Statusvariablen/Kategorien werden automatisch angelegt bzw. gelöscht, je nach Auswahl der Register im Konfigurationsformulars.
+
+#### Steuervariablen
+
 Aktuell sind folgende Ansteuerung möglich:
 
 Wallbox:
