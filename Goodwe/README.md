@@ -15,6 +15,8 @@ Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen 
 Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefragt wird. 
 Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit dem Wechselrichter verbunden ist.
 
+![alt text](image.png)
+
 
 ### Inhaltsverzeichnis
 
