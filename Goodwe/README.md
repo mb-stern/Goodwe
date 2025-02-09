@@ -64,8 +64,8 @@ Aktuell sind folgende Ansteuerung möglich:
 
 Wallbox:
 - WB - Ladevorgang (Starten oder Stoppen des Ladevorganges)
-- WB - Leistung Soll (Soll Leistung der Wallbox (4.2-11kW))
-- WB - Modus Soll (Soll Modus der Wallbox (Scnell, PV-Rriorität, PV&Batterie))
+- WB - Leistung Soll (Soll Leistung der Wallbox (4.2-11kW), nur relevant im Modus 'Schnell')
+- WB - Modus Soll (Soll Modus der Wallbox (Schnell, PV-Rriorität, PV&Batterie))
 
 Batterie/Wechselrichter:
 - BAT - Min SOC online (Minimaler SOC der Batterie bei vorhandener Stromnetz-Verbindung)
