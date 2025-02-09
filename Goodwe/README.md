@@ -61,11 +61,13 @@ Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefr
 
 Die Statusvariablen/Kategorien werden automatisch angelegt bzw. gelöscht, je nach Auswahl der Register im Konfigurationsformulars.
 Aktuell sind folgende Ansteuerung möglich:
-- Wallbox:
+
+Wallbox:
 - WB - Ladevorgang (Starten oder Stoppen des Ladevorganges)
 - WB - Leistung Soll (Soll Leistung der Wallbox (4.2-11kW))
 - WB - Modus Soll (Soll Modus der Wallbox (Scnell, PV-Rriorität, PV&Batterie))
-- Batterie/Wechselrichter:
+
+Batterie/Wechselrichter:
 - BAT - Min SOC online (Minimaler SOC der Batterie bei vorhandener Stromnetz-Verbindung)
 - BAT - Min SOC offline (Minimaler SOC der Batterie bei nicht vorhandener Stromnetz-Verbindung)
 - BAT - EMSPowerMode (Modus des EnergieManagentSystems in Zusammenhang mit der Batterie (wenn du weist was du tust, der Modus 'Auto' ist zu bevorzugen))
