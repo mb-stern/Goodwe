@@ -978,6 +978,7 @@ class Goodwe extends IPSModule
             if ($currentMappingJson !== $newMapping) {
                 $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
                 IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
+                IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
             } 
 
         return $defaultMapping;
