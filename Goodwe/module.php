@@ -196,7 +196,7 @@ class Goodwe extends IPSModule
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer definiert. Aktion abgebrochen.", 0);
-            IPS_LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
+            $this->LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
             return;
         }
     
@@ -265,7 +265,7 @@ class Goodwe extends IPSModule
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
             $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            IPS_LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
             return;
         }
     
@@ -273,7 +273,7 @@ class Goodwe extends IPSModule
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
             $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            IPS_LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
+            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
     
@@ -347,7 +347,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
-                IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
+                $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
     }
