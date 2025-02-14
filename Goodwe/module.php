@@ -13,7 +13,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
-        $this->RegisterPropertyString("WallboxVariableMapping", "[]");
+        $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         
@@ -963,7 +963,7 @@ class Goodwe extends IPSModule
             ];
 
             // Aktuelles Mapping auslesen
-            $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+            $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
 
             // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
             if ($currentMapping === null || !is_array($currentMapping)) {
@@ -978,7 +978,6 @@ class Goodwe extends IPSModule
             if ($currentMappingJson !== $newMapping) {
                 $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
                 IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
-                IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
             } 
 
         return $defaultMapping;
