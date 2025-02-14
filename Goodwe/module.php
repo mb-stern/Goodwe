@@ -17,8 +17,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         
-        $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
-        $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer("Timer_WR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer("Timer_WB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
     }
 
     public function ApplyChanges()
@@ -27,12 +27,8 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
-        //Timer erst auf 0 stellen um das Problem beim Update mit dem mehrfachen Anlegen derselben Timer zu umgehen.
-        $this->SetTimerInterval('TimerWR', 0);
-        $this->SetTimerInterval('TimerWB', 0);
-
-        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        $this->SetTimerInterval('Timer_WR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval('Timer_WB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
