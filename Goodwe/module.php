@@ -13,9 +13,10 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
-        $this->RegisterPropertyString("WallboxVariableMapping", "[]");
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+
+        $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
         $this->RegisterTimer("Timer_WR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
         $this->RegisterTimer("Timer_WB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
@@ -962,25 +963,24 @@ class Goodwe extends IPSModule
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
             ];
 
-            // Aktuelles Mapping auslesen
-            $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+        // Aktuelles Mapping auslesen
+        $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
 
-            // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
-            if ($currentMapping === null || !is_array($currentMapping)) {
-                $this->SendDebug("GetWbVariables", "Aktuelles Mapping ungültig, setze Standardwerte.", 0);
-                $currentMapping = [];
-            }
-
-            // Vergleich der Mappings
-            $newMapping = json_encode($defaultMapping);
-            $currentMappingJson = json_encode($currentMapping);
-
-            if ($currentMappingJson !== $newMapping) {
-                $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
-                IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
-                IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
-            } 
-
+        // Falls Decoding fehlschlägt, Standardwerte setzen
+        if ($currentMapping === null || !is_array($currentMapping)) {
+            $this->SendDebug("GetWbVariables", "Kein gültiges Mapping, Standardwerte setzen.", 0);
+            $currentMapping = [];
+        }
+    
+        // Vergleich der Mappings
+        $newMappingJson = json_encode($defaultMapping);
+        $currentMappingJson = json_encode($currentMapping);
+    
+        if ($currentMappingJson !== $newMappingJson) {
+            $this->SendDebug("GetWbVariables", "Mapping geändert. Speichere neues Mapping.", 0);
+            $this->WriteAttributeString("WallboxVariableMapping", $newMappingJson);
+        }
+    
         return $defaultMapping;
     }
         
