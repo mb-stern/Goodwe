@@ -142,7 +142,8 @@ class Goodwe extends IPSModule
                 $ident = "Addr" . $selectedRegister['address'];
                 $registerCurrentIdents[] = $ident;
     
-                if (!@$this->GetIDForIdent($ident)) {
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) { // Variable existiert nicht, also neu registrieren
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
                             $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
@@ -154,10 +155,13 @@ class Goodwe extends IPSModule
                             $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']} und Position {$selectedRegister['pos']}.", 0);
+                } else { // Variable existiert bereits
+                    IPS_SetVariableCustomProfile($varID, $variableDetails['profile']); // Nur das Profil setzen
                 }
+                
 
-                //Hier die Akttionsvariablen
+                //Hier die Akttion hinzufügen
                 $this->EnableAction('Addr45358');
                 $this->EnableAction('Addr45356');
                 $this->EnableAction('Addr47511');
