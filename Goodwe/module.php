@@ -157,11 +157,11 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
                 }
 
-                //Hier die Akttionsvariablen
-                $this->EnableAction('Addr45358');
-                $this->EnableAction('Addr45356');
-                $this->EnableAction('Addr47511');
-                $this->EnableAction('Addr47512');
+                //Hier die aktiven Variablen definieren
+                $this->EnableAction('Addr45358'); //Min SOC offline
+                $this->EnableAction('Addr45356'); //Min SOC online
+                $this->EnableAction('Addr47511'); //EMSPowerMode
+                $this->EnableAction('Addr47512'); //EMSPowerSet
     
             }
         }
