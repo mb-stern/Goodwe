@@ -111,7 +111,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.0 (14.02.2025)
+Version 2.0 (15.02.2025)
 - Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
 - EMSPowermode (Priorität der Energiequelle) auf alle möglichen Modis erweitert.
 - Version um die Store-Kompatibilität zu erlangen.
