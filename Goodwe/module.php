@@ -13,12 +13,13 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
-        $this->RegisterPropertyString("WallboxVariableMapping", "[]");
         $this->RegisterPropertyInteger("PollIntervalWB", 30);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+
+        $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
-        $this->RegisterTimer("TimerWR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
-        $this->RegisterTimer("TimerWB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer("Timer_WR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer("Timer_WB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
     }
 
     public function ApplyChanges()
@@ -27,12 +28,8 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
-        //Timer erst auf 0 stellen um das Problem beim Update mit dem mehrfachen Anlegen derselben Timer zu umgehen.
-        $this->SetTimerInterval('TimerWR', 0);
-        $this->SetTimerInterval('TimerWB', 0);
-
-        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        $this->SetTimerInterval('Timer_WR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->SetTimerInterval('Timer_WB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
@@ -148,30 +145,24 @@ class Goodwe extends IPSModule
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], 0);
+                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
                 }
 
-                
-                //Hier die Akttionsvariablen
-                $this->EnableAction('Addr45358');
-                $this->EnableAction('Addr45356');
-                $this->EnableAction('Addr47511');
-                $this->EnableAction('Addr47512');
+                //Hier die aktiven Variablen definieren
+                $this->EnableAction('Addr45358'); //Min SOC offline
+                $this->EnableAction('Addr45356'); //Min SOC online
+                $this->EnableAction('Addr47511'); //EMSPowerMode
+                $this->EnableAction('Addr47512'); //EMSPowerSet
     
-                // Position setzen
-                $variableID = $this->GetIDForIdent($ident);
-                if ($variableID !== false) {
-                    IPS_SetPosition($variableID, $selectedRegister['pos']);
-                }
             }
         }
     
@@ -206,7 +197,7 @@ class Goodwe extends IPSModule
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer definiert. Aktion abgebrochen.", 0);
-            IPS_LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
+            $this->LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
             return;
         }
     
@@ -275,7 +266,7 @@ class Goodwe extends IPSModule
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
             $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            IPS_LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
             return;
         }
     
@@ -283,7 +274,7 @@ class Goodwe extends IPSModule
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
             $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            IPS_LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
+            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
     
@@ -357,7 +348,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
-                IPS_LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
+                $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
     }
@@ -972,25 +963,24 @@ class Goodwe extends IPSModule
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
             ];
 
-            // Aktuelles Mapping auslesen
-            $currentMapping = json_decode($this->ReadPropertyString("WallboxVariableMapping"), true);
+        // Aktuelles Mapping auslesen
+        $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
 
-            // Falls Decoding fehlschlägt, Initialisiere mit Standardwerten
-            if ($currentMapping === null || !is_array($currentMapping)) {
-                $this->SendDebug("GetWbVariables", "Aktuelles Mapping ungültig, setze Standardwerte.", 0);
-                $currentMapping = [];
-            }
-
-            // Vergleich der Mappings
-            $newMapping = json_encode($defaultMapping);
-            $currentMappingJson = json_encode($currentMapping);
-
-            if ($currentMappingJson !== $newMapping) {
-                $this->SendDebug("GetWbVariables", "Mapping hat sich geändert. Aktualisiere Property.", 0);
-                IPS_SetProperty($this->InstanceID, "WallboxVariableMapping", $newMapping);
-                IPS_ApplyChanges($this->InstanceID); // Führt ApplyChanges aus, aber nur bei tatsächlicher Änderung
-            } 
-
+        // Falls Decoding fehlschlägt, Standardwerte setzen
+        if ($currentMapping === null || !is_array($currentMapping)) {
+            $this->SendDebug("GetWbVariables", "Kein gültiges Mapping, Standardwerte setzen.", 0);
+            $currentMapping = [];
+        }
+    
+        // Vergleich der Mappings
+        $newMappingJson = json_encode($defaultMapping);
+        $currentMappingJson = json_encode($currentMapping);
+    
+        if ($currentMappingJson !== $newMappingJson) {
+            $this->SendDebug("GetWbVariables", "Mapping geändert. Speichere neues Mapping.", 0);
+            $this->WriteAttributeString("WallboxVariableMapping", $newMappingJson);
+        }
+    
         return $defaultMapping;
     }
         
