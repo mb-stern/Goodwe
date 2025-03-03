@@ -203,24 +203,34 @@ class Goodwe extends IPSModule
         
         switch ($ident) {
             case 'WB_ChargePower':
-                $chargePower = round($value, 1);
-                $chargePower = max(4.2, min($chargePower, 11));
-                $data = [
-                    'sn' => $serial,
-                    'charge_power' => $chargePower
-                ];
-                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                if ($response !== null) {
-                    SetValue($this->GetIDForIdent($ident), $chargePower);
-                    $this->SendDebug("RequestAction", "WB_ChargePower auf $chargePower kW gesetzt.", 0);
-                    
-                    // Wenn WB_ChargePower geändert wurde, WB_ChargeMode auf Modus 0 setzen
-                    if (GetValue($this->GetIDForIdent('WB_ChargeMode')) !== 0) {
-                        $this->SendDebug("RequestAction", "Setze WB_ChargeMode auf 0 aufgrund von Änderungen an WB_ChargePower.", 0);
-                        $this->SetChargingMode(0); // Modus 0 setzen
+                // Aktuellen Wert aus der Variable holen
+                $chargePower = GetValue($this->GetIDForIdent('WB_ChargePower'));
+            
+                // Sicherstellen, dass $chargePower ein gültiger Float ist
+                $chargePower = round(floatval($chargePower), 1);
+                $chargePower = max(4.2, min($chargePower, 11)); // Begrenzung auf 4.2 bis 11 kW
+            
+                // Nur wenn chargePower gültig ist, die Anfrage senden
+                if ($chargePower > 0) {
+                    $data = [
+                        'sn' => $serial,
+                        'charge_power' => $chargePower
+                    ];
+                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                    if ($response !== null) {
+                        SetValue($this->GetIDForIdent($ident), $chargePower); // Variable aktualisieren
+                        $this->SendDebug("RequestAction", "WB_ChargePower auf $chargePower kW gesetzt.", 0);
+            
+                        // Wenn WB_ChargePower geändert wurde, WB_ChargeMode auf Modus 0 setzen
+                        if (GetValue($this->GetIDForIdent('WB_ChargeMode')) !== 0) {
+                            $this->SendDebug("RequestAction", "Setze WB_ChargeMode auf 0 aufgrund von Änderungen an WB_ChargePower.", 0);
+                            $this->SetChargingMode(0); // Modus 0 setzen
+                        }
                     }
+                } else {
+                    $this->SendDebug("RequestAction", "Ungültiger Wert für WB_ChargePower: $chargePower", 0);
                 }
-                break;
+                break;            
     
             case 'WB_ChargeMode':
                 SetValue($this->GetIDForIdent($ident), $value);
