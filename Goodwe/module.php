@@ -180,7 +180,7 @@ class Goodwe extends IPSModule
     {
         // Debug-Ausgabe für Ident und Wert
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
-        
+    
         // Logik für Register
         if (strpos($ident, 'Addr') === 0) { // Ident für Register-Variablen beginnt mit "Addr"
             $address = intval(substr($ident, 4)); // Extrahiere die Adresse aus dem Ident
@@ -200,37 +200,19 @@ class Goodwe extends IPSModule
             $this->LogMessage("Goodwe", "Keine Seriennummer definiert. Aktion abgebrochen.");
             return;
         }
-        
+    
         switch ($ident) {
-            case 'WB_ChargePower':
-                // Aktuellen Wert aus der Variable holen
-                $chargePower = GetValue($this->GetIDForIdent('WB_ChargePower'));
-            
-                // Sicherstellen, dass $chargePower ein gültiger Float ist
-                $chargePower = round(floatval($chargePower), 1);
-                $chargePower = max(4.2, min($chargePower, 11)); // Begrenzung auf 4.2 bis 11 kW
-            
-                // Nur wenn chargePower gültig ist, die Anfrage senden
-                if ($chargePower > 0) {
-                    $data = [
-                        'sn' => $serial,
-                        'charge_power' => $chargePower
-                    ];
-                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                    if ($response !== null) {
-                        SetValue($this->GetIDForIdent($ident), $chargePower); // Variable aktualisieren
-                        $this->SendDebug("RequestAction", "WB_ChargePower auf $chargePower kW gesetzt.", 0);
-            
-                        // Wenn WB_ChargePower geändert wurde, WB_ChargeMode auf Modus 0 setzen
-                        if (GetValue($this->GetIDForIdent('WB_ChargeMode')) !== 0) {
-                            $this->SendDebug("RequestAction", "Setze WB_ChargeMode auf 0 aufgrund von Änderungen an WB_ChargePower.", 0);
-                            $this->SetChargingMode(0); // Modus 0 setzen
-                        }
-                    }
-                } else {
-                    $this->SendDebug("RequestAction", "Ungültiger Wert für WB_ChargePower: $chargePower", 0);
+            case 'WB_Charging':
+                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $data = ['sn' => $serial];
+                if ($value) {
+                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
-                break;            
+                $response = $this->SendWallboxRequest($data, $endpoint);
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value);
+                }
+                break;
     
             case 'WB_ChargeMode':
                 SetValue($this->GetIDForIdent($ident), $value);
@@ -248,22 +230,23 @@ class Goodwe extends IPSModule
                 }
                 break;
     
-            case 'WB_Charging':
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($value) {
-                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                }
-                $response = $this->SendWallboxRequest($data, $endpoint);
+            case 'WB_ChargePower':
+                $chargePower = round($value, 1);
+                $chargePower = max(4.2, min($chargePower, 11));
+                $data = [
+                    'sn' => $serial,
+                    'charge_power' => $chargePower
+                ];
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
                 if ($response !== null) {
-                    SetValue($this->GetIDForIdent($ident), $value);
+                    SetValue($this->GetIDForIdent($ident), $chargePower);
                 }
                 break;
     
             default:
                 throw new Exception("Ungültiger Ident: $ident");
         }
-    }    
+    }
     
     public function FetchAll()
     {
