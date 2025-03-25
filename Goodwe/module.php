@@ -82,7 +82,7 @@ class Goodwe extends IPSModule
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB - Ladevorgang', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_FLOAT, 'profile' => 'Goodwe.WB_Power', 'pos' => 2],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.Watt', 'pos' => 2],
                 ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
 
@@ -230,18 +230,18 @@ class Goodwe extends IPSModule
                 }
                 break;
     
-            case 'WB_ChargePower':
-                $chargePower = round($value, 1);
-                $chargePower = max(4.2, min($chargePower, 11));
-                $data = [
-                    'sn' => $serial,
-                    'charge_power' => $chargePower
-                ];
-                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                if ($response !== null) {
-                    SetValue($this->GetIDForIdent($ident), $chargePower);
-                }
-                break;
+                case 'WB_ChargePower':
+                    $chargePowerKW = round($value / 1000, 1);  // Watt → kW
+                    $chargePowerKW = max(4.2, min($chargePowerKW, 11));
+                    $data = [
+                        'sn' => $serial,
+                        'charge_power' => $chargePowerKW
+                    ];
+                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                    if ($response !== null) {
+                        SetValue($this->GetIDForIdent($ident), $value); // Wert in Watt speichern
+                    }
+                    break;                
     
             default:
                 throw new Exception("Ungültiger Ident: $ident");
@@ -412,21 +412,24 @@ class Goodwe extends IPSModule
         foreach ($data['data'] as $key => $value) {
             $ident = "WB_" . $key;
             $varID = @$this->GetIDForIdent($ident);
-
+        
             if ($varID !== false) {
+                if ($key === 'power') {
+                    $value = $value * 1000; // kW → W
+                }
+        
                 SetValue($varID, $value);
-
-                // Aktualisierung von WB_Charging basierend auf workstate
+        
                 if ($key === "workstate") {
-                    $chargingState = ($value !== 0); // false, wenn 0, true bei allen anderen Werten
+                    $chargingState = ($value !== 0);
                     $chargingVarID = @$this->GetIDForIdent('WB_Charging');
                     if ($chargingVarID !== false) {
                         SetValue($chargingVarID, $chargingState);
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
                     }
                 }
-            } 
-        }
+            }
+        }        
 
         $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
@@ -860,6 +863,7 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
         }
+        /*
         if (!IPS_VariableProfileExists('Goodwe.WB_Power')){
             IPS_CreateVariableProfile('Goodwe.WB_Power', VARIABLETYPE_FLOAT);
             IPS_SetVariableProfileValues('Goodwe.WB_Power', 4.2, 11, 0.1); //Min, Max, Schritt
@@ -867,6 +871,7 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileText('Goodwe.WB_Power', "", " kW"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power', 0);
         }
+        */
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie', '', -1);
@@ -924,7 +929,7 @@ class Goodwe extends IPSModule
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 9, "active" => true],
-            ["key" => "power", "name" => "Leistung Ist", "unit" => "kW", "pos" => 4, "active" => true],
+            ["key" => "power", "name" => "Leistung Ist", "unit" => "W", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 8, "active" => true],
             ["key" => "time", "name" => "lädt seit (min)", "unit" => "dur", "pos" => 10, "active" => true],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "pos" => 0, "active" => false],
