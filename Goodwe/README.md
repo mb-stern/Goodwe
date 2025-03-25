@@ -90,7 +90,7 @@ Name   | Typ
 Goodwe.EMSPowerMode     |  Integer 
 Goodwe.WB_State         |  Integer  
 Goodwe.WB_Mode          |  Integer 
-Goodwe.WB_Power         |  Float   
+Goodwe.WB_Power_W       |  Integer 
 Goodwe.Mode             |  Integer
 Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
@@ -110,6 +110,9 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 2.1 (25.03.2025)
+- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW, um den Sollwert über den Energie-Optimierer zu steuern.
 
 Version 2.0 (15.02.2025)
 - Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
