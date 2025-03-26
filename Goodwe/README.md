@@ -3,8 +3,8 @@ Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie
 
 Unterstützt sind folgende Komponenten:
 Goodwe Wechselrichter (ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
-Goodwe Wallbox (GW11K-HCA). Andere Goodwe-Wallboxen (insbesondere alle derHCA Serie) dürften ebenfalls kompatibel sein.
 Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
+Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2)ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
@@ -112,7 +112,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.1 (25.03.2025)
-- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW, um den Sollwert über den Energie-Optimierer zu steuern. Allenfalls müssen die Variablen WB - Leistung Soll und WB - Leistung ist manuell gelöscht werden, sie werden automatisch wieder erstellt.
+- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW. Allenfalls müssen die Variablen WB - Leistung Soll und WB - Leistung ist manuell gelöscht werden, sie werden automatisch wieder erstellt.
 
 Version 2.0 (15.02.2025)
 - Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
