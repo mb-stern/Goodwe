@@ -112,7 +112,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.1 (25.03.2025)
-- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW, um den Sollwert über den Energie-Optimierer zu steuern.
+- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW, um den Sollwert über den Energie-Optimierer zu steuern. Allenfalls müssen die Variablen WB - Leistung Soll und WB - Leistung ist manuell gelöscht werden, sie werden automatisch wieder erstellt.
 
 Version 2.0 (15.02.2025)
 - Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
