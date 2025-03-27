@@ -18,8 +18,8 @@ class Goodwe extends IPSModule
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
-        $this->RegisterTimer("Timer_WR", 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
-        $this->RegisterTimer("Timer_WB", 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer('Timer_WR', 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer('Timer_WB', 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
     }
 
     public function ApplyChanges()

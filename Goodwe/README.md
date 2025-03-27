@@ -3,13 +3,13 @@ Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie
 
 Unterstützt sind folgende Komponenten:
 Goodwe Wechselrichter (ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
-Goodwe Wallbox (GW11K-HCA). Andere Goodwe-Wallboxen (insbesondere alle derHCA Serie) dürften ebenfalls kompatibel sein.
 Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
+Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2)ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
 Die Verbindung mit dem Goode Wechselrichter der ET-, EH-, BH-, oder BT-Serie  wird über Modbus hergestellt. Die Register können nach Wunsch aus einer Liste via Konfigurationsformular ausgewählt werden. Es sind nicht alle möglichen Register in der Auswahl vorhanden. Gerne erweitere ich aber die Auswahl bei Bedarf. 
-Die Verbindung mit der Goodwe Wallbox GW11K-HCA wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
+Die Verbindung mit der Goodwe Wallbox GW11K-HCA (1. Generation) wird über die SEMS-API hergestellt. Dazu werden die Zugangsdaten des SEMS-Portal und die Seriennummer der Goodwe Wallbox benötigt. Diese kann in der SEMS-APP in der Wallboxsteuerung nachgesehen werden.
 Während der Installation des Moduls wird automatisch ein Modbus-Gateway erstellt, sofern noch keines vorhanden ist. Besteht bereteits ein Gateway, kann dieses ausgewählt werden. Die Geräte-ID des Wechselrichters ist 247.
 Danach kann die IP-Adresse des Wechselrichters in den Client Socket eingetragen werden. 
 Der Port ist standardmässig 502, sofern der Wechselrichter über das LAN-Modul direkt abgefragt wird. 
@@ -90,7 +90,7 @@ Name   | Typ
 Goodwe.EMSPowerMode     |  Integer 
 Goodwe.WB_State         |  Integer  
 Goodwe.WB_Mode          |  Integer 
-Goodwe.WB_Power         |  Float   
+Goodwe.WB_Power_W       |  Integer 
 Goodwe.Mode             |  Integer
 Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
@@ -110,6 +110,9 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 2.1 (25.03.2025)
+- Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW. Allenfalls müssen die beiden Variablen 'WB - Leistung Soll' und 'WB - Leistung ist' manuell gelöscht werden, sie werden dann automatisch wieder erstellt.
 
 Version 2.0 (15.02.2025)
 - Neues Variablenprofil für die Regelung von EMSPowerSet (Leistungsvorgabe) auf 10000 Watt beschränkt.
