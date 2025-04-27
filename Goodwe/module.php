@@ -258,6 +258,7 @@ class Goodwe extends IPSModule
     {
         $this->FetchWallboxData();
         $this->FetchInverterData();
+        private function CalculateMaxPower();
     }
 
     public function FetchInverterData()
