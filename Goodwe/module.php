@@ -358,6 +358,7 @@ class Goodwe extends IPSModule
                 $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
+        $this->CalculateMaxPower(); //Max. Lade/Entladeleistung aktualisieren
     }
 
     private function WriteRegister(int $address, int $value): bool
