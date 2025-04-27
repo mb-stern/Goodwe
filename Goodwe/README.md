@@ -112,7 +112,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.2 (27.04.2025)
-- Die maximal freigegeben Leistungsaufnahme und Abgabe kann in Watt ausgegeben werden. Diese wird vom Modul berechnet, da diese von Goodwe nicht als Datenpunkt zur Verfügung steht.
+- Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung steht.
 - Ein Fehler wurde behoben, dass nach einer Aktualisierung des Moduls die neuen Register nicht zur Auswahl standen.
 
 Version 2.1 (25.03.2025)
