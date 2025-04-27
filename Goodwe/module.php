@@ -10,6 +10,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
+        $this->RegisterPropertyBoolean("Entladen_Max", true);
+        $this->RegisterPropertyBoolean("Laden_Max", true);
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
