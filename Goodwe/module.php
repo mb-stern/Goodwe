@@ -721,24 +721,24 @@ class Goodwe extends IPSModule
 
         // Jetzt die Berechnung, wenn aktiviert:
         if ($entladenAktiv) {
-            $spannung = $this->ReadRegisterValue(47904);
-            $strom = $this->ReadRegisterValue(47905);
+            $spannung = $this->ReadRegisterValue(47904, 0.1); // Spannung max Entladen
+            $strom = $this->ReadRegisterValue(47905, 0.1);    // Strom max Entladen
             if ($spannung !== null && $strom !== null) {
                 $leistung = intval($spannung * $strom);
                 SetValue($this->GetIDForIdent("MaxEntladen"), $leistung);
                 $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
             }
         }
-
+        
         if ($ladenAktiv) {
-            $spannung = $this->ReadRegisterValue(47902);
-            $strom = $this->ReadRegisterValue(47903);
+            $spannung = $this->ReadRegisterValue(47902, 0.1); // Spannung max Laden
+            $strom = $this->ReadRegisterValue(47903, 0.1);    // Strom max Laden
             if ($spannung !== null && $strom !== null) {
                 $leistung = intval($spannung * $strom);
                 SetValue($this->GetIDForIdent("MaxLaden"), $leistung);
                 $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
             }
-        }
+        }        
     }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
