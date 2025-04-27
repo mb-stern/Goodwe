@@ -7,6 +7,7 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
+        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
@@ -987,6 +988,25 @@ class Goodwe extends IPSModule
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
             ];
+
+        // Aktuelles Mapping auslesen
+        $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
+
+        // Falls Decoding fehlschlägt, Standardwerte setzen
+        if ($currentMapping === null || !is_array($currentMapping)) {
+            $this->SendDebug("GetWbVariables", "Kein gültiges Mapping, Standardwerte setzen.", 0);
+            $currentMapping = [];
+        }
+    
+        // Vergleich der Mappings
+        $newMappingJson = json_encode($defaultMapping);
+        $currentMappingJson = json_encode($currentMapping);
+    
+        if ($currentMappingJson !== $newMappingJson) {
+            $this->SendDebug("GetWbVariables", "Mapping geändert. Speichere neues Mapping.", 0);
+            $this->WriteAttributeString("WallboxVariableMapping", $newMappingJson);
+        }
+    
         return $defaultMapping;
     }
         
@@ -1008,10 +1028,10 @@ class Goodwe extends IPSModule
         ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
         ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
         ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "watt_ems", "scale" => 1, "pos" => 130],
-        ["address" => 47902, "name" => "BAT - Laden Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 141],
         ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
-        ["address" => 47904, "name" => "BAT - Entladen Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 151],
+        ["address" => 47902, "name" => "BAT - Laden Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 141],
         ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
+        ["address" => 47904, "name" => "BAT - Entladen Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 151],
         ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
         ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
         ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
