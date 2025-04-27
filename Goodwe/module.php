@@ -777,12 +777,12 @@ class Goodwe extends IPSModule
                         [
                             "type" => "CheckBox",
                             "name" => "Entladen_Max",
-                            "caption" => "Maximal mögliche Leistung für das Entladen der Batterie anzeigen",
+                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers anzeigen",
                         ],
                         [
                             "type" => "CheckBox",
                             "name" => "Laden_Max",
-                            "caption" => "Maximal mögliche Leistung für das Laden der Batterie anzeigen"
+                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers anzeigen"
                         ]
                     ]   
                 ]            
@@ -1028,7 +1028,9 @@ class Goodwe extends IPSModule
         ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
         ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
         ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "watt_ems", "scale" => 1, "pos" => 130],
+        ["address" => 47902, "name" => "BAT - Laden Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 140],
         ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
+        ["address" => 47904, "name" => "BAT - Entladen Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 140],
         ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
         ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
         ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
