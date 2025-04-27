@@ -8,7 +8,7 @@ class Goodwe extends IPSModule
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         //$this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
-        //$this->RegisterPropertyString("SelectedRegisters", "[]");
+        $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
         $this->RegisterPropertyBoolean("Laden_Max", true);
@@ -988,25 +988,6 @@ class Goodwe extends IPSModule
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
             ];
-
-        // Aktuelles Mapping auslesen
-        $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
-
-        // Falls Decoding fehlschlägt, Standardwerte setzen
-        if ($currentMapping === null || !is_array($currentMapping)) {
-            $this->SendDebug("GetWbVariables", "Kein gültiges Mapping, Standardwerte setzen.", 0);
-            $currentMapping = [];
-        }
-    
-        // Vergleich der Mappings
-        $newMappingJson = json_encode($defaultMapping);
-        $currentMappingJson = json_encode($currentMapping);
-    
-        if ($currentMappingJson !== $newMappingJson) {
-            $this->SendDebug("GetWbVariables", "Mapping geändert. Speichere neues Mapping.", 0);
-            $this->WriteAttributeString("WallboxVariableMapping", $newMappingJson);
-        }
-    
         return $defaultMapping;
     }
         
