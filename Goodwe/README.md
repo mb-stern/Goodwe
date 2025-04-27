@@ -113,6 +113,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 Version 2.2 (27.04.2025)
 - Die maximal freigegeben Leistungsaufnahme und Abgabe kann in Watt ausgegeben werden. Diese wird vom Modul berechnet, da diese von Goodwe nicht als Datenpunkt zur Verfügung steht.
+- Ein Fehler wurde behoben, dass eine Aktualisierung der Register bei einem Update nicht zur Auswahl stand.
 
 Version 2.1 (25.03.2025)
 - Wallbox Soll- und Ist-Leistung wird nun in Watt angezeigt statt kW. Allenfalls müssen die beiden Variablen 'WB - Leistung Soll' und 'WB - Leistung ist' manuell gelöscht werden, sie werden dann automatisch wieder erstellt.
