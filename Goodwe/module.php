@@ -699,6 +699,79 @@ class Goodwe extends IPSModule
         return true;
     }
 
+    
+    
+    
+    
+    private function CalculateMaxPower()
+    {
+        // Prüfen, ob die Option überhaupt aktiviert ist:
+        $entladenAktiv = $this->ReadPropertyBoolean("Entladen_Max");
+        $ladenAktiv = $this->ReadPropertyBoolean("Laden_Max");
+
+        // Variablen anlegen, wenn sie nicht existieren:
+        if (!@$this->GetIDForIdent("MaxEntladen")) {
+            $this->RegisterVariableInteger("MaxEntladen", "Maximale Entladeleistung", "Goodwe.Watt", 901);
+        }
+        if (!@$this->GetIDForIdent("MaxLaden")) {
+            $this->RegisterVariableInteger("MaxLaden", "Maximale Ladeleistung", "Goodwe.Watt", 902);
+        }
+
+        // Jetzt die Berechnung, wenn aktiviert:
+        if ($entladenAktiv) {
+            $spannung = $this->ReadRegisterValue(47904);
+            $strom = $this->ReadRegisterValue(47905);
+            if ($spannung !== null && $strom !== null) {
+                $leistung = intval($spannung * $strom);
+                SetValue($this->GetIDForIdent("MaxEntladen"), $leistung);
+                $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+            }
+        }
+
+        if ($ladenAktiv) {
+            $spannung = $this->ReadRegisterValue(47902);
+            $strom = $this->ReadRegisterValue(47903);
+            if ($spannung !== null && $strom !== null) {
+                $leistung = intval($spannung * $strom);
+                SetValue($this->GetIDForIdent("MaxLaden"), $leistung);
+                $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+            }
+        }
+    }
+
+    private function ReadRegisterValue(int $address)
+    {
+        $quantity = 1; // Immer 1, weil U16 oder S16
+
+        $response = $this->SendDataToParent(json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address"  => $address,
+            "Quantity" => $quantity,
+            "Data"     => ""
+        ]));
+
+        if ($response === false || strlen($response) < 4) {
+            $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
+            return null;
+        }
+
+        $data = unpack("n*", substr($response, 2));
+        $value = $data[1];
+
+        // Umwandlung für signed (S16):
+        if ($value & 0x8000) {
+            $value = -((~$value & 0xFFFF) + 1);
+        }
+
+        return $value;
+    }
+
+
+    
+    
+    
+    
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
