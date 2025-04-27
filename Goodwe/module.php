@@ -175,6 +175,31 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
+
+        // Max-Entladen-Variable anlegen oder löschen:
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            if (!@$this->GetIDForIdent("MaxEntladen")) {
+                $this->RegisterVariableInteger("MaxEntladen", "Maximale Entladeleistung", "Goodwe.Watt", 901);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxEntladen") !== false) {
+                $this->UnregisterVariable("MaxEntladen");
+                $this->SendDebug("ApplyChanges", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            }
+        }
+
+        // Max-Laden-Variable anlegen oder löschen:
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            if (!@$this->GetIDForIdent("MaxLaden")) {
+                $this->RegisterVariableInteger("MaxLaden", "Maximale Ladeleistung", "Goodwe.Watt", 902);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxLaden") !== false) {
+                $this->UnregisterVariable("MaxLaden");
+                $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            }
+        }
+
     }
 
     public function RequestAction($ident, $value)
@@ -703,43 +728,30 @@ class Goodwe extends IPSModule
 
     public function CalculateMaxPower()
     {
-        $entladenAktiv = $this->ReadPropertyBoolean("Entladen_Max");
-        $ladenAktiv = $this->ReadPropertyBoolean("Laden_Max");
-    
-        // Entladen-Variable:
-        $entladenID = @$this->GetIDForIdent("MaxEntladen");
-        if ($entladenAktiv) {
-            if ($entladenID === false) {
-                $entladenID = $this->RegisterVariableInteger("MaxEntladen", "Maximale Entladeleistung", "Goodwe.Watt", 901);
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47904, 0.1);
+                $strom = $this->ReadRegisterValue(47905, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = intval($spannung * $strom);
+                    SetValue($entladenID, $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
             }
-            $spannung = $this->ReadRegisterValue(47904, 0.1); // Skalierung beachten!
-            $strom = $this->ReadRegisterValue(47905, 0.1);
-            if ($spannung !== null && $strom !== null) {
-                $leistung = intval($spannung * $strom);
-                SetValue($entladenID, $leistung);
-                $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
-            }
-        } elseif ($entladenID !== false) {
-            $this->UnregisterVariable("MaxEntladen");
-            $this->SendDebug("CalculateMaxPower", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
         }
     
-        // Laden-Variable:
-        $ladenID = @$this->GetIDForIdent("MaxLaden");
-        if ($ladenAktiv) {
-            if ($ladenID === false) {
-                $ladenID = $this->RegisterVariableInteger("MaxLaden", "Maximale Ladeleistung", "Goodwe.Watt", 902);
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47902, 0.1);
+                $strom = $this->ReadRegisterValue(47903, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = intval($spannung * $strom);
+                    SetValue($ladenID, $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
             }
-            $spannung = $this->ReadRegisterValue(47902, 0.1);
-            $strom = $this->ReadRegisterValue(47903, 0.1);
-            if ($spannung !== null && $strom !== null) {
-                $leistung = intval($spannung * $strom);
-                SetValue($ladenID, $leistung);
-                $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
-            }
-        } elseif ($ladenID !== false) {
-            $this->UnregisterVariable("MaxLaden");
-            $this->SendDebug("CalculateMaxPower", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
         }
     }    
 
@@ -771,13 +783,7 @@ class Goodwe extends IPSModule
         // Skalierung:
         return $value * $scale;
     }
-    
 
-
-    
-    
-    
-    
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
