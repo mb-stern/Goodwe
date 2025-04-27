@@ -775,15 +775,15 @@ class Goodwe extends IPSModule
                         [
                             "type": "CheckBox",
                             "name": "Entladen_Max",
-                            "caption": "Maximal mögliche Leistung beim Entladen der Batterie anzeigen"
+                            "caption": "Maximal mögliche Leistung für das Entladen der Batterie anzeigen"
                         ],
                         [
                             "type": "CheckBox",
                             "name": "Laden_Max",
-                            "caption": "Maximal mögliche Leistung beim Laden der Batterie anzeigen"
+                            "caption": "Maximal mögliche Leistung für das Laden der Batterie anzeigen"
                         ]
-                    ]
-                        
+                    ]   
+                ]            
             ],
             "actions" => [
                 [
