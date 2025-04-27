@@ -191,7 +191,7 @@ class Goodwe extends IPSModule
         // Max-Laden-Variable anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
-                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 152);
+                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
             }
         } else {
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
