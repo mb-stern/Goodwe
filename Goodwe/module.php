@@ -7,7 +7,7 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
+        //$this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
