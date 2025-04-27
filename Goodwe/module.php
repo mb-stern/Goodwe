@@ -176,10 +176,10 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Max-Entladen-Variable anlegen oder löschen:
+        // Max-Entladen-Variable für Speicher anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
-                $this->RegisterVariableInteger("MaxEntladen", "Maximale Entladeleistung", "Goodwe.Watt", 901);
+                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
             }
         } else {
             if (@$this->GetIDForIdent("MaxEntladen") !== false) {
@@ -191,7 +191,7 @@ class Goodwe extends IPSModule
         // Max-Laden-Variable anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
-                $this->RegisterVariableInteger("MaxLaden", "Maximale Ladeleistung", "Goodwe.Watt", 902);
+                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 152);
             }
         } else {
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
