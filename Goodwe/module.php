@@ -358,7 +358,7 @@ class Goodwe extends IPSModule
                 $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
-        $this->CalculateMaxPower(); //Max. Lade/Entladeleistung aktualisieren
+        $this->CalculateMaxPower(); //Zusätzlich Variablen für Max. Lade/Entladeleistung ebenfalls aktualisieren
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -741,10 +741,10 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function ReadRegisterValue(int $address)
+    private function ReadRegisterValue(int $address, float $scale = 1.0)
     {
-        $quantity = 1; // Immer 1, weil U16 oder S16
-
+        $quantity = 1; // 1 Register (16 Bit)
+    
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,
@@ -752,22 +752,24 @@ class Goodwe extends IPSModule
             "Quantity" => $quantity,
             "Data"     => ""
         ]));
-
+    
         if ($response === false || strlen($response) < 4) {
             $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
             return null;
         }
-
+    
         $data = unpack("n*", substr($response, 2));
         $value = $data[1];
-
-        // Umwandlung für signed (S16):
+    
+        // Umwandlung für signed S16:
         if ($value & 0x8000) {
             $value = -((~$value & 0xFFFF) + 1);
         }
-
-        return $value;
+    
+        // Skalierung:
+        return $value * $scale;
     }
+    
 
 
     
