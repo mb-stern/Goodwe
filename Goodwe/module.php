@@ -119,26 +119,7 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $selectedRegisters = [];
-        
-        if (is_array($selectedRegistersRaw)) {
-            $allRegisters = $this->GetRegisters();
-            foreach ($allRegisters as $register) {
-                foreach ($selectedRegistersRaw as $selected) {
-                    if (isset($selected['address'], $selected['active']) && 
-                        $selected['address'] == $register['address'] && 
-                        $selected['active']) {
-                        $selectedRegisters[] = $register; // <-- jetzt hast du unit, type, scale, pos
-                        break;
-                    }
-                }
-            }
-        }
-
-        $this->SendDebug("ApplyChanges", "Gefundene aktive Register: " . json_encode($selectedRegisters), 0);
-
-        
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
@@ -330,12 +311,7 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as &$register) {
-            if (!isset($register['address'])) {
-                $this->SendDebug("RequestRead", "Register-Eintrag ohne 'address' gefunden: " . json_encode($register), 0);
-                continue;
-            }
-            
-            if (is_string($register['address'])) {            
+            if (is_string($register['address'])) {
                 $decodedRegister = json_decode($register['address'], true);
                 if ($decodedRegister !== null) {
                     $register = array_merge($register, $decodedRegister);
@@ -810,68 +786,45 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
+        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
-        }
-    
-        // Mapping vorbereiten
-        $values = [];
-        foreach ($registers as $register) {
-            $isChecked = false;
-    
-            // Prüfen, ob dieses Register in der Property SelectedRegisters aktiv ist
-            foreach ($selectedRegisters as $selected) {
-                if (isset($selected['address']) && $selected['address'] == $register['address'] && isset($selected['active']) && $selected['active']) {
-                    $isChecked = true;
-                    break;
-                }
-            }
-    
-            $values[] = [
-                "active"  => $isChecked,
-                "address" => $register['address'],
-                "name"    => $register['name']
+        // Optionen für die Auswahlliste
+        $registerOptions = array_map(function ($register) {
+            return [
+                "caption" => "{$register['address']} - {$register['name']}",
+                "value" => json_encode($register)
             ];
-        }
-    
+        }, $registers);
+        
         return json_encode([
             "elements" => [
                 [
-                    "type"    => "List",
-                    "name"    => "SelectedRegisters",
-                    "caption" => "Register auswählen",
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Ausgewählte Register",
                     "rowCount" => 15,
-                    "add"     => false,
-                    "delete"  => false,
+                    "add" => true,
+                    "delete" => true,
                     "columns" => [
                         [
-                            "caption" => "Aktiv",
-                            "name"    => "active",
-                            "width"   => "100px",
-                            "edit"    => [
-                                "type" => "CheckBox"
+                            "caption" => "Register auswählen",
+                            "name" => "address",
+                            "width" => "400px",
+                            "add" => json_encode($registers[0] ?? ""),
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => $registerOptions
                             ]
-                        ],
-                        [
-                            "caption" => "Register",
-                            "name"    => "address",
-                            "width"   => "150px"
-                        ],
-                        [
-                            "caption" => "Name",
-                            "name"    => "name",
-                            "width"   => "auto"
                         ]
                     ],
-                    "values" => $values
+                    "values" => $selectedRegisters
                 ],
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden Wechselrichter",
+                    "caption" => "Sekunden",
                     "suffix" => "s"
                 ],
                 [
@@ -896,7 +849,7 @@ class Goodwe extends IPSModule
                         [
                             "type"  => "IntervalBox",
                             "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden Wallbox",
+                            "caption" => "Sekunden",
                             "suffix" => "s"
                         ]
                     ]
@@ -915,8 +868,8 @@ class Goodwe extends IPSModule
                             "name" => "Laden_Max",
                             "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
                         ]
-                    ]
-                ]
+                    ]   
+                ]            
             ],
             "actions" => [
                 [
