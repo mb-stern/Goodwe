@@ -119,7 +119,22 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = [];
+
+        if (is_array($selectedRegistersRaw)) {
+            foreach ($selectedRegistersRaw as $entry) {
+                if (isset($entry['value'])) {
+                    $decoded = json_decode($entry['value'], true);
+                    if (is_array($decoded)) {
+                        $selectedRegisters[] = $decoded;
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['value'], 0);
+                    }
+                }
+            }
+        }
+
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
@@ -787,22 +802,8 @@ class Goodwe extends IPSModule
  public function GetConfigurationForm()
 {
     $registers = $this->GetRegisters();
-    $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    $selectedRegisters = [];
+    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
 
-    if (is_array($selectedRegistersRaw)) {
-        foreach ($selectedRegistersRaw as $entry) {
-            if (isset($entry['value'])) {
-                $decoded = json_decode($entry['value'], true);
-                if (is_array($decoded)) {
-                    $selectedRegisters[] = $decoded;
-                } else {
-                    $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['value'], 0);
-                }
-            }
-        }
-    }
-    
     $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
 
     $options = [];
