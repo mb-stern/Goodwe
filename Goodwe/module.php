@@ -142,19 +142,14 @@ class Goodwe extends IPSModule
                 if (!isset($entry['address']) || !isset($entry['active']) || !$entry['active']) {
                     continue;
                 }
-            
+        
                 $decoded = json_decode($entry['address'], true);
                 if (!is_array($decoded)) {
                     $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
                     continue;
                 }
-            
+        
                 $selectedRegister = $decoded;
-                else {
-                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                        continue;
-                    }
-                }
     
                 $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
                 if ($variableDetails === null) {
