@@ -119,45 +119,44 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
-        
-        if (is_array($selectedRegistersRaw)) {
-            foreach ($selectedRegistersRaw as $entry) {
-                if (!isset($entry['address']) || !$entry['active']) {
-                    continue;
-                }
-        
-                $decoded = json_decode($entry['address'], true); // address aus JSON holen
-                if (!is_array($decoded)) {
-                    $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . print_r($entry, true), 0);
-                    continue;
-                }
-        
-                $ident = "Addr" . $decoded['address'];
-                $registerCurrentIdents[] = $ident;
-        
-                if (!@$this->GetIDForIdent($ident)) {
-                    $variableDetails = $this->GetVariableDetails($decoded['unit']);
-                    if ($variableDetails === null) {
-                        $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$decoded['unit']} gefunden.", 0);
+    
+        if (is_array($selectedRegisters)) {
+            foreach ($selectedRegisters as &$selectedRegister) {
+                if (is_string($selectedRegister['address'])) {
+                    $decodedRegister = json_decode($selectedRegister['address'], true);
+                    if ($decodedRegister !== null) {
+                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                         continue;
                     }
-        
+                }
+    
+                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+                if ($variableDetails === null) {
+                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                    continue;
+                }
+    
+                $ident = "Addr" . $selectedRegister['address'];
+                $registerCurrentIdents[] = $ident;
+    
+                if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $decoded['name'], $variableDetails['profile'], $decoded['pos']);
+                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $decoded['name'], $variableDetails['profile'], $decoded['pos']);
+                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $decoded['name'], $variableDetails['profile'], $decoded['pos']);
+                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                     }
-        
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
-                }              
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+                }
 
                 //Hier die aktiven Variablen definieren
                 $this->EnableAction('Addr45358'); //Min SOC offline
@@ -200,6 +199,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
+
     }
 
     public function RequestAction($ident, $value)
@@ -310,18 +310,17 @@ class Goodwe extends IPSModule
             return;
         }
     
-        foreach ($selectedRegisters as $entry) {
-            if (!isset($entry['address']) || !isset($entry['active']) || !$entry['active']) {
-                continue;
+        foreach ($selectedRegisters as &$register) {
+            if (is_string($register['address'])) {
+                $decodedRegister = json_decode($register['address'], true);
+                if ($decodedRegister !== null) {
+                    $register = array_merge($register, $decodedRegister);
+                } else {
+                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
+                    continue;
+                }
             }
-        
-            $register = json_decode($entry['address'], true);
-            if (!is_array($register)) {
-                $this->SendDebug("FetchInverterData", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
-                continue;
-            }
-        
-
+    
             // Validierung der Felder
             if (!isset($register['address'], $register['type'], $register['scale'])) {
                 $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
@@ -787,52 +786,46 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
+        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $selectedAddresses = [];
-        
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $entry) {
-                if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
-                    $decoded = json_decode($entry['address'], true);
-                    if (is_array($decoded) && isset($decoded['address'])) {
-                        $selectedAddresses[] = $decoded['address'];
-                    }
-                }
-            }
-        }
-        
     
-        $values = [];
-        foreach ($registers as $register) {
-            $values[] = [
-                'address' => json_encode($register),
-                'caption' => "{$register['address']} - {$register['name']}",
-                'active'  => in_array($register['address'], $selectedAddresses)
+        // Optionen für die Auswahlliste
+        $registerOptions = array_map(function ($register) {
+            return [
+                "caption" => "{$register['address']} - {$register['name']}",
+                "value" => json_encode($register)
             ];
-        }
-    
+        }, $registers);
+        
         return json_encode([
-            'elements' => [
+            "elements" => [
                 [
-                    'type'    => 'List',
-                    'name'    => 'SelectedRegisters',
-                    'caption' => 'Register auswählen',
-                    'rowCount' => 20,
-                    'add' => false,
-                    'delete' => false,
-            'columns' => [
-                ['caption' => 'Aktiv', 'name' => 'active', 'width' => '100px', 'edit' => ['type' => 'CheckBox']],
-                ['caption' => 'Register', 'name' => 'caption', 'width' => '600px', 'edit' => false],
-                ['name' => 'address', 'visible' => false]
-            ],
-                    'values' => $values
+                    "type"  => "List",
+                    "name"  => "SelectedRegisters",
+                    "caption" => "Ausgewählte Register",
+                    "rowCount" => 15,
+                    "add" => true,
+                    "delete" => true,
+                    "columns" => [
+                        [
+                            "caption" => "Register auswählen",
+                            "name" => "address",
+                            "width" => "400px",
+                            "add" => json_encode($registers[0] ?? ""),
+                            "edit" => [
+                                "type" => "Select",
+                                "options" => $registerOptions
+                            ]
+                        ]
+                    ],
+                    "values" => $selectedRegisters
                 ],
                 [
-                    'type'  => 'IntervalBox',
-                    'name'  => 'PollIntervalWR',
-                    'caption' => 'Abfrageintervall Wechselrichter (s)',
-                    'suffix' => 's'
+                    "type"  => "IntervalBox",
+                    "name"  => "PollIntervalWR",
+                    "caption" => "Sekunden",
+                    "suffix" => "s"
                 ],
                 [
                     "type" => "ExpansionPanel",
