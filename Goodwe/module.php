@@ -837,10 +837,11 @@ class Goodwe extends IPSModule
                     'rowCount' => 20,
                     'add' => false,
                     'delete' => false,
-                    'columns' => [
-                        ['caption' => 'Aktiv', 'name' => 'active', 'width' => '100px', 'edit' => ['type' => 'CheckBox']],
-                        ['caption' => 'Register', 'name' => 'caption', 'width' => '600px', 'edit' => false]
-                    ],
+            'columns' => [
+                ['caption' => 'Aktiv', 'name' => 'active', 'width' => '100px', 'edit' => ['type' => 'CheckBox']],
+                ['caption' => 'Register', 'name' => 'caption', 'width' => '600px', 'edit' => false],
+                ['name' => 'address', 'visible' => false]
+            ],
                     'values' => $values
                 ],
                 [
