@@ -819,7 +819,7 @@ class Goodwe extends IPSModule
                     ]
                 ],
                 [
-                    'type'  => 'GroupBox',
+                    'type'  => 'Group',
                     'caption' => 'Batterie Register',
                     'items' => [
                         [
