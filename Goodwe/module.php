@@ -144,15 +144,18 @@ class Goodwe extends IPSModule
                     continue;
                 }
             
+                // KEIN json_decode hier!
+                // $selectedRegister ist schon korrekt das Array!
+            
                 $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
                 if ($variableDetails === null) {
                     $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                     continue;
                 }
-    
+            
                 $ident = "Addr" . $selectedRegister['address'];
                 $registerCurrentIdents[] = $ident;
-    
+            
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
@@ -165,8 +168,10 @@ class Goodwe extends IPSModule
                             $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
                 }
+            }
+            
 
                 //Hier die aktiven Variablen definieren
                 $this->EnableAction('Addr45358'); //Min SOC offline
