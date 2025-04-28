@@ -806,7 +806,7 @@ class Goodwe extends IPSModule
         return json_encode([
             'elements' => [
                 [
-                    'type'  => 'GroupBox',
+                    'type'  => 'Group',
                     'caption' => 'Smartmeter Register',
                     'items' => [
                         [
