@@ -832,7 +832,7 @@ class Goodwe extends IPSModule
                     ]
                 ],
                 [
-                    'type'  => 'GroupBox',
+                    'type'  => 'Group',
                     'caption' => 'Wechselrichter Register',
                     'items' => [
                         [
