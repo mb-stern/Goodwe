@@ -841,7 +841,8 @@ class Goodwe extends IPSModule
                                 "values"  => $inverterOptions
                             ]
                         ]
-                    ],
+                    ]
+                ], 
                 [
                     'type'  => 'ExpansionPanel',
                     'caption' => 'SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)',
