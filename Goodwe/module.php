@@ -9,6 +9,11 @@ class Goodwe extends IPSModule
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
+        $registers = $this->GetRegisters();
+        foreach ($registers as $register) {
+            $this->RegisterPropertyBoolean("Reg_" . $register['address'], false);
+        }
+
         $this->RegisterPropertyBoolean("Entladen_Max", true);
         $this->RegisterPropertyBoolean("Laden_Max", true);
         $this->RegisterPropertyString("WallboxUser", "");     
@@ -794,8 +799,6 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
     
         $registerCheckboxes = [];
         foreach ($registers as $register) {
@@ -803,7 +806,7 @@ class Goodwe extends IPSModule
                 "type"    => "CheckBox",
                 "name"    => "Reg_" . $register['address'],
                 "caption" => $register['address'] . " - " . $register['name'],
-                "value"   => in_array($register['address'], $selectedAddresses)
+                "value"   => $this->ReadPropertyBoolean("Reg_" . $register['address'])
             ];
         }
     
