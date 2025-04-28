@@ -861,12 +861,12 @@ class Goodwe extends IPSModule
                         [
                             "type" => "CheckBox",
                             "name" => "Entladen_Max",
-                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers anzeigen",
+                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen",
                         ],
                         [
                             "type" => "CheckBox",
                             "name" => "Laden_Max",
-                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers anzeigen"
+                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
                         ]
                     ]   
                 ]            
