@@ -124,7 +124,7 @@ class Goodwe extends IPSModule
         
         if (is_array($selectedRegistersRaw)) {
             foreach ($selectedRegistersRaw as $entry) {
-                if (isset($entry['address']) && $entry['active']) {
+                if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
                     $decoded = json_decode($entry['address'], true);
                     if (is_array($decoded)) {
                         $selectedRegisters[] = $decoded;
