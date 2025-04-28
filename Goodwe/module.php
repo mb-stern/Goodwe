@@ -801,47 +801,25 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
-        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
-            return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
-            ];
-        }, $registers);
-        
         return json_encode([
             "elements" => [
                 [
                     "type"  => "ExpansionPanel",
                     "caption" => "Register auswählen",
-                    "items" => array_map(function ($register) use ($selectedRegisters) {
-                        $address = $register['address'];
-                        $name = $register['name'];
-                        $isChecked = false;
-                
-                        foreach ($selectedRegisters as $selected) {
-                            if (isset($selected['address']) && $selected['address'] == $address) {
-                                $isChecked = true;
-                                break;
-                            }
-                        }
-                
+                    "items" => array_map(function ($register) {
                         return [
                             "type"    => "CheckBox",
-                            "name"    => "Register_" . $address,
-                            "caption" => $address . " - " . $name,
-                            "value"   => $isChecked
+                            "name"    => "Register_" . $register['address'],
+                            "caption" => $register['address'] . " - " . $register['name']
                         ];
                     }, $registers)
-                ],                
+                ],
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden",
+                    "caption" => "Sekunden Wechselrichter",
                     "suffix" => "s"
                 ],
                 [
@@ -866,7 +844,7 @@ class Goodwe extends IPSModule
                         [
                             "type"  => "IntervalBox",
                             "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden",
+                            "caption" => "Sekunden Wallbox",
                             "suffix" => "s"
                         ]
                     ]
@@ -885,8 +863,8 @@ class Goodwe extends IPSModule
                             "name" => "Laden_Max",
                             "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
                         ]
-                    ]   
-                ]            
+                    ]
+                ]
             ],
             "actions" => [
                 [
