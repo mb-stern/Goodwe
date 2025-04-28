@@ -140,7 +140,6 @@ class Goodwe extends IPSModule
     
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as $selectedRegister) {
-                $this->SendDebug("ApplyChanges", "Prüfe Register: " . print_r($selectedRegister, true), 0);
                 if (!isset($selectedRegister['address']) || !isset($selectedRegister['active']) || !$selectedRegister['active']) {
                     continue;
                 }
@@ -800,7 +799,19 @@ class Goodwe extends IPSModule
     {
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
+        $selectedAddresses = [];
+        
+        if (is_array($selectedRegisters)) {
+            foreach ($selectedRegisters as $entry) {
+                if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
+                    $decoded = json_decode($entry['address'], true);
+                    if (is_array($decoded) && isset($decoded['address'])) {
+                        $selectedAddresses[] = $decoded['address'];
+                    }
+                }
+            }
+        }
+        
     
         $values = [];
         foreach ($registers as $register) {
