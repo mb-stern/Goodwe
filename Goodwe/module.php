@@ -726,7 +726,7 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    public function CalculateMaxPower()
+    public function CalculateMaxPower() //Berechnen der maximal möglichen Leistung des Speichers
     {
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
@@ -755,7 +755,7 @@ class Goodwe extends IPSModule
         }
     }    
 
-    private function ReadRegisterValue(int $address, float $scale = 1.0)
+    private function ReadRegisterValue(int $address, float $scale = 1.0) //Auslesen der Register für Zusätzliche Werte
     {
         $quantity = 1; // 1 Register (16 Bit)
     
