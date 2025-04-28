@@ -119,9 +119,16 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $registers = $this->GetRegisters();
+        $selectedRegisters = [];
         $registerCurrentIdents = [];
-    
+
+        foreach ($registers as $register) {
+            if ($this->ReadPropertyBoolean("Reg_" . $register['address'])) {
+                $selectedRegisters[] = $register;
+            }
+        }
+
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as &$selectedRegister) {
                 if (is_string($selectedRegister['address'])) {
@@ -786,74 +793,33 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
-        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
-            return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
+        $registerCheckboxes = [];
+        foreach ($registers as $register) {
+            $registerCheckboxes[] = [
+                "type"    => "CheckBox",
+                "name"    => "Reg_" . $register['address'],
+                "caption" => $register['address'] . " - " . $register['name'],
+                "value"   => in_array($register['address'], $selectedAddresses)
             ];
-        }, $registers);
-        
+        }
+    
         return json_encode([
             "elements" => [
                 [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
-                    "rowCount" => 15,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
-                        [
-                            "caption" => "Register auswählen",
-                            "name" => "address",
-                            "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
-                            ]
-                        ]
-                    ],
-                    "values" => $selectedRegisters
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Register auswählen",
+                    "items"   => $registerCheckboxes
                 ],
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
                     "caption" => "Sekunden",
                     "suffix" => "s"
-                ],
-                [
-                    "type" => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items" => [
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxUser",
-                            "caption" => "Benutzername",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxPassword",
-                            "caption" => "Passwort",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxSerial",
-                            "caption" => "Seriennummer Wallbox",
-                        ],
-                        [
-                            "type"  => "IntervalBox",
-                            "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden",
-                            "suffix" => "s"
-                        ]
-                    ]
-                ],
+                ],o 
                 [
                     "type" => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
