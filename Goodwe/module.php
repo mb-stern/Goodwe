@@ -138,12 +138,19 @@ class Goodwe extends IPSModule
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$selectedRegister) {
-                if (is_string($selectedRegister['address'])) {
-                    $decodedRegister = json_decode($selectedRegister['address'], true);
-                    if ($decodedRegister !== null) {
-                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                    } else {
+            foreach ($selectedRegisters as $entry) {
+                if (!isset($entry['address']) || !isset($entry['active']) || !$entry['active']) {
+                    continue;
+                }
+            
+                $decoded = json_decode($entry['address'], true);
+                if (!is_array($decoded)) {
+                    $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
+                    continue;
+                }
+            
+                $selectedRegister = $decoded;
+                else {
                         $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
                         continue;
                     }
