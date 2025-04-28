@@ -7,7 +7,6 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $registers = $this->GetRegisters();
         foreach ($registers as $register) {
@@ -126,7 +125,6 @@ class Goodwe extends IPSModule
         // 2. Verarbeitung der Registervariablen
         $registers = $this->GetRegisters();
         $selectedRegisters = [];
-        $registerCurrentIdents = [];
 
         foreach ($registers as $register) {
             if ($this->ReadPropertyBoolean("Reg_" . $register['address'])) {
@@ -300,11 +298,14 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
+        $registers = $this->GetRegisters();
+        $selectedRegisters = [];
+    
+        foreach ($registers as $register) {
+            if ($this->ReadPropertyBoolean("Reg_" . $register['address'])) {
+                $selectedRegisters[] = $register;
+            }
+        }    
     
         // Prüfen, ob eine Verbindung zum Parent besteht
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
