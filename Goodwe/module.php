@@ -169,9 +169,7 @@ class Goodwe extends IPSModule
                             break;
                     }
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
-                }
-            }
-            
+                }            
 
                 //Hier die aktiven Variablen definieren
                 $this->EnableAction('Addr45358'); //Min SOC offline
