@@ -140,6 +140,7 @@ class Goodwe extends IPSModule
     
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as $selectedRegister) {
+                $this->SendDebug("ApplyChanges", "Prüfe Register: " . print_r($selectedRegister, true), 0);
                 if (!isset($selectedRegister['address']) || !isset($selectedRegister['active']) || !$selectedRegister['active']) {
                     continue;
                 }
