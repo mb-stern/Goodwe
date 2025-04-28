@@ -8,6 +8,10 @@ class Goodwe extends IPSModule
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
+        $this->RegisterPropertyString('Registers_Smartmeter', '[]');
+        $this->RegisterPropertyString('Registers_Battery', '[]');
+        $this->RegisterPropertyString('Registers_Inverter', '[]');
+    
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
         $this->RegisterPropertyBoolean("Laden_Max", true);
