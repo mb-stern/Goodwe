@@ -8,11 +8,6 @@ class Goodwe extends IPSModule
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
-        
-        $registers = $this->GetRegisters();
-        foreach ($registers as $register) {
-            $this->RegisterPropertyBoolean("Register_" . $register['address'], false);
-            }
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
         $this->RegisterPropertyBoolean("Laden_Max", true);
@@ -124,16 +119,20 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
+        $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $selectedRegisters = [];
-        $registers = $this->GetRegisters();
         
-        foreach ($registers as $register) {
-            $address = $register['address'];
-            $checkboxName = "Register_" . $address;
-            if ($this->ReadPropertyBoolean($checkboxName)) {
-                $selectedRegisters[] = $register;
+        if (is_array($selectedRegistersRaw)) {
+            $allRegisters = $this->GetRegisters();
+            foreach ($allRegisters as $register) {
+                foreach ($selectedRegistersRaw as $selected) {
+                    if (isset($selected['address'], $selected['active']) && $selected['address'] == $register['address'] && $selected['active']) {
+                        $selectedRegisters[] = $register;
+                        break;
+                    }
+                }
             }
-        }
+        }        
         
         $registerCurrentIdents = [];
     
@@ -802,19 +801,62 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
+        }
+    
+        // Mapping vorbereiten
+        $values = [];
+        foreach ($registers as $register) {
+            $isChecked = false;
+    
+            // Prüfen, ob dieses Register in der Property SelectedRegisters aktiv ist
+            foreach ($selectedRegisters as $selected) {
+                if (isset($selected['address']) && $selected['address'] == $register['address'] && isset($selected['active']) && $selected['active']) {
+                    $isChecked = true;
+                    break;
+                }
+            }
+    
+            $values[] = [
+                "active"  => $isChecked,
+                "address" => $register['address'],
+                "name"    => $register['name']
+            ];
+        }
     
         return json_encode([
             "elements" => [
                 [
-                    "type"  => "ExpansionPanel",
+                    "type"    => "List",
+                    "name"    => "SelectedRegisters",
                     "caption" => "Register auswählen",
-                    "items" => array_map(function ($register) {
-                        return [
-                            "type"    => "CheckBox",
-                            "name"    => "Register_" . $register['address'],
-                            "caption" => $register['address'] . " - " . $register['name']
-                        ];
-                    }, $registers)
+                    "rowCount" => 15,
+                    "add"     => false,
+                    "delete"  => false,
+                    "columns" => [
+                        [
+                            "caption" => "Aktiv",
+                            "name"    => "active",
+                            "width"   => "100px",
+                            "edit"    => [
+                                "type" => "CheckBox"
+                            ]
+                        ],
+                        [
+                            "caption" => "Register",
+                            "name"    => "address",
+                            "width"   => "150px"
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name"    => "name",
+                            "width"   => "auto"
+                        ]
+                    ],
+                    "values" => $values
                 ],
                 [
                     "type"  => "IntervalBox",
