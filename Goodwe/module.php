@@ -822,7 +822,7 @@ class Goodwe extends IPSModule
                     "name"  => "PollIntervalWR",
                     "caption" => "Sekunden",
                     "suffix" => "s"
-                ],o 
+                ],
                 [
                     "type" => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
