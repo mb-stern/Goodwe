@@ -135,6 +135,9 @@ class Goodwe extends IPSModule
                 }
             }
         }
+
+        $this->SendDebug("ApplyChanges", "Gefundene aktive Register: " . json_encode($selectedRegisters), 0);
+
         
         $registerCurrentIdents = [];
     
