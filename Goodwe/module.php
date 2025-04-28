@@ -126,13 +126,16 @@ class Goodwe extends IPSModule
             $allRegisters = $this->GetRegisters();
             foreach ($allRegisters as $register) {
                 foreach ($selectedRegistersRaw as $selected) {
-                    if (isset($selected['address'], $selected['active']) && $selected['address'] == $register['address'] && $selected['active']) {
-                        $selectedRegisters[] = $register;
+                    if (isset($selected['address'], $selected['active']) && 
+                        $selected['address'] == $register['address'] && 
+                        $selected['active']) {
+                        $selectedRegisters[] = $register; // Hier bekommst du jetzt das vollständige Register mit type, unit, scale, pos!
                         break;
                     }
                 }
             }
-        }        
+        }
+            
         
         $registerCurrentIdents = [];
     
