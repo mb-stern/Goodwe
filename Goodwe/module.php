@@ -806,44 +806,42 @@ class Goodwe extends IPSModule
         return json_encode([
             'elements' => [
                 [
-                    'type'  => 'Group',
-                    'caption' => 'Smartmeter Register',
-                    'items' => [
-                        [
-                            'type'    => 'CheckBoxList',
-                            'name'    => 'SelectedRegisters_SM',
-                            'caption' => 'Smartmeter',
-                            'options' => $smartmeterOptions,
-                            'values'  => $selectedRegisters['SM'] ?? []
+                    [
+                        "type"    => "ExpansionPanel",
+                        "caption" => "Smartmeter",
+                        "items"   => [
+                            [
+                                "type"    => "CheckBoxList",
+                                "name"    => "Registers_Smartmeter",
+                                "caption" => "Smartmeter Register",
+                                "values"  => $smartmeterOptions
+                            ]
                         ]
-                    ]
-                ],
-                [
-                    'type'  => 'Group',
-                    'caption' => 'Batterie Register',
-                    'items' => [
-                        [
-                            'type'    => 'CheckBoxList',
-                            'name'    => 'SelectedRegisters_BAT',
-                            'caption' => 'Batterie',
-                            'options' => $batteryOptions,
-                            'values'  => $selectedRegisters['BAT'] ?? []
+                    ],
+                    [
+                        "type"    => "ExpansionPanel",
+                        "caption" => "Batterie",
+                        "items"   => [
+                            [
+                                "type"    => "CheckBoxList",
+                                "name"    => "Registers_Battery",
+                                "caption" => "Batterie Register",
+                                "values"  => $batteryOptions
+                            ]
                         ]
-                    ]
-                ],
-                [
-                    'type'  => 'Group',
-                    'caption' => 'Wechselrichter Register',
-                    'items' => [
-                        [
-                            'type'    => 'CheckBoxList',
-                            'name'    => 'SelectedRegisters_WR',
-                            'caption' => 'Wechselrichter',
-                            'options' => $inverterOptions,
-                            'values'  => $selectedRegisters['WR'] ?? []
+                    ],
+                    [
+                        "type"    => "ExpansionPanel",
+                        "caption" => "Wechselrichter",
+                        "items"   => [
+                            [
+                                "type"    => "CheckBoxList",
+                                "name"    => "Registers_Inverter",
+                                "caption" => "Wechselrichter Register",
+                                "values"  => $inverterOptions
+                            ]
                         ]
-                    ]
-                ],
+                    ],
                 [
                     'type'  => 'ExpansionPanel',
                     'caption' => 'SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)',
