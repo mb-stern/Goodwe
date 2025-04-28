@@ -327,7 +327,12 @@ class Goodwe extends IPSModule
         }
     
         foreach ($selectedRegisters as &$register) {
-            if (is_string($register['address'])) {
+            if (!isset($register['address'])) {
+                $this->SendDebug("RequestRead", "Register-Eintrag ohne 'address' gefunden: " . json_encode($register), 0);
+                continue;
+            }
+            
+            if (is_string($register['address'])) {            
                 $decodedRegister = json_decode($register['address'], true);
                 if ($decodedRegister !== null) {
                     $register = array_merge($register, $decodedRegister);
