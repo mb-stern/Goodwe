@@ -326,17 +326,18 @@ class Goodwe extends IPSModule
             return;
         }
     
-        foreach ($selectedRegisters as &$register) {
-            if (is_string($register['address'])) {
-                $decodedRegister = json_decode($register['address'], true);
-                if ($decodedRegister !== null) {
-                    $register = array_merge($register, $decodedRegister);
-                } else {
-                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
-                    continue;
-                }
+        foreach ($selectedRegisters as $entry) {
+            if (!isset($entry['address']) || !isset($entry['active']) || !$entry['active']) {
+                continue;
             }
-    
+        
+            $register = json_decode($entry['address'], true);
+            if (!is_array($register)) {
+                $this->SendDebug("FetchInverterData", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
+                continue;
+            }
+        
+
             // Validierung der Felder
             if (!isset($register['address'], $register['type'], $register['scale'])) {
                 $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
