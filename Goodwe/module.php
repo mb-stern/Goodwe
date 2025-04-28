@@ -121,15 +121,15 @@ class Goodwe extends IPSModule
         // 2. Verarbeitung der Registervariablen
         $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $selectedRegisters = [];
-
+        
         if (is_array($selectedRegistersRaw)) {
             foreach ($selectedRegistersRaw as $entry) {
-                if (isset($entry['value'])) {
-                    $decoded = json_decode($entry['value'], true);
+                if (isset($entry['address']) && $entry['active']) {
+                    $decoded = json_decode($entry['address'], true);
                     if (is_array($decoded)) {
                         $selectedRegisters[] = $decoded;
                     } else {
-                        $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['value'], 0);
+                        $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
                     }
                 }
             }
@@ -799,36 +799,42 @@ class Goodwe extends IPSModule
         return $value * $scale;
     }
 
- public function GetConfigurationForm()
-{
-    $registers = $this->GetRegisters();
-    $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-
-    $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
-
-    $options = [];
-    foreach ($registers as $register) {
-        $options[] = [
-            'caption' => "{$register['address']} - {$register['name']}",
-            'value'   => json_encode($register),
-            'checked' => in_array($register['address'], $selectedAddresses)
-        ];
-    }
-
-    return json_encode([
-        'elements' => [
-            [
-                'type'    => 'CheckBoxList',
-                'name'    => 'SelectedRegisters',
-                'caption' => 'Register auswählen',
-                'options' => $options
-            ],
-            [
-                'type'  => 'IntervalBox',
-                'name'  => 'PollIntervalWR',
-                'caption' => 'Abfrageintervall Wechselrichter (s)',
-                'suffix' => 's'
-            ],
+    public function GetConfigurationForm()
+    {
+        $registers = $this->GetRegisters();
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
+    
+        $values = [];
+        foreach ($registers as $register) {
+            $values[] = [
+                'address' => json_encode($register),
+                'caption' => "{$register['address']} - {$register['name']}",
+                'active'  => in_array($register['address'], $selectedAddresses)
+            ];
+        }
+    
+        return json_encode([
+            'elements' => [
+                [
+                    'type'    => 'List',
+                    'name'    => 'SelectedRegisters',
+                    'caption' => 'Register auswählen',
+                    'rowCount' => 20,
+                    'add' => false,
+                    'delete' => false,
+                    'columns' => [
+                        ['caption' => 'Aktiv', 'name' => 'active', 'width' => '100px', 'edit' => ['type' => 'CheckBox']],
+                        ['caption' => 'Register', 'name' => 'caption', 'width' => '600px', 'edit' => false]
+                    ],
+                    'values' => $values
+                ],
+                [
+                    'type'  => 'IntervalBox',
+                    'name'  => 'PollIntervalWR',
+                    'caption' => 'Abfrageintervall Wechselrichter (s)',
+                    'suffix' => 's'
+                ],
                 [
                     "type" => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
