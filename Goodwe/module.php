@@ -143,14 +143,7 @@ class Goodwe extends IPSModule
                 if (!isset($selectedRegister['address']) || !isset($selectedRegister['active']) || !$selectedRegister['active']) {
                     continue;
                 }
-        
-                $selectedRegister = json_decode($entry['address'], true);
-                if (!is_array($selectedRegister)) {
-                    $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
-                    continue;
-                }
-                
-    
+            
                 $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
                 if ($variableDetails === null) {
                     $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
