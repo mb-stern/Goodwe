@@ -26,33 +26,30 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
+    
         $this->CreateProfile();
-
+    
         $this->SetTimerInterval('Timer_WR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval('Timer_WB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
-        // Wallbox-Benutzerinformationen lesen
+        // --- WALLBOX ---
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial = $this->ReadPropertyString("WallboxSerial");
-
-        // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
+    
         $wbCurrentIdents = [];
         if (!empty($user) && !empty($password) && !empty($serial)) {
             $mapping = $this->GetWbVariables();
-
             foreach ($mapping as $variable) {
                 if (!$variable['active']) {
                     continue;
                 }
-
                 $ident = "WB_" . $variable['key'];
                 $wbCurrentIdents[] = $ident;
-
+    
                 $type = VARIABLETYPE_STRING;
                 $profile = "";
-
+    
                 if (!empty($variable['unit'])) {
                     $details = $this->GetVariableDetails($variable['unit']);
                     if ($details !== null) {
@@ -60,7 +57,7 @@ class Goodwe extends IPSModule
                         $profile = $details['profile'];
                     }
                 }
-
+    
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($type) {
                         case VARIABLETYPE_INTEGER:
@@ -79,14 +76,14 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
                 }
             }
-
-            // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
+    
+            // Zusätzliche Wallbox-Steuerungsvariablen
             $specialVariables = [
                 ['ident' => 'WB_Charging', 'name' => 'WB - Ladevorgang', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
                 ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Power_W', 'pos' => 2],
                 ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
             ];
-
+    
             foreach ($specialVariables as $var) {
                 $wbCurrentIdents[] = $var['ident'];
                 if (!@$this->GetIDForIdent($var['ident'])) {
@@ -108,8 +105,8 @@ class Goodwe extends IPSModule
         } else {
             $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
         }
-
-        // Nicht mehr benötigte Wallbox-Variablen löschen
+    
+        // Alte Wallbox-Variablen löschen:
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
             if (strpos($object['ObjectIdent'], 'WB_') === 0 && !in_array($object['ObjectIdent'], $wbCurrentIdents)) {
@@ -117,64 +114,52 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Wallbox-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-
-        // 2. Verarbeitung der Registervariablen
-        $allRegisters = $this->GetRegisters();
-$selectedRegisters = [];
-
-foreach ($allRegisters as $register) {
-    if (isset($register['active']) && $register['active']) {
-        $selectedRegisters[] = $register;
-    }
-}
+    
+        // --- REGISTER ---
         $registerCurrentIdents = [];
     
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$selectedRegister) {
-                if (is_string($selectedRegister['address'])) {
-                    $decodedRegister = json_decode($selectedRegister['address'], true);
-                    if ($decodedRegister !== null) {
-                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                        continue;
-                    }
-                }
+        $selectedRegistersSmart = json_decode($this->ReadPropertyString("Registers_Smartmeter"), true);
+        $selectedRegistersBat = json_decode($this->ReadPropertyString("Registers_Battery"), true);
+        $selectedRegistersWR = json_decode($this->ReadPropertyString("Registers_Inverter"), true);
     
-                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+        $selectedAddresses = array_merge($selectedRegistersSmart, $selectedRegistersBat, $selectedRegistersWR);
+        $allRegisters = $this->GetRegisters();
+    
+        foreach ($allRegisters as $register) {
+            if (in_array($register['address'], $selectedAddresses)) {
+                $variableDetails = $this->GetVariableDetails($register['unit']);
                 if ($variableDetails === null) {
-                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$register['unit']} gefunden.", 0);
                     continue;
                 }
     
-                $ident = "Addr" . $selectedRegister['address'];
+                $ident = "Addr" . $register['address'];
                 $registerCurrentIdents[] = $ident;
     
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableInteger($ident, $register['name'], $variableDetails['profile'], $register['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableFloat($ident, $register['name'], $variableDetails['profile'], $register['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableString($ident, $register['name'], $variableDetails['profile'], $register['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
                 }
-
-                //Hier die aktiven Variablen definieren
-                $this->EnableAction('Addr45358'); //Min SOC offline
-                $this->EnableAction('Addr45356'); //Min SOC online
-                $this->EnableAction('Addr47511'); //EMSPowerMode
-                $this->EnableAction('Addr47512'); //EMSPowerSet
-    
             }
         }
+
+        //Hier die aktiven Variablen definieren
+        $this->EnableAction('Addr45358'); //Min SOC offline
+        $this->EnableAction('Addr45356'); //Min SOC online
+        $this->EnableAction('Addr47511'); //EMSPowerMode
+        $this->EnableAction('Addr47512'); //EMSPowerSet
     
-        // Nicht mehr benötigte Register-Variablen löschen
+        // Alte Register-Variablen löschen:
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
             if (strpos($object['ObjectIdent'], 'Addr') === 0 && !in_array($object['ObjectIdent'], $registerCurrentIdents)) {
@@ -182,8 +167,8 @@ foreach ($allRegisters as $register) {
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
-
-        // Max-Entladen-Variable für Speicher anlegen oder löschen:
+    
+        // --- ZUSÄTZLICHE BERECHNUNGEN ---
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
@@ -194,8 +179,7 @@ foreach ($allRegisters as $register) {
                 $this->SendDebug("ApplyChanges", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
             }
         }
-
-        // Max-Laden-Variable für Speicher anlegen oder löschen:
+    
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
                 $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
@@ -206,8 +190,8 @@ foreach ($allRegisters as $register) {
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
-
     }
+    
 
     public function RequestAction($ident, $value)
     {
@@ -796,104 +780,108 @@ foreach ($allRegisters as $register) {
         $registers = $this->GetRegisters();
         $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
     
-        // Für jedes Register prüfen, ob es in den Properties ausgewählt ist
-        foreach ($registers as &$register) {
-            $register['active'] = in_array($register['address'], $selectedRegisters);
+        $smartmeterOptions = [];
+        $batteryOptions = [];
+        $inverterOptions = [];
+    
+        foreach ($registers as $register) {
+            $option = [
+                'caption' => $register['name'],
+                'value'   => $register['address']
+            ];
+            if (strpos($register['name'], 'SM -') === 0) {
+                $smartmeterOptions[] = $option;
+            } elseif (strpos($register['name'], 'BAT -') === 0) {
+                $batteryOptions[] = $option;
+            } elseif (strpos($register['name'], 'WR -') === 0) {
+                $inverterOptions[] = $option;
+            }
         }
     
         return json_encode([
             'elements' => [
                 [
-                    'type' => 'List',
-                    'name' => 'SelectedRegisters',
-                    'caption' => 'Register auswählen',
-                    'add' => false,
-                    'delete' => false,
-                    'rowCount' => 15,
-                    'columns' => [
+                    'type'  => 'GroupBox',
+                    'caption' => 'Smartmeter Register',
+                    'items' => [
                         [
-                            'caption' => 'Aktiv',
-                            'name' => 'active',
-                            'width' => '80px',
-                            'edit' => [
-                                'type' => 'CheckBox'
-                            ]
-                        ],
-                        [
-                            'caption' => 'Adresse',
-                            'name' => 'address',
-                            'width' => '100px',
-                            'edit' => [
-                                'type' => 'NumberSpinner'
-                            ]
-                        ],
-                        [
-                            'caption' => 'Name',
-                            'name' => 'name',
-                            'width' => '300px'
-                        ],
-                        [
-                            'caption' => 'Einheit',
-                            'name' => 'unit',
-                            'width' => '100px'
-                        ],
-                        [
-                            'caption' => 'Typ',
-                            'name' => 'type',
-                            'width' => '100px'
-                        ]
-                    ],
-                    'values' => $registers
-                ],
-                [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix" => "s"
-                ],
-                [
-                    "type" => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items" => [
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxUser",
-                            "caption" => "Benutzername",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxPassword",
-                            "caption" => "Passwort",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxSerial",
-                            "caption" => "Seriennummer Wallbox",
-                        ],
-                        [
-                            "type"  => "IntervalBox",
-                            "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden",
-                            "suffix" => "s"
+                            'type'    => 'CheckBoxList',
+                            'name'    => 'SelectedRegisters_SM',
+                            'caption' => 'Smartmeter',
+                            'options' => $smartmeterOptions,
+                            'values'  => $selectedRegisters['SM'] ?? []
                         ]
                     ]
                 ],
                 [
-                    "type" => "ExpansionPanel",
-                    "caption" => "Zusätzliche Werte berechnen",
-                    "items" => [
+                    'type'  => 'GroupBox',
+                    'caption' => 'Batterie Register',
+                    'items' => [
                         [
-                            "type" => "CheckBox",
-                            "name" => "Entladen_Max",
-                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen",
+                            'type'    => 'CheckBoxList',
+                            'name'    => 'SelectedRegisters_BAT',
+                            'caption' => 'Batterie',
+                            'options' => $batteryOptions,
+                            'values'  => $selectedRegisters['BAT'] ?? []
+                        ]
+                    ]
+                ],
+                [
+                    'type'  => 'GroupBox',
+                    'caption' => 'Wechselrichter Register',
+                    'items' => [
+                        [
+                            'type'    => 'CheckBoxList',
+                            'name'    => 'SelectedRegisters_WR',
+                            'caption' => 'Wechselrichter',
+                            'options' => $inverterOptions,
+                            'values'  => $selectedRegisters['WR'] ?? []
+                        ]
+                    ]
+                ],
+                [
+                    'type'  => 'ExpansionPanel',
+                    'caption' => 'SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)',
+                    'items' => [
+                        [
+                            'type' => 'ValidationTextBox',
+                            'name' => 'WallboxUser',
+                            'caption' => 'Benutzername'
                         ],
                         [
-                            "type" => "CheckBox",
-                            "name" => "Laden_Max",
-                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
+                            'type' => 'ValidationTextBox',
+                            'name' => 'WallboxPassword',
+                            'caption' => 'Passwort'
+                        ],
+                        [
+                            'type' => 'ValidationTextBox',
+                            'name' => 'WallboxSerial',
+                            'caption' => 'Seriennummer Wallbox'
+                        ],
+                        [
+                            'type'  => 'IntervalBox',
+                            'name'  => 'PollIntervalWB',
+                            'caption' => 'Sekunden',
+                            'suffix'  => 's'
                         ]
-                    ]   
-                ]            
+                    ]
+                ],
+                [
+                    'type' => 'ExpansionPanel',
+                    'caption' => 'Zusätzliche Werte berechnen',
+                    'items' => [
+                        [
+                            'type' => 'CheckBox',
+                            'name' => 'Entladen_Max',
+                            'caption' => 'Maximal mögliche Leistung für das Entladen des Speichers berechnen'
+                        ],
+                        [
+                            'type' => 'CheckBox',
+                            'name' => 'Laden_Max',
+                            'caption' => 'Maximal mögliche Leistung für das Laden des Speichers berechnen'
+                        ]
+                    ]
+                ]
             ],
             "actions" => [
                 [
