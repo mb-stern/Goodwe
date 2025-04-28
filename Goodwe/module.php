@@ -124,21 +124,24 @@ class Goodwe extends IPSModule
         
         if (is_array($selectedRegistersRaw)) {
             foreach ($selectedRegistersRaw as $entry) {
-                $this->SendDebug("ApplyChanges", "SelectedRegistersRaw: " . print_r($selectedRegistersRaw, true), 0);
-                $this->SendDebug("ApplyChanges", "SelectedRegisters decoded: " . print_r($selectedRegisters, true), 0);
-
-                if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
-                    $decoded = json_decode($entry['address'], true);
+                if (isset($entry['address']) && isset($entry['active'])) {
+                    if (is_string($entry['address'])) {
+                        $decoded = json_decode($entry['address'], true);
+                    } else if (is_array($entry['address'])) {
+                        $decoded = $entry['address']; // <-- Fehlerquelle: address kann schon Array sein!
+                    } else {
+                        $decoded = null;
+                    }
+            
                     if (is_array($decoded)) {
-                        $decoded['active'] = $entry['active']; // active wieder dazu packen
+                        $decoded['active'] = $entry['active'];
                         $selectedRegisters[] = $decoded;
                     } else {
-                        $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
+                        $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . print_r($entry, true), 0);
                     }
                 }
-            }
-        }
-
+            }            
+            
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
