@@ -124,9 +124,10 @@ class Goodwe extends IPSModule
         
         if (is_array($selectedRegistersRaw)) {
             foreach ($selectedRegistersRaw as $entry) {
-                if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
+                if (isset($entry['address']) && isset($entry['active'])) {
                     $decoded = json_decode($entry['address'], true);
                     if (is_array($decoded)) {
+                        $decoded['active'] = $entry['active']; // ← Hier active mit reinpacken!
                         $selectedRegisters[] = $decoded;
                     } else {
                         $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['address'], 0);
@@ -142,6 +143,7 @@ class Goodwe extends IPSModule
                 if (!isset($entry['address']) || !isset($entry['active']) || !$entry['active']) {
                     continue;
                 }
+        
         
                 $selectedRegister = json_decode($entry['address'], true);
                 if (!is_array($selectedRegister)) {
