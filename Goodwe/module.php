@@ -129,13 +129,12 @@ class Goodwe extends IPSModule
                     if (isset($selected['address'], $selected['active']) && 
                         $selected['address'] == $register['address'] && 
                         $selected['active']) {
-                        $selectedRegisters[] = $register; // Hier bekommst du jetzt das vollständige Register mit type, unit, scale, pos!
+                        $selectedRegisters[] = $register; // <-- jetzt hast du unit, type, scale, pos
                         break;
                     }
                 }
             }
         }
-            
         
         $registerCurrentIdents = [];
     
