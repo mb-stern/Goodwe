@@ -783,106 +783,111 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
     
+        // Gruppen nach Smartmeter, Batterie und Wechselrichter sortieren:
         $smartmeterOptions = [];
-        $batteryOptions = [];
-        $inverterOptions = [];
+        $batteryOptions    = [];
+        $inverterOptions   = [];
     
         foreach ($registers as $register) {
-            $option = [
-                'caption' => $register['name'],
-                'value'   => $register['address']
+            $entry = [
+                "caption" => "{$register['address']} - {$register['name']}",
+                "value"   => $register['address']
             ];
+    
             if (strpos($register['name'], 'SM -') === 0) {
-                $smartmeterOptions[] = $option;
+                $smartmeterOptions[] = $entry;
             } elseif (strpos($register['name'], 'BAT -') === 0) {
-                $batteryOptions[] = $option;
+                $batteryOptions[] = $entry;
             } elseif (strpos($register['name'], 'WR -') === 0) {
-                $inverterOptions[] = $option;
+                $inverterOptions[] = $entry;
             }
         }
     
         return json_encode([
-            'elements' => [
+            "elements" => [
                 [
-                    [
-                        "type"    => "ExpansionPanel",
-                        "caption" => "Smartmeter",
-                        "items"   => [
-                            [
-                                "type"    => "CheckBoxList",
-                                "name"    => "Registers_Smartmeter",
-                                "caption" => "Smartmeter Register",
-                                "values"  => $smartmeterOptions
-                            ]
-                        ]
-                    ],
-                    [
-                        "type"    => "ExpansionPanel",
-                        "caption" => "Batterie",
-                        "items"   => [
-                            [
-                                "type"    => "CheckBoxList",
-                                "name"    => "Registers_Battery",
-                                "caption" => "Batterie Register",
-                                "values"  => $batteryOptions
-                            ]
-                        ]
-                    ],
-                    [
-                        "type"    => "ExpansionPanel",
-                        "caption" => "Wechselrichter",
-                        "items"   => [
-                            [
-                                "type"    => "CheckBoxList",
-                                "name"    => "Registers_Inverter",
-                                "caption" => "Wechselrichter Register",
-                                "values"  => $inverterOptions
-                            ]
-                        ]
-                    ]
-                ], 
-                [
-                    'type'  => 'ExpansionPanel',
-                    'caption' => 'SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)',
-                    'items' => [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Smartmeter",
+                    "items"   => [
                         [
-                            'type' => 'ValidationTextBox',
-                            'name' => 'WallboxUser',
-                            'caption' => 'Benutzername'
-                        ],
-                        [
-                            'type' => 'ValidationTextBox',
-                            'name' => 'WallboxPassword',
-                            'caption' => 'Passwort'
-                        ],
-                        [
-                            'type' => 'ValidationTextBox',
-                            'name' => 'WallboxSerial',
-                            'caption' => 'Seriennummer Wallbox'
-                        ],
-                        [
-                            'type'  => 'IntervalBox',
-                            'name'  => 'PollIntervalWB',
-                            'caption' => 'Sekunden',
-                            'suffix'  => 's'
+                            "type"    => "CheckBoxList",
+                            "name"    => "Registers_Smartmeter",
+                            "caption" => "Smartmeter Register",
+                            "values"  => $smartmeterOptions
                         ]
                     ]
                 ],
                 [
-                    'type' => 'ExpansionPanel',
-                    'caption' => 'Zusätzliche Werte berechnen',
-                    'items' => [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Batterie",
+                    "items"   => [
                         [
-                            'type' => 'CheckBox',
-                            'name' => 'Entladen_Max',
-                            'caption' => 'Maximal mögliche Leistung für das Entladen des Speichers berechnen'
+                            "type"    => "CheckBoxList",
+                            "name"    => "Registers_Battery",
+                            "caption" => "Batterie Register",
+                            "values"  => $batteryOptions
+                        ]
+                    ]
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Wechselrichter",
+                    "items"   => [
+                        [
+                            "type"    => "CheckBoxList",
+                            "name"    => "Registers_Inverter",
+                            "caption" => "Wechselrichter Register",
+                            "values"  => $inverterOptions
+                        ]
+                    ]
+                ],
+                [
+                    "type"    => "IntervalBox",
+                    "name"    => "PollIntervalWR",
+                    "caption" => "Wechselrichter-Abfrageintervall",
+                    "suffix"  => "s"
+                ],
+                [
+                    "type"  => "ExpansionPanel",
+                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
+                    "items" => [
+                        [
+                            "type"    => "ValidationTextBox",
+                            "name"    => "WallboxUser",
+                            "caption" => "Benutzername"
                         ],
                         [
-                            'type' => 'CheckBox',
-                            'name' => 'Laden_Max',
-                            'caption' => 'Maximal mögliche Leistung für das Laden des Speichers berechnen'
+                            "type"    => "ValidationTextBox",
+                            "name"    => "WallboxPassword",
+                            "caption" => "Passwort"
+                        ],
+                        [
+                            "type"    => "ValidationTextBox",
+                            "name"    => "WallboxSerial",
+                            "caption" => "Seriennummer Wallbox"
+                        ],
+                        [
+                            "type"    => "IntervalBox",
+                            "name"    => "PollIntervalWB",
+                            "caption" => "Wallbox-Abfrageintervall",
+                            "suffix"  => "s"
+                        ]
+                    ]
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Zusätzliche Werte berechnen",
+                    "items"   => [
+                        [
+                            "type"    => "CheckBox",
+                            "name"    => "Entladen_Max",
+                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen"
+                        ],
+                        [
+                            "type"    => "CheckBox",
+                            "name"    => "Laden_Max",
+                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
                         ]
                     ]
                 ]
