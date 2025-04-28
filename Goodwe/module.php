@@ -124,6 +124,9 @@ class Goodwe extends IPSModule
         
         if (is_array($selectedRegistersRaw)) {
             foreach ($selectedRegistersRaw as $entry) {
+                $this->SendDebug("ApplyChanges", "SelectedRegistersRaw: " . print_r($selectedRegistersRaw, true), 0);
+                $this->SendDebug("ApplyChanges", "SelectedRegisters decoded: " . print_r($selectedRegisters, true), 0);
+
                 if (isset($entry['address']) && isset($entry['active']) && $entry['active']) {
                     $decoded = json_decode($entry['address'], true);
                     if (is_array($decoded)) {
