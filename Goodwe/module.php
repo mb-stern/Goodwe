@@ -150,9 +150,6 @@ class Goodwe extends IPSModule
                     continue;
                 }
             
-                // KEIN json_decode hier!
-                // $selectedRegister ist schon korrekt das Array!
-            
                 $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
                 if ($variableDetails === null) {
                     $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
@@ -218,7 +215,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
-
+    }
     }
 
     public function RequestAction($ident, $value)
