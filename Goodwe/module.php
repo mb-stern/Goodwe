@@ -8,6 +8,11 @@ class Goodwe extends IPSModule
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
+        
+        $registers = $this->GetRegisters();
+        foreach ($registers as $register) {
+            $this->RegisterPropertyBoolean("Register_" . $register['address'], false);
+            }
 
         $this->RegisterPropertyBoolean("Entladen_Max", true);
         $this->RegisterPropertyBoolean("Laden_Max", true);
@@ -119,7 +124,17 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = [];
+        $registers = $this->GetRegisters();
+        
+        foreach ($registers as $register) {
+            $address = $register['address'];
+            $checkboxName = "Register_" . $address;
+            if ($this->ReadPropertyBoolean($checkboxName)) {
+                $selectedRegisters[] = $register;
+            }
+        }
+        
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
@@ -801,26 +816,28 @@ class Goodwe extends IPSModule
         return json_encode([
             "elements" => [
                 [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
-                    "rowCount" => 15,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
-                        [
-                            "caption" => "Register auswählen",
-                            "name" => "address",
-                            "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
-                            ]
-                        ]
-                    ],
-                    "values" => $selectedRegisters
-                ],
+                    "type"  => "ExpansionPanel",
+                    "caption" => "Register auswählen",
+                    "items" => array_map(function ($register) use ($selectedRegisters) {
+                        $address = $register['address'];
+                        $name = $register['name'];
+                        $isChecked = false;
+                
+                        foreach ($selectedRegisters as $selected) {
+                            if (isset($selected['address']) && $selected['address'] == $address) {
+                                $isChecked = true;
+                                break;
+                            }
+                        }
+                
+                        return [
+                            "type"    => "CheckBox",
+                            "name"    => "Register_" . $address,
+                            "caption" => $address . " - " . $name,
+                            "value"   => $isChecked
+                        ];
+                    }, $registers)
+                ],                
                 [
                     "type"  => "IntervalBox",
                     "name"  => "PollIntervalWR",
