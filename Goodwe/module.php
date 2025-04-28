@@ -119,7 +119,14 @@ class Goodwe extends IPSModule
         }
 
         // 2. Verarbeitung der Registervariablen
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $allRegisters = $this->GetRegisters();
+$selectedRegisters = [];
+
+foreach ($allRegisters as $register) {
+    if (isset($register['active']) && $register['active']) {
+        $selectedRegisters[] = $register;
+    }
+}
         $registerCurrentIdents = [];
     
         if (is_array($selectedRegisters)) {
@@ -786,40 +793,57 @@ class Goodwe extends IPSModule
 
     public function GetConfigurationForm()
     {
-        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
         $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
-            return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
-            ];
-        }, $registers);
-        
+        // Für jedes Register prüfen, ob es in den Properties ausgewählt ist
+        foreach ($registers as &$register) {
+            $register['active'] = in_array($register['address'], $selectedRegisters);
+        }
+    
         return json_encode([
-            "elements" => [
+            'elements' => [
                 [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
-                    "rowCount" => 15,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
+                    'type' => 'List',
+                    'name' => 'SelectedRegisters',
+                    'caption' => 'Register auswählen',
+                    'add' => false,
+                    'delete' => false,
+                    'rowCount' => 15,
+                    'columns' => [
                         [
-                            "caption" => "Register auswählen",
-                            "name" => "address",
-                            "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
+                            'caption' => 'Aktiv',
+                            'name' => 'active',
+                            'width' => '80px',
+                            'edit' => [
+                                'type' => 'CheckBox'
                             ]
+                        ],
+                        [
+                            'caption' => 'Adresse',
+                            'name' => 'address',
+                            'width' => '100px',
+                            'edit' => [
+                                'type' => 'NumberSpinner'
+                            ]
+                        ],
+                        [
+                            'caption' => 'Name',
+                            'name' => 'name',
+                            'width' => '300px'
+                        ],
+                        [
+                            'caption' => 'Einheit',
+                            'name' => 'unit',
+                            'width' => '100px'
+                        ],
+                        [
+                            'caption' => 'Typ',
+                            'name' => 'type',
+                            'width' => '100px'
                         ]
                     ],
-                    "values" => $selectedRegisters
+                    'values' => $registers
                 ],
                 [
                     "type"  => "IntervalBox",
