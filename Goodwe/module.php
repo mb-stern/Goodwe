@@ -784,49 +784,50 @@ class Goodwe extends IPSModule
         return $value * $scale;
     }
 
-    public function GetConfigurationForm()
-    {
-        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+ public function GetConfigurationForm()
+{
+    $registers = $this->GetRegisters();
+    $selectedRegistersRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    $selectedRegisters = [];
+
+    if (is_array($selectedRegistersRaw)) {
+        foreach ($selectedRegistersRaw as $entry) {
+            if (isset($entry['value'])) {
+                $decoded = json_decode($entry['value'], true);
+                if (is_array($decoded)) {
+                    $selectedRegisters[] = $decoded;
+                } else {
+                    $this->SendDebug("ApplyChanges", "Fehler beim Decodieren eines Registers: " . $entry['value'], 0);
+                }
+            }
+        }
+    }
     
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
-            return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
-            ];
-        }, $registers);
-        
-        return json_encode([
-            "elements" => [
-                [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
-                    "rowCount" => 15,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
-                        [
-                            "caption" => "Register auswählen",
-                            "name" => "address",
-                            "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
-                            ]
-                        ]
-                    ],
-                    "values" => $selectedRegisters
-                ],
-                [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix" => "s"
-                ],
+    $selectedAddresses = is_array($selectedRegisters) ? array_column($selectedRegisters, 'address') : [];
+
+    $options = [];
+    foreach ($registers as $register) {
+        $options[] = [
+            'caption' => "{$register['address']} - {$register['name']}",
+            'value'   => json_encode($register),
+            'checked' => in_array($register['address'], $selectedAddresses)
+        ];
+    }
+
+    return json_encode([
+        'elements' => [
+            [
+                'type'    => 'CheckBoxList',
+                'name'    => 'SelectedRegisters',
+                'caption' => 'Register auswählen',
+                'options' => $options
+            ],
+            [
+                'type'  => 'IntervalBox',
+                'name'  => 'PollIntervalWR',
+                'caption' => 'Abfrageintervall Wechselrichter (s)',
+                'suffix' => 's'
+            ],
                 [
                     "type" => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
