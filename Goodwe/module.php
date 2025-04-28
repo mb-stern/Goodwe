@@ -201,7 +201,6 @@ class Goodwe extends IPSModule
             }
         }
     }
-    }
 
     public function RequestAction($ident, $value)
     {
