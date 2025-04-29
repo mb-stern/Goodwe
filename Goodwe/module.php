@@ -19,8 +19,8 @@ class Goodwe extends IPSModule
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
-        $this->RegisterTimer('Timer_WR', 0, 'Goodwe_FetchInverterData(' . $this->InstanceID . ');');  
-        $this->RegisterTimer('Timer_WB', 0, 'Goodwe_FetchWallboxData(' . $this->InstanceID . ');');  
+        $this->RegisterTimer("Timer_WR", 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
+        $this->RegisterTimer("Timer_WB", 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');  
     }
 
     public function ApplyChanges()
@@ -29,8 +29,8 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
-        $this->SetTimerInterval('Timer_WR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval('Timer_WB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        $this->SetTimerInterval("Timer_WR", $this->ReadPropertyInteger("PollIntervalWR") * 1000);
+        $this->SetTimerInterval("Timer_WB", $this->ReadPropertyInteger("PollIntervalWB") * 1000);
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
