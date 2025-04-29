@@ -7,9 +7,10 @@ class Goodwe extends IPSModule
         parent::Create();
 
         $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
-        $this->RegisterPropertyString("Registers", json_encode($this->GetRegisters()));
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
+        $this->RegisterPropertyBoolean("Entladen_Max", true);
+        $this->RegisterPropertyBoolean("Laden_Max", true);
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
@@ -174,6 +175,31 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
             }
         }
+
+        // Max-Entladen-Variable für Speicher anlegen oder löschen:
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            if (!@$this->GetIDForIdent("MaxEntladen")) {
+                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxEntladen") !== false) {
+                $this->UnregisterVariable("MaxEntladen");
+                $this->SendDebug("ApplyChanges", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            }
+        }
+
+        // Max-Laden-Variable für Speicher anlegen oder löschen:
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            if (!@$this->GetIDForIdent("MaxLaden")) {
+                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxLaden") !== false) {
+                $this->UnregisterVariable("MaxLaden");
+                $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            }
+        }
+
     }
 
     public function RequestAction($ident, $value)
@@ -257,6 +283,7 @@ class Goodwe extends IPSModule
     {
         $this->FetchWallboxData();
         $this->FetchInverterData();
+        $this->CalculateMaxPower();
     }
 
     public function FetchInverterData()
@@ -356,6 +383,7 @@ class Goodwe extends IPSModule
                 $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
             }
         }
+        $this->CalculateMaxPower(); //Zusätzlich Variablen für Max. Lade/Entladeleistung ebenfalls aktualisieren
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -698,6 +726,64 @@ class Goodwe extends IPSModule
         return true;
     }
 
+    public function CalculateMaxPower() //Berechnen der maximal möglichen Leistung des Speichers
+    {
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47904, 0.1);
+                $strom = $this->ReadRegisterValue(47905, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = intval($spannung * $strom);
+                    SetValue($entladenID, $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+    
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47902, 0.1);
+                $strom = $this->ReadRegisterValue(47903, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = intval($spannung * $strom);
+                    SetValue($ladenID, $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+    }    
+
+    private function ReadRegisterValue(int $address, float $scale = 1.0) //Auslesen der Register für Zusätzliche Werte
+    {
+        $quantity = 1; // 1 Register (16 Bit)
+    
+        $response = $this->SendDataToParent(json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address"  => $address,
+            "Quantity" => $quantity,
+            "Data"     => ""
+        ]));
+    
+        if ($response === false || strlen($response) < 4) {
+            $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
+            return null;
+        }
+    
+        $data = unpack("n*", substr($response, 2));
+        $value = $data[1];
+    
+        // Umwandlung für signed S16:
+        if ($value & 0x8000) {
+            $value = -((~$value & 0xFFFF) + 1);
+        }
+    
+        // Skalierung:
+        return $value * $scale;
+    }
+
     public function GetConfigurationForm()
     {
         // Aktuelle Liste der Register abrufen und in der Property aktualisieren
@@ -743,7 +829,7 @@ class Goodwe extends IPSModule
                 ],
                 [
                     "type" => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox erforderlich)",
+                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
                     "items" => [
                         [
                             "type" => "ValidationTextBox",
@@ -767,7 +853,23 @@ class Goodwe extends IPSModule
                             "suffix" => "s"
                         ]
                     ]
-                ]
+                ],
+                [
+                    "type" => "ExpansionPanel",
+                    "caption" => "Zusätzliche Werte berechnen",
+                    "items" => [
+                        [
+                            "type" => "CheckBox",
+                            "name" => "Entladen_Max",
+                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen",
+                        ],
+                        [
+                            "type" => "CheckBox",
+                            "name" => "Laden_Max",
+                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
+                        ]
+                    ]   
+                ]            
             ],
             "actions" => [
                 [
@@ -970,25 +1072,6 @@ class Goodwe extends IPSModule
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
             ];
-
-        // Aktuelles Mapping auslesen
-        $currentMapping = json_decode($this->ReadAttributeString("WallboxVariableMapping"), true);
-
-        // Falls Decoding fehlschlägt, Standardwerte setzen
-        if ($currentMapping === null || !is_array($currentMapping)) {
-            $this->SendDebug("GetWbVariables", "Kein gültiges Mapping, Standardwerte setzen.", 0);
-            $currentMapping = [];
-        }
-    
-        // Vergleich der Mappings
-        $newMappingJson = json_encode($defaultMapping);
-        $currentMappingJson = json_encode($currentMapping);
-    
-        if ($currentMappingJson !== $newMappingJson) {
-            $this->SendDebug("GetWbVariables", "Mapping geändert. Speichere neues Mapping.", 0);
-            $this->WriteAttributeString("WallboxVariableMapping", $newMappingJson);
-        }
-    
         return $defaultMapping;
     }
         
@@ -1010,7 +1093,9 @@ class Goodwe extends IPSModule
         ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
         ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
         ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "watt_ems", "scale" => 1, "pos" => 130],
+        ["address" => 47902, "name" => "BAT - Laden Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 141],
         ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
+        ["address" => 47904, "name" => "BAT - Entladen Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 151],
         ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
         ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
         ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
