@@ -54,7 +54,7 @@ Name     | Beschreibung
 -------- | ------------------
 Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Variablen werden automatisch erstellt oder gelöscht.
 Intervall                  |  Intervall für die Abfrage der Modbus-Register. Standard ist 5 sek.
-SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
+SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 15 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
 
 ### 5. Statusvariablen und Profile
