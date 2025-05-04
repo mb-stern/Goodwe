@@ -113,6 +113,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 Version 2.3 (4.05.2025)
 - Ein Problem wurde behoben, welches die Ansteuerung durch den Energiemanager verhinderte.
+- Ein Problem mit dem doppelten setzen des Timers nach einem Modulupdate wurde behoben.
 
 Version 2.2 (29.04.2025)
 - Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung stellt. Eventuell kann dieser Datenpunkt in Zukunft als Info für den Energiemanger genutzt werden.
