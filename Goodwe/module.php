@@ -248,13 +248,20 @@ class Goodwe extends IPSModule
         if (!is_array($buffer)) {
             $buffer = [];
         }
-
+    
+        // Hauptwert eintragen
         $buffer[$ident] = $value;
+    
+        // Sonderfall: manuelles Setzen der Ladeleistung → Modus auf "Schnell" (0)
+        if ($ident === 'WB_ChargePower') {
+            $buffer['WB_ChargeMode'] = 0;
+            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0); // Optional: sofort auch Variable anpassen
+            $this->SendDebug("UpdateWallboxBuffer", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
+        }
+    
         $this->SetBuffer("WallboxChanges", json_encode($buffer));
-
-        // Starte oder verlängere Timer auf 5 Sekunden
         $this->SetTimerInterval("WallboxApplyTimer", 5000);
-    }
+    }    
 
     public function ApplyWallboxChanges()
     {
