@@ -222,26 +222,17 @@ class Goodwe extends IPSModule
         }
     
         // Logik für Wallbox-Aktionen
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
-            ...
-        }
         switch ($ident) {
             case 'WB_Charging':
-                ...
-                break;
-
             case 'WB_ChargeMode':
-                ...
-                break;
-
             case 'WB_ChargePower':
-                ...
+                SetValue($this->GetIDForIdent($ident), $value);
+                $this->UpdateWallboxBuffer($ident, $value);
                 break;
-
+        
             default:
                 throw new Exception("Ungültiger Ident: $ident");
-        }
+        }        
     }
     
     public function FetchAll()
