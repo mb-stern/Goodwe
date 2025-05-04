@@ -472,11 +472,18 @@ class Goodwe extends IPSModule
                 if ($key === "workstate") {
                     $chargingState = ($value !== 0);
                     $chargingVarID = @$this->GetIDForIdent('WB_Charging');
-                    if ($chargingVarID !== false) {
+                
+                    // Nur setzen, wenn kein aktiver Puffer-Wert für WB_Charging vorliegt
+                    $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
+                    $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
+                
+                    if ($chargingVarID !== false && !$isPending) {
                         SetValue($chargingVarID, $chargingState);
-                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false") . ".", 0);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                    } elseif ($isPending) {
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht überschrieben – Änderung gepuffert.", 0);
                     }
-                }
+                }                
             }
         }        
 
