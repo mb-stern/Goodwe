@@ -256,24 +256,25 @@ class Goodwe extends IPSModule
                 }
                 break;
     
-                case 'WB_ChargePower':
-                    // Originalwert NICHT verändern
-                    $roundedValue = round($value / 100) * 100;  // Nur für API
+            case 'WB_ChargePower':
+                // Auf 100 W runden (z. B. 4675 → 4700, 4620 → 4600)
+                $value = round($value / 100) * 100;
                 
-                    // Umrechnung in kW für die API (eine Nachkommastelle)
-                    $chargePowerKW = round($roundedValue / 1000, 1);
+                // Umrechnung in kW mit einer Nachkommastelle
+                $chargePowerKW = round($value / 1000, 1);
                 
-                    $data = [
-                        'sn' => $serial,
-                        'charge_power' => $chargePowerKW
-                    ];
+                $data = [
+                    'sn' => $serial,
+                    'charge_power' => $chargePowerKW
+                ];
                 
-                    $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
                 
-                    if ($response !== null) {
-                        SetValue($this->GetIDForIdent($ident), $value);  // Unveränderten Originalwert speichern
-                    }
-                    break;
+                if ($response !== null) {
+                    SetValue($this->GetIDForIdent($ident), $value); // in Watt speichern (gerundet)
+                }
+                break;
+                
                 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
