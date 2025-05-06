@@ -249,13 +249,19 @@ class Goodwe extends IPSModule
             $buffer = [];
         }
     
-        // Hauptwert eintragen
+        // Wert puffern
         $buffer[$ident] = $value;
     
-        // Sonderfall: manuelles Setzen der Ladeleistung → Modus auf "Schnell" (0)
+        // Rückmeldung für WB_Charging für 30 sec blockieren – immer (true oder false)
+        if ($ident === 'WB_Charging') {
+            $this->SetBuffer("ChargingHoldUntil", time() + 30);
+            $this->SendDebug("UpdateWallboxBuffer", "WB_Charging blockiert Rückmeldung für 30 Sek. (Wert: " . ($value ? "true" : "false") . ")", 0);
+        }
+    
+        // Automatischer Moduswechsel bei Ladeleistung
         if ($ident === 'WB_ChargePower') {
             $buffer['WB_ChargeMode'] = 0;
-            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0); // Optional: sofort auch Variable anpassen
+            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
             $this->SendDebug("UpdateWallboxBuffer", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
         }
     
@@ -477,20 +483,25 @@ class Goodwe extends IPSModule
                 SetValue($varID, $value);
         
                 if ($key === "workstate") {
-                    $chargingState = ($value !== 0);
+                    $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
                     $chargingVarID = @$this->GetIDForIdent('WB_Charging');
                 
-                    // Nur setzen, wenn kein aktiver Puffer-Wert für WB_Charging vorliegt
                     $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
                     $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
                 
-                    if ($chargingVarID !== false && !$isPending) {
+                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
+                    $now = time();
+                    $isBlocked = ($holdUntil > $now);
+                
+                    if ($chargingVarID !== false && !$isPending && !$isBlocked) {
                         SetValue($chargingVarID, $chargingState);
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                    } elseif ($isBlocked) {
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
                     } elseif ($isPending) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht überschrieben – Änderung gepuffert.", 0);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
                     }
-                }                
+                }
             }
         }        
 
