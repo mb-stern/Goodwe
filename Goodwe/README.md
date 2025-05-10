@@ -54,7 +54,7 @@ Name     | Beschreibung
 -------- | ------------------
 Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Variablen werden automatisch erstellt oder gelöscht.
 Intervall                  |  Intervall für die Abfrage der Modbus-Register. Standard ist 5 sek.
-SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
+SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 15 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
 
 ### 5. Statusvariablen und Profile
@@ -111,8 +111,14 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.2 (28.04.2025)
-- Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung stellt.
+Version 2.3 (6.05.2025)
+- Ein Problem wurde behoben, welches die Ansteuerung durch den Energiemanager verhinderte.
+- Ein Problem mit dem doppelten setzen des Timers nach einem Modulupdate wurde behoben.
+- Wenn der Sollwert der Ladeleistung verändert wird, wird der Modus direkt auf 'Schnell' gesetzt.
+- Die Ladeinstellungen für die Wallbox werden gepuffert und verzögert gesandt, da die API eine zu schnelle Befehlsfolge ablehnt.
+
+Version 2.2 (29.04.2025)
+- Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung stellt. Eventuell kann dieser Datenpunkt in Zukunft als Info für den Energiemanger genutzt werden.
 - Ein Fehler wurde behoben, dass nach einer Aktualisierung des Moduls die neuen Register nicht zur Auswahl standen.
 
 Version 2.1 (25.03.2025)
