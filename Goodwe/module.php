@@ -272,12 +272,14 @@ class Goodwe extends IPSModule
         $this->SendDebug("ApplyWallboxChanges", "Änderungen werden übertragen: " . json_encode($changes), 0);
 
         // 1. Setze Ladeleistung (wenn gesetzt)
-        if (isset($changes['WB_ChargePower'])) {
-            $value = round($changes['WB_ChargePower'] / 100) * 100;
-            $value = max(4200, min($value, 11000));
-            $kw = round($value / 1000, 1);
-            $data = ['sn' => $serial, 'charge_power' => $kw];
-            $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+        if ($mode == 0 && isset($changes["WB_ChargePower"])) {
+            $rawPower = $changes["WB_ChargePower"];
+            $power = max(4200, min(round($rawPower / 100) * 100, 11000));
+            $powerKW = round($power / 1000, 1);
+            $requestData["charge_power"] = $powerKW;
+            $this->SendDebug("ApplyWallboxChanges", "Ladeleistung gesetzt: {$powerKW} kW", 0);
+        } else {
+            $this->SendDebug("ApplyWallboxChanges", "Ladeleistung nicht gesetzt, da Modus != 0", 0);
         }
 
         // 2. Setze Modus, falls WB_Charging aktiv
