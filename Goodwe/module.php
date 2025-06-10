@@ -245,18 +245,14 @@ class Goodwe extends IPSModule
                 break;
 
             case 'WB_ChargeMode':
-            SetValue($this->GetIDForIdent($ident), $value);
-
-            $charging = GetValue($this->GetIDForIdent('WB_Charging'));
-            $endpoint = $charging ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-
-            $data = ['sn' => $serial];
-            if ($charging) {
-                $data['mode'] = $value;
-            }
-
-            $this->SendWallboxRequest($data, $endpoint);
-            break;
+                SetValue($this->GetIDForIdent($ident), $value);
+                if (GetValue($this->GetIDForIdent('WB_Charging'))) {
+                    $this->SendWallboxRequest([
+                        'sn' => $serial,
+                        'mode' => $value
+                    ], '/v4/EvCharger/StartCharging');
+                }
+                break;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
