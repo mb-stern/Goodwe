@@ -21,6 +21,8 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
+        $this->RegisterTimer('WallboxApplyTimer', 0, 'Goodwe_ApplyWallboxChanges($_IPS[\'TARGET\']);');
+
     }
 
     public function ApplyChanges()
@@ -204,11 +206,12 @@ class Goodwe extends IPSModule
 
     public function RequestAction($ident, $value)
     {
+        // Debug-Ausgabe für Ident und Wert
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
-
-        // Register-Steuerung
-        if (strpos($ident, 'Addr') === 0) {
-            $address = intval(substr($ident, 4));
+    
+        // Logik für Register
+        if (strpos($ident, 'Addr') === 0) { // Ident für Register-Variablen beginnt mit "Addr"
+            $address = intval(substr($ident, 4)); // Extrahiere die Adresse aus dem Ident
             if ($this->WriteRegister($address, $value)) {
                 SetValue($this->GetIDForIdent($ident), $value);
                 $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
@@ -217,46 +220,19 @@ class Goodwe extends IPSModule
             }
             return;
         }
-
-        // Wallbox-Steuerung direkt ohne Pufferung
-        $serial = $this->ReadPropertyString("WallboxSerial");
-
+    
+        // Logik für Wallbox-Aktionen
         switch ($ident) {
             case 'WB_Charging':
-                SetValue($this->GetIDForIdent($ident), $value);
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($value) {
-                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                }
-                $this->SendWallboxRequest($data, $endpoint);
-                break;
-
+            case 'WB_ChargeMode':
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
-
-                // Automatischer Moduswechsel bei Ladeleistung
-                $this->SendDebug("RequestAction", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
-                SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
-                $this->SendWallboxRequest([
-                    'sn' => $serial,
-                    'charge_power' => round($value / 1000, 1)
-                ], '/v3/EvCharger/SetChargeMode');
+                $this->UpdateWallboxBuffer($ident, $value);
                 break;
-
-            case 'WB_ChargeMode':
-                SetValue($this->GetIDForIdent($ident), $value);
-                if (GetValue($this->GetIDForIdent('WB_Charging'))) {
-                    $this->SendWallboxRequest([
-                        'sn' => $serial,
-                        'mode' => $value
-                    ], '/v4/EvCharger/StartCharging');
-                }
-                break;
-
+        
             default:
                 throw new Exception("Ungültiger Ident: $ident");
-        }
+        }        
     }
     
     public function FetchAll()
@@ -264,6 +240,79 @@ class Goodwe extends IPSModule
         $this->FetchWallboxData();
         $this->FetchInverterData();
         $this->CalculateMaxPower();
+    }
+
+    private function UpdateWallboxBuffer(string $ident, $value): void
+    {
+        $buffer = json_decode($this->GetBuffer("WallboxChanges"), true);
+        if (!is_array($buffer)) {
+            $buffer = [];
+        }
+    
+        // Wert puffern
+        $buffer[$ident] = $value;
+    
+        // Rückmeldung für WB_Charging für 30 sec blockieren – immer (true oder false)
+        if ($ident === 'WB_Charging') {
+            $this->SetBuffer("ChargingHoldUntil", time() + 5);
+            $this->SendDebug("UpdateWallboxBuffer", "WB_Charging blockiert Rückmeldung für 5 Sek. (Wert: " . ($value ? "true" : "false") . ")", 0);
+        }
+    
+        // Automatischer Moduswechsel bei Ladeleistung
+        if ($ident === 'WB_ChargePower') {
+            $buffer['WB_ChargeMode'] = 0;
+            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
+            $this->SendDebug("UpdateWallboxBuffer", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
+        }
+    
+        $this->SetBuffer("WallboxChanges", json_encode($buffer));
+        $this->SetTimerInterval("WallboxApplyTimer", 5000);
+    }    
+
+    public function ApplyWallboxChanges()
+    {
+        $this->SetTimerInterval("WallboxApplyTimer", 0); // Timer stoppen
+
+        $serial = $this->ReadPropertyString("WallboxSerial");
+        if (empty($serial)) {
+            $this->SendDebug("ApplyWallboxChanges", "Keine Seriennummer vorhanden.", 0);
+            return;
+        }
+
+        $changes = json_decode($this->GetBuffer("WallboxChanges"), true);
+        if (!is_array($changes) || empty($changes)) {
+            return;
+        }
+
+        $this->SendDebug("ApplyWallboxChanges", "Änderungen werden übertragen: " . json_encode($changes), 0);
+
+        // 1. Setze Ladeleistung (wenn gesetzt)
+        if (isset($changes['WB_ChargePower'])) {
+            $value = round($changes['WB_ChargePower'] / 100) * 100;
+            $value = max(4200, min($value, 11000));
+            $kw = round($value / 1000, 1);
+            $data = ['sn' => $serial, 'charge_power' => $kw];
+            $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+        }
+
+        // 2. Setze Modus, falls WB_Charging aktiv
+        if (isset($changes['WB_ChargeMode']) && GetValue($this->GetIDForIdent('WB_Charging'))) {
+            $data = ['sn' => $serial, 'mode' => $changes['WB_ChargeMode']];
+            $this->SendWallboxRequest($data, '/v4/EvCharger/StartCharging');
+        }
+
+        // 3. Starte oder Stoppe Ladevorgang
+        if (isset($changes['WB_Charging'])) {
+            $endpoint = $changes['WB_Charging'] ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+            $data = ['sn' => $serial];
+            if ($changes['WB_Charging']) {
+                $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+            }
+            $this->SendWallboxRequest($data, $endpoint);
+        }
+
+        // Puffer zurücksetzen
+        $this->SetBuffer("WallboxChanges", json_encode([]));
     }
 
     public function FetchInverterData()
