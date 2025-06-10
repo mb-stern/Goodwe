@@ -457,13 +457,15 @@ class Goodwe extends IPSModule
                     $now = time();
                     $isBlocked = ($holdUntil > $now);
                 
-                    if ($chargingVarID !== false && !$isPending && !$isBlocked) {
+                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
+                    $now = time();
+                    $isBlocked = ($holdUntil > $now);
+
+                    if ($chargingVarID !== false && !$isBlocked) {
                         SetValue($chargingVarID, $chargingState);
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
                     } elseif ($isBlocked) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                    } elseif ($isPending) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – blockiert bis " . date('H:i:s', $holdUntil), 0);
                     }
                 }
             }
