@@ -111,7 +111,10 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.3 (6.05.2025)
+Version 2.4 (10.06.2025)
+- Puferung der Ladeeinstellungen wieder deaktiviert. Dies führt zu fehlerhaften, nicht aktuellem übermitteln der Sollwerte
+
+Version 2.3 (06.05.2025)
 - Ein Problem wurde behoben, welches die Ansteuerung durch den Energiemanager verhinderte.
 - Ein Problem mit dem doppelten setzen des Timers nach einem Modulupdate wurde behoben.
 - Wenn der Sollwert der Ladeleistung verändert wird, wird der Modus direkt auf 'Schnell' gesetzt.
