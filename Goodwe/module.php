@@ -21,7 +21,6 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
-        $this->RegisterTimer('WallboxApplyTimer', 0, 'Goodwe_ApplyWallboxChanges($_IPS[\'TARGET\']);');
 
     }
 
@@ -206,68 +205,54 @@ class Goodwe extends IPSModule
 
     public function RequestAction($ident, $value)
     {
-        // Debug-Ausgabe für Ident und Wert
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
-    
-        // Logik für Register
-        if (strpos($ident, 'Addr') === 0) { // Ident für Register-Variablen beginnt mit "Addr"
-            $address = intval(substr($ident, 4)); // Extrahiere die Adresse aus dem Ident
+
+        if (strpos($ident, 'Addr') === 0) {
+            $address = intval(substr($ident, 4));
             if ($this->WriteRegister($address, $value)) {
                 SetValue($this->GetIDForIdent($ident), $value);
-                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
-            } else {
-                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
             }
             return;
         }
-    
-        // Logik für Wallbox-Aktionen
+
         switch ($ident) {
             case 'WB_Charging':
+                SetValue($this->GetIDForIdent($ident), $value);
+                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $data = ['sn' => $this->ReadPropertyString("WallboxSerial")];
+                if ($value) {
+                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                }
+                $this->SendWallboxRequest($data, $endpoint);
+                break;
+
             case 'WB_ChargeMode':
+                SetValue($this->GetIDForIdent($ident), $value);
+                $this->SetChargingMode($value);
+                break;
+
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
-                $this->UpdateWallboxBuffer($ident, $value);
+
+                // Automatischer Moduswechsel bei Ladeleistung
+                $this->SendDebug("RequestAction", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
+                SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
+                $this->SetChargingMode(0);
+
+                $this->SetChargingPower($value);
                 break;
-        
+
             default:
                 throw new Exception("Ungültiger Ident: $ident");
-        }        
+        }
     }
-    
+
     public function FetchAll()
     {
         $this->FetchWallboxData();
         $this->FetchInverterData();
         $this->CalculateMaxPower();
     }
-
-    private function UpdateWallboxBuffer(string $ident, $value): void
-    {
-        $buffer = json_decode($this->GetBuffer("WallboxChanges"), true);
-        if (!is_array($buffer)) {
-            $buffer = [];
-        }
-    
-        // Wert puffern
-        $buffer[$ident] = $value;
-    
-        // Rückmeldung für WB_Charging für 30 sec blockieren – immer (true oder false)
-        if ($ident === 'WB_Charging') {
-            $this->SetBuffer("ChargingHoldUntil", time() + 5);
-            $this->SendDebug("UpdateWallboxBuffer", "WB_Charging blockiert Rückmeldung für 5 Sek. (Wert: " . ($value ? "true" : "false") . ")", 0);
-        }
-    
-        // Automatischer Moduswechsel bei Ladeleistung
-        if ($ident === 'WB_ChargePower') {
-            $buffer['WB_ChargeMode'] = 0;
-            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
-            $this->SendDebug("UpdateWallboxBuffer", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
-        }
-    
-        $this->SetBuffer("WallboxChanges", json_encode($buffer));
-        $this->SetTimerInterval("WallboxApplyTimer", 5000);
-    }    
 
     public function ApplyWallboxChanges()
     {
