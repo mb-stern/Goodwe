@@ -254,8 +254,8 @@ class Goodwe extends IPSModule
     
         // Rückmeldung für WB_Charging für 30 sec blockieren – immer (true oder false)
         if ($ident === 'WB_Charging') {
-            $this->SetBuffer("ChargingHoldUntil", time() + 30);
-            $this->SendDebug("UpdateWallboxBuffer", "WB_Charging blockiert Rückmeldung für 30 Sek. (Wert: " . ($value ? "true" : "false") . ")", 0);
+            $this->SetBuffer("ChargingHoldUntil", time() + 5);
+            $this->SendDebug("UpdateWallboxBuffer", "WB_Charging blockiert Rückmeldung für 5 Sek. (Wert: " . ($value ? "true" : "false") . ")", 0);
         }
     
         // Automatischer Moduswechsel bei Ladeleistung
