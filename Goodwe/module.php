@@ -500,6 +500,7 @@ class Goodwe extends IPSModule
 
         if ($httpCode !== 200 || !$response) {
             $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            $this->LogMessage("GoodweFetchData", "Wallbox-Datenabruf fehlgeschlagen! HTTP-Code: $httpCode", KL_ERROR);
             return null;
         }
 
@@ -535,6 +536,7 @@ class Goodwe extends IPSModule
 
         if ($httpCode !== 200 || !$response) {
             $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            $this->LogMessage("GoodweLogin", "Login fehlgeschlagen! HTTP-Code: $httpCode", KL_ERROR);
             return false;
         }
 
