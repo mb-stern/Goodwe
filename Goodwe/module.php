@@ -227,7 +227,7 @@ class Goodwe extends IPSModule
             SetValue($chargingVarID, $value);
 
             // Sperre setzen
-            $holdUntil = time() + 30;
+            $holdUntil = time() + 5;
             $this->SetBuffer("ChargingHoldUntil", $holdUntil);
             $this->SendDebug("RequestAction", "WB_Charging gesperrt bis: " . date('H:i:s', $holdUntil), 0);
 
@@ -244,7 +244,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("RequestAction", "API-Fehler. Schalter zurückgesetzt.", 0);
             }
             break;
-            
+
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
 
@@ -452,10 +452,6 @@ class Goodwe extends IPSModule
                 
                     $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
                     $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
-                
-                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
-                    $now = time();
-                    $isBlocked = ($holdUntil > $now);
                 
                     $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
                     $now = time();
