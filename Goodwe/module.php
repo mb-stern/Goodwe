@@ -223,28 +223,28 @@ class Goodwe extends IPSModule
         switch ($ident) {
         case 'WB_Charging':
             $chargingVarID = $this->GetIDForIdent($ident);
-            $oldValue = GetValue($chargingVarID);         // Aktueller Wert vor dem Umschalten
-            SetValue($chargingVarID, $value);             // Sofort Schalter setzen
+            $oldValue = GetValue($chargingVarID);
+            SetValue($chargingVarID, $value);
+
+            // Sperre setzen
+            $holdUntil = time() + 30;
+            $this->SetBuffer("ChargingHoldUntil", $holdUntil);
+            $this->SendDebug("RequestAction", "WB_Charging gesperrt bis: " . date('H:i:s', $holdUntil), 0);
 
             $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
             $data = ['sn' => $serial];
-
             if ($value) {
-                $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                $data['mode'] = $mode;
+                $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
             }
 
             $result = $this->SendWallboxRequest($data, $endpoint);
-
             if (!$result) {
-                // API fehlgeschlagen → Wert zurücksetzen
                 SetValue($chargingVarID, $oldValue);
-                $this->SendDebug("RequestAction", "API-Fehler. Schalter zurück auf vorherigen Wert: " . ($oldValue ? "true" : "false"), 0);
-            } else {
-                $this->SendDebug("RequestAction", "Schalter erfolgreich gesetzt. API-Aufruf OK.", 0);
+                $this->LogMessage("Goodwe", "Fehler beim Schalten der Wallbox über API. Zielzustand war: " . ($value ? "Ein" : "Aus"), KL_ERROR);
+                $this->SendDebug("RequestAction", "API-Fehler. Schalter zurückgesetzt.", 0);
             }
             break;
-
+            
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
 
@@ -457,13 +457,15 @@ class Goodwe extends IPSModule
                     $now = time();
                     $isBlocked = ($holdUntil > $now);
                 
-                    if ($chargingVarID !== false && !$isPending && !$isBlocked) {
+                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
+                    $now = time();
+                    $isBlocked = ($holdUntil > $now);
+
+                    if ($chargingVarID !== false && !$isBlocked) {
                         SetValue($chargingVarID, $chargingState);
                         $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
                     } elseif ($isBlocked) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                    } elseif ($isPending) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – blockiert bis " . date('H:i:s', $holdUntil), 0);
                     }
                 }
             }
