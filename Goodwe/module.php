@@ -644,14 +644,22 @@ class Goodwe extends IPSModule
             return;
         }
 
+        // Aktuell eingestellter Wert aus der Variable 'WB_ChargePower'
+        $rawPower = GetValue($this->GetIDForIdent('WB_ChargePower'));
+
+        // Begrenzen & runden wie von dir festgelegt (in 100er-Schritten, 4.2–11 kW)
+        $power = max(4200, min(round($rawPower / 100) * 100, 11000));
+        $powerKW = round($power / 1000, 1); // Umrechnung in kW
+
         $requestData = [
             "sn" => $serial,
-            "mode" => $mode
+            "mode" => $mode,
+            "charge_power" => $powerKW
         ];
 
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
-            $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
+            $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt mit {$powerKW} kW.", 0);
             SetValue($this->GetIDForIdent("ChargingMode"), $mode);
         } else {
             $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
