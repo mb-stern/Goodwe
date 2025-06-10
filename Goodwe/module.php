@@ -206,51 +206,77 @@ class Goodwe extends IPSModule
     {
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
 
-        // Register-Steuerung
-        if (strpos($ident, 'Addr') === 0) {
-            $address = intval(substr($ident, 4));
-            if ($this->WriteRegister($address, $value)) {
-                SetValue($this->GetIDForIdent($ident), $value);
-                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
-            } else {
-                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
-            }
-            return;
-        }
-
-        // Wallbox-Steuerung direkt ohne Pufferung
         $serial = $this->ReadPropertyString("WallboxSerial");
 
         switch ($ident) {
-            case 'WB_Charging':
-                SetValue($this->GetIDForIdent($ident), $value);
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($value) {
-                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                }
-                $this->SendWallboxRequest($data, $endpoint);
-                break;
-
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
 
-                // Automatischer Moduswechsel bei Ladeleistung
-                $this->SendDebug("RequestAction", "Ladeleistung gesetzt → Modus automatisch auf Schnell (0)", 0);
-                SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
-                $this->SendWallboxRequest([
+                // Automatisch auf Schnellladung (Modus 0) umschalten
+                $modeID = $this->GetIDForIdent('WB_ChargeMode');
+                SetValue($modeID, 0);
+
+                $kw = round($value / 1000, 1);
+
+                // Ladeleistung setzen
+                $result = $this->SendWallboxRequest([
                     'sn' => $serial,
-                    'charge_power' => round($value / 1000, 1)
+                    'charge_power' => $kw
                 ], '/v3/EvCharger/SetChargeMode');
+
+                if (!is_array($result) || (int)($result['code'] ?? -1) !== 0) {
+                    $this->LogMessage("Goodwe", "Fehler beim Setzen der Ladeleistung: " . json_encode($result), KL_ERROR);
+                }
+
+                // Wenn aktuell geladen wird, auch Modus an API senden
+                if (GetValue($this->GetIDForIdent('WB_Charging'))) {
+                    $result = $this->SendWallboxRequest([
+                        'sn' => $serial,
+                        'mode' => 0
+                    ], '/v4/EvCharger/StartCharging');
+
+                    if (!is_array($result) || (int)($result['code'] ?? -1) !== 0) {
+                        $this->LogMessage("Goodwe", "Fehler beim Setzen des Lademodus: " . json_encode($result), KL_ERROR);
+                    }
+                }
                 break;
 
             case 'WB_ChargeMode':
                 SetValue($this->GetIDForIdent($ident), $value);
+
                 if (GetValue($this->GetIDForIdent('WB_Charging'))) {
-                    $this->SendWallboxRequest([
+                    $result = $this->SendWallboxRequest([
                         'sn' => $serial,
                         'mode' => $value
                     ], '/v4/EvCharger/StartCharging');
+
+                    if (!is_array($result) || (int)($result['code'] ?? -1) !== 0) {
+                        $this->LogMessage("Goodwe", "Fehler beim Setzen des Lademodus: " . json_encode($result), KL_ERROR);
+                    }
+                }
+                break;
+
+            case 'WB_Charging':
+                $chargingVarID = $this->GetIDForIdent($ident);
+                $oldValue = GetValue($chargingVarID);
+                SetValue($chargingVarID, $value);
+
+                // Sperre setzen – verhindert Überschreiben durch FetchWallboxData
+                $this->SetBuffer("ChargingHoldUntil", time() + 30);
+                $this->SendDebug("RequestAction", "WB_Charging gesperrt bis: " . date('H:i:s', time() + 30), 0);
+
+                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $data = ['sn' => $serial];
+
+                if ($value) {
+                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                }
+
+                $result = $this->SendWallboxRequest($data, $endpoint);
+                if (!is_array($result) || (int)($result['code'] ?? -1) !== 0) {
+                    SetValue($chargingVarID, $oldValue);
+                    $this->LogMessage("Goodwe", "Fehler beim Schalten der Wallbox über API. Zielzustand war: " . ($value ? "Ein" : "Aus") . " | Antwort: " . json_encode($result), KL_ERROR);
+                    $this->SendDebug("RequestAction", "API-Fehler. Schalter zurückgesetzt.", 0);
                 }
                 break;
 
@@ -258,7 +284,7 @@ class Goodwe extends IPSModule
                 throw new Exception("Ungültiger Ident: $ident");
         }
     }
-    
+
     public function FetchAll()
     {
         $this->FetchWallboxData();
