@@ -221,15 +221,29 @@ class Goodwe extends IPSModule
         $serial = $this->ReadPropertyString("WallboxSerial");
 
         switch ($ident) {
-            case 'WB_Charging':
-                SetValue($this->GetIDForIdent($ident), $value);
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($value) {
-                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                }
-                $this->SendWallboxRequest($data, $endpoint);
-                break;
+        case 'WB_Charging':
+            $chargingVarID = $this->GetIDForIdent($ident);
+            $oldValue = GetValue($chargingVarID);         // Aktueller Wert vor dem Umschalten
+            SetValue($chargingVarID, $value);             // Sofort Schalter setzen
+
+            $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+            $data = ['sn' => $serial];
+
+            if ($value) {
+                $mode = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                $data['mode'] = $mode;
+            }
+
+            $result = $this->SendWallboxRequest($data, $endpoint);
+
+            if (!$result) {
+                // API fehlgeschlagen → Wert zurücksetzen
+                SetValue($chargingVarID, $oldValue);
+                $this->SendDebug("RequestAction", "API-Fehler. Schalter zurück auf vorherigen Wert: " . ($oldValue ? "true" : "false"), 0);
+            } else {
+                $this->SendDebug("RequestAction", "Schalter erfolgreich gesetzt. API-Aufruf OK.", 0);
+            }
+            break;
 
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
