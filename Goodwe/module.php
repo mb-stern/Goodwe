@@ -16,6 +16,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyInteger("PollIntervalWB", 15);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+        $this->RegisterPropertyInteger("ChargePowerOffset", 200);
+
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
@@ -288,8 +290,15 @@ class Goodwe extends IPSModule
 
         // 1. Setze Ladeleistung (wenn gesetzt)
         if (isset($changes['WB_ChargePower'])) {
+            $offset = $this->ReadPropertyInteger('ChargePowerOffset');
             $value = round($changes['WB_ChargePower'] / 100) * 100;
+
+            // Offset addieren
+            $value += $offset;
+
+            // Begrenzen
             $value = max(4200, min($value, 11000));
+
             $kw = round($value / 1000, 1);
             $data = ['sn' => $serial, 'charge_power' => $kw];
             $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
@@ -892,6 +901,12 @@ class Goodwe extends IPSModule
                             "name"  => "PollIntervalWB",
                             "caption" => "Sekunden",
                             "suffix" => "s"
+                        ],
+                        [
+                            "type" => "NumberSpinner",
+                            "name" => "ChargePowerOffset",
+                            "caption" => "Soll-Ladeleistung erhöhen",
+                            "suffix" => "W"
                         ]
                     ]
                 ],
@@ -1077,7 +1092,7 @@ class Goodwe extends IPSModule
             ["key" => "chargeEnergy", "name" => "Energie akt. Ladevorgang", "unit" => "kWh", "pos" => 9, "active" => true],
             ["key" => "power", "name" => "Leistung Ist", "unit" => "W", "pos" => 4, "active" => true],
             ["key" => "current", "name" => "Strom", "unit" => "A", "pos" => 8, "active" => true],
-            ["key" => "time", "name" => "lädt seit (min)", "unit" => "dur", "pos" => 10, "active" => true],
+            ["key" => "time", "name" => "lädt seit (sek)", "unit" => "dur", "pos" => 10, "active" => true],
             ["key" => "importPowerLimit", "name" => "Import Power Limit", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "chargeMode", "name" => "Modus Ist", "unit" => "wb_mode", "pos" => 5, "active" => true],
             ["key" => "scheduleMode", "name" => "Zeitplanmodus", "unit" => "", "pos" => 0, "active" => false],

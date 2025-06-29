@@ -111,7 +111,10 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.3 (6.05.2025)
+Version 2.4 (29.06.2025)
+- Konfigurierbaren Offset-Wert für die Wallbox Sollleistung hinzugefügt, um das Problem mit 30% Grenze des Energiemanagers und die nicht erreichte Ist-Leistung zu beheben.
+
+Version 2.3 (06.05.2025)
 - Ein Problem wurde behoben, welches die Ansteuerung durch den Energiemanager verhinderte.
 - Ein Problem mit dem doppelten setzen des Timers nach einem Modulupdate wurde behoben.
 - Wenn der Sollwert der Ladeleistung verändert wird, wird der Modus direkt auf 'Schnell' gesetzt.
