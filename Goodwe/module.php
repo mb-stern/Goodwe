@@ -291,13 +291,18 @@ class Goodwe extends IPSModule
         // 1. Setze Ladeleistung (wenn gesetzt)
         if (isset($changes['WB_ChargePower'])) {
             $offset = $this->ReadPropertyInteger('ChargePowerOffset');
+
+            // Basiswert auf 100 runden
             $value = round($changes['WB_ChargePower'] / 100) * 100;
 
             // Offset addieren
             $value += $offset;
 
-            // Begrenzen
-            $value = max(4200, min($value, 11000));
+            // Begrenzung auf Maximalwert
+            $value = min($value, 11000);
+
+            // Untergrenze bleibt wie gehabt
+            $value = max(4200, $value);
 
             $kw = round($value / 1000, 1);
             $data = ['sn' => $serial, 'charge_power' => $kw];
