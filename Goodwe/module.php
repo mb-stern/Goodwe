@@ -16,6 +16,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxSerial", "");  
         $this->RegisterPropertyInteger("PollIntervalWB", 15);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+        $this->RegisterPropertyInteger("ChargePowerOffset", 200);
+
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
@@ -288,8 +290,15 @@ class Goodwe extends IPSModule
 
         // 1. Setze Ladeleistung (wenn gesetzt)
         if (isset($changes['WB_ChargePower'])) {
+            $offset = $this->ReadPropertyInteger('ChargePowerOffset');
             $value = round($changes['WB_ChargePower'] / 100) * 100;
+
+            // Offset addieren
+            $value += $offset;
+
+            // Begrenzen
             $value = max(4200, min($value, 11000));
+
             $kw = round($value / 1000, 1);
             $data = ['sn' => $serial, 'charge_power' => $kw];
             $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
@@ -892,6 +901,12 @@ class Goodwe extends IPSModule
                             "name"  => "PollIntervalWB",
                             "caption" => "Sekunden",
                             "suffix" => "s"
+                        ],
+                        [
+                            "type" => "NumberSpinner",
+                            "name" => "ChargePowerOffset",
+                            "caption" => "Zusatzwert für Ladeleistung (W)",
+                            "suffix" => "W"
                         ]
                     ]
                 ],
