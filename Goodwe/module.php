@@ -905,7 +905,7 @@ class Goodwe extends IPSModule
                         [
                             "type" => "NumberSpinner",
                             "name" => "ChargePowerOffset",
-                            "caption" => "Zusatzwert für Ladeleistung (W)",
+                            "caption" => "Soll-Ladeleistung erhöhen",
                             "suffix" => "W"
                         ]
                     ]
