@@ -1081,7 +1081,7 @@ class Goodwe extends IPSModule
         }
          if (!IPS_VariableProfileExists('Goodwe.kOhm')){
             IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('Goodwe.kOhm', '', ' %');
+            IPS_SetVariableProfileText('Goodwe.kOhm', '', ' KΩ');
             IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
             IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 100, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
