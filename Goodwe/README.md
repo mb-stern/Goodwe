@@ -96,6 +96,7 @@ Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
 Goodwe.Percent          |  Integer
 Goodwe.WattEMS          |  Integer
+Goodwe.kOhm             |  Integer
 
 ### 6. WebFront
 
@@ -110,6 +111,9 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 2.5 (01.07.2025)
+- Es sind nun bis 4 Strings und bis 8 MPP-Tracker verfügbar. Ebenfalls ist der Isolationswiderstand verfügbar.
 
 Version 2.4 (29.06.2025)
 - Konfigurierbaren Offset-Wert für die Wallbox Sollleistung hinzugefügt, um das Problem mit 30% Grenze des Energiemanagers und die nicht erreichte Ist-Leistung zu beheben.

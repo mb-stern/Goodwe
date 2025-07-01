@@ -975,6 +975,8 @@ class Goodwe extends IPSModule
                 return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
             case "kW":
                 return ["profile" => "~Power", "type" => VARIABLETYPE_FLOAT];
+            case "KΩ":
+                return ["profile" => "Goodwe.kOhm", "type" => VARIABLETYPE_INTEGER];
             case "°C":
                 return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
             case "%":
@@ -1077,6 +1079,13 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileValues('Goodwe.Percent', 0, 100, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Percent', 0);
         }
+         if (!IPS_VariableProfileExists('Goodwe.kOhm')){
+            IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.kOhm', '', ' %');
+            IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
+            IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 100, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
+        }       
     }
 
     private function GetWbVariables(): array
@@ -1162,13 +1171,19 @@ class Goodwe extends IPSModule
         ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
         ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
         ["address" => 47909, "name" => "BAT - SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
-        // Wechslerichter
+        // Wechselrichter
         ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
         ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
         ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 220],
         ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
         ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
         ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 250],
+        ["address" => 35111, "name" => "WR - Spannung String 3", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 251],
+        ["address" => 35112, "name" => "WR - Strom String 3", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 252],
+        ["address" => 35113, "name" => "WR - Leistung String 3", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 253],
+        ["address" => 35115, "name" => "WR - Spannung String 4", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 254],
+        ["address" => 35116, "name" => "WR - Strom String 4", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 255],
+        ["address" => 35117, "name" => "WR - Leistung String 4", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 256],
         ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
         ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
         ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
@@ -1176,9 +1191,20 @@ class Goodwe extends IPSModule
         ["address" => 35337, "name" => "WR - P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
         ["address" => 35338, "name" => "WR - P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
         ["address" => 35339, "name" => "WR - P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
+        ["address" => 35340, "name" => "WR - P MPPT4", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 321],
+        ["address" => 35341, "name" => "WR - P MPPT5", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 322],
+        ["address" => 35342, "name" => "WR - P MPPT6", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 323],
+        ["address" => 35343, "name" => "WR - P MPPT7", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 324],
+        ["address" => 35344, "name" => "WR - P MPPT8", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 325],
         ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
         ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
         ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
+        ["address" => 35348, "name" => "WR - I MPPT4", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 351],
+        ["address" => 35349, "name" => "WR - I MPPT5", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 352],
+        ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353]
+        ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
+        ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
+        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 0.1, "pos" => 370],
         ];
     }
 }
