@@ -1198,10 +1198,10 @@ class Goodwe extends IPSModule
         ["address" => 35344, "name" => "WR - P MPPT8", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 325],
         ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
         ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
-        ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350]
+        ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350],
         ["address" => 35348, "name" => "WR - I MPPT4", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 351],
         ["address" => 35349, "name" => "WR - I MPPT5", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 352],
-        ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353]
+        ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353],
         ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
         ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 0.1, "pos" => 370],
