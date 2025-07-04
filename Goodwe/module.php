@@ -1083,7 +1083,7 @@ class Goodwe extends IPSModule
             IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileText('Goodwe.kOhm', '', ' KΩ');
             IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
-            IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 100, 1);
+            IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
         }       
     }
@@ -1204,7 +1204,7 @@ class Goodwe extends IPSModule
         ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353],
         ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
         ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
-        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
+        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 0.1, "pos" => 370],
         ];
     }
 }
