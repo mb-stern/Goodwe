@@ -319,24 +319,9 @@ class Goodwe extends IPSModule
         if (isset($changes['WB_Charging'])) {
             $endpoint = $changes['WB_Charging'] ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
             $data = ['sn' => $serial];
-
             if ($changes['WB_Charging']) {
                 $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
-
-                // 🔹 NEU: Beim Starten IMMER mit minimaler Ladeleistung beginnen
-                $minPower = 4200; // Mindestwert
-                $kw = round($minPower / 1000, 1);
-
-                // Ladeleistung direkt auf Minimalwert setzen
-                SetValue($this->GetIDForIdent('WB_ChargePower'), $minPower);
-
-                // Force-Status aktivieren, damit Symcon erkennt, dass der Wert vorgegeben wurde
-                $this->SetBuffer('WB_ChargePower_Force', '1');
-
-                // Wert sofort an die API senden
-                $this->SendWallboxRequest(['sn' => $serial, 'charge_power' => $kw], '/v3/EvCharger/SetChargeMode');
             }
-
             $this->SendWallboxRequest($data, $endpoint);
         }
 
