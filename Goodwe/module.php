@@ -230,6 +230,7 @@ class Goodwe extends IPSModule
             case 'WB_ChargePower':
                 SetValue($this->GetIDForIdent($ident), $value);
                 $this->UpdateWallboxBuffer($ident, $value);
+                $this->SetBuffer($ident . "_Force", "1");
                 break;
         
             default:
@@ -494,7 +495,13 @@ class Goodwe extends IPSModule
                     $value = $value * 1000; // kW → W
                 }
         
+                // Prüfen, ob sich der Wert geändert hat
+                if (GetValue($varID) !== $value) {
                 SetValue($varID, $value);
+
+                // Wenn Änderung von der Wallbox kam → Force-Status löschen
+                $this->SetBuffer("WB_" . $key . "_Force", "0");
+                }
         
                 if ($key === "workstate") {
                     $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
@@ -523,6 +530,9 @@ class Goodwe extends IPSModule
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
+        // Nach erfolgreichem Abruf erneut Vorgaben senden (falls Symcon Sollwerte aktiv hat)
+        $this->ResendWallboxSettings();
+
     }
 
     private function GoodweFetchData(string $serial): ?string
@@ -809,6 +819,65 @@ class Goodwe extends IPSModule
             }
         }
     }    
+
+    private function ResendWallboxSettings()
+    {
+        $serial = $this->ReadPropertyString("WallboxSerial");
+        if (empty($serial)) {
+            $this->SendDebug("ResendWallboxSettings", "Keine Seriennummer vorhanden.", 0);
+            return;
+        }
+
+        // Force-Status prüfen
+        $sendPower    = $this->GetBuffer("WB_ChargePower_Force") === "1";
+        $sendMode     = $this->GetBuffer("WB_ChargeMode_Force") === "1";
+        $sendCharging = $this->GetBuffer("WB_Charging_Force") === "1";
+
+        if (!$sendPower && !$sendMode && !$sendCharging) {
+            $this->SendDebug("ResendWallboxSettings", "Keine aktiven Symcon-Sollwerte → nichts senden.", 0);
+            return;
+        }
+
+        $chargePowerID = @$this->GetIDForIdent("WB_ChargePower");
+        $chargeModeID  = @$this->GetIDForIdent("WB_ChargeMode");
+        $chargingID    = @$this->GetIDForIdent("WB_Charging");
+
+        if ($chargePowerID === false || $chargeModeID === false || $chargingID === false) {
+            $this->SendDebug("ResendWallboxSettings", "Soll-Variablen fehlen, Abbruch.", 0);
+            return;
+        }
+
+        $chargePower = GetValue($chargePowerID);
+        $chargeMode  = GetValue($chargeModeID);
+        $charging    = GetValue($chargingID);
+
+        $this->SendDebug("ResendWallboxSettings", "Sende Vorgaben erneut: Power={$chargePower}W, Mode={$chargeMode}, Charging=" . ($charging ? "true" : "false"), 0);
+
+        // 1. Ladeleistung senden
+        if ($sendPower) {
+            $offset = $this->ReadPropertyInteger('ChargePowerOffset');
+            $value = round($chargePower / 100) * 100 + $offset;
+            $value = min(max(4200, $value), 11000);
+            $kw = round($value / 1000, 1);
+
+            $this->SendWallboxRequest(['sn' => $serial, 'charge_power' => $kw], '/v3/EvCharger/SetChargeMode');
+        }
+
+        // 2. Modus senden (nur wenn geladen wird)
+        if ($sendMode && $charging) {
+            $this->SendWallboxRequest(['sn' => $serial, 'mode' => $chargeMode], '/v4/EvCharger/StartCharging');
+        }
+
+        // 3. Start/Stop senden
+        if ($sendCharging) {
+            $endpoint = $charging ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+            $data = ['sn' => $serial];
+            if ($charging) {
+                $data['mode'] = $chargeMode;
+            }
+            $this->SendWallboxRequest($data, $endpoint);
+        }
+    }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0) //Auslesen der Register für Zusätzliche Werte
     {
