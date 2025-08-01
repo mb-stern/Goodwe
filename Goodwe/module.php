@@ -519,27 +519,6 @@ class Goodwe extends IPSModule
             }
         }        
 
-        // Sollwert für Ladeleistung regelmäßig erneut an API senden
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (!empty($serial)) {
-            $chargePower = GetValue($this->GetIDForIdent('WB_ChargePower'));
-
-            if ($chargePower >= 4200) { // Nur senden, wenn Sollwert sinnvoll
-                $offset = $this->ReadPropertyInteger('ChargePowerOffset');
-
-                $value = round($chargePower / 100) * 100;
-                $value += $offset;
-                $value = min($value, 11000);
-                $value = max(4200, $value);
-
-                $kw = round($value / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
-
-                $this->SendDebug("FetchWallboxData", "Resend Soll-Ladeleistung: {$kw} kW", 0);
-                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-            }
-        }
-
         $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
