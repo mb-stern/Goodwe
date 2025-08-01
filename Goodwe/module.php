@@ -319,9 +319,25 @@ class Goodwe extends IPSModule
         if (isset($changes['WB_Charging'])) {
             $endpoint = $changes['WB_Charging'] ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
             $data = ['sn' => $serial];
+
             if ($changes['WB_Charging']) {
+                // Beim Starten immer mit 4,2 kW beginnen
+                $minPower = 4200;
+                $kw = round($minPower / 1000, 1);
+
+                // Sollwert-Variable sofort aktualisieren
+                SetValue($this->GetIDForIdent('WB_ChargePower'), $minPower);
+
+                // Ladeleistung sofort an API senden
+                $this->SendWallboxRequest(
+                    ['sn' => $serial, 'charge_power' => $kw],
+                    '/v3/EvCharger/SetChargeMode'
+                );
+
+                // Lade-Modus wie bisher übernehmen
                 $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
             }
+
             $this->SendWallboxRequest($data, $endpoint);
         }
 
