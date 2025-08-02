@@ -251,7 +251,7 @@ class Goodwe extends IPSModule
                 SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
                 $offset = $this->ReadPropertyInteger('ChargePowerOffset');
                 $val = round($value / 100) * 100 + $offset;
-                $val = min(max($val, 4200), 11000);
+                $val = min(max($val, 4200), 10900);
                 $kw = round($val / 1000, 1);
                 $data = ['sn' => $serial, 'charge_power' => $kw];
                 $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
