@@ -20,7 +20,7 @@ class Goodwe extends IPSModule
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
-        $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
+        //$this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
     }
 
@@ -1145,5 +1145,5 @@ class Goodwe extends IPSModule
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
-    
+
 }
