@@ -1145,4 +1145,13 @@ class Goodwe extends IPSModule
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
+
+    public function DeleteTimers(): void
+    {
+    $eventID = @IPS_GetObjectIDByIdent('TimerWR', $this->InstanceID);
+    if ($eventID && IPS_EventExists($eventID)) {
+        IPS_DeleteEvent($eventID);
+        $this->SendDebug(__FUNCTION__, "TimerWR gelöscht (ID $eventID)", 0);
+    }
+    
 }
