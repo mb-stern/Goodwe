@@ -1145,5 +1145,4 @@ class Goodwe extends IPSModule
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
-    
 }
