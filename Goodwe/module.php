@@ -1148,10 +1148,11 @@ class Goodwe extends IPSModule
 
     public function DeleteTimers(): void
     {
-    $eventID = @IPS_GetObjectIDByIdent('TimerWR', $this->InstanceID);
-    if ($eventID && IPS_EventExists($eventID)) {
-        IPS_DeleteEvent($eventID);
-        $this->SendDebug(__FUNCTION__, "TimerWR gelöscht (ID $eventID)", 0);
+        $eventID = @IPS_GetObjectIDByIdent('TimerWR', $this->InstanceID);
+        if ($eventID && IPS_EventExists($eventID)) {
+            IPS_DeleteEvent($eventID);
+            $this->SendDebug(__FUNCTION__, "TimerWR gelöscht (ID $eventID)", 0);
+        }
     }
-    
+
 }
