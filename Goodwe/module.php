@@ -22,7 +22,6 @@ class Goodwe extends IPSModule
         
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
-
     }
 
     public function ApplyChanges()
@@ -165,7 +164,6 @@ class Goodwe extends IPSModule
                 $this->EnableAction('Addr45356'); //Min SOC online
                 $this->EnableAction('Addr47511'); //EMSPowerMode
                 $this->EnableAction('Addr47512'); //EMSPowerSet
-    
             }
         }
     
@@ -201,7 +199,6 @@ class Goodwe extends IPSModule
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
-
     }
 
     public function RequestAction($ident, $value)
