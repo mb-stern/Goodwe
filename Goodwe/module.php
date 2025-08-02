@@ -251,7 +251,7 @@ class Goodwe extends IPSModule
                 SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
                 $offset = $this->ReadPropertyInteger('ChargePowerOffset');
                 $val = round($value / 100) * 100 + $offset;
-                $val = min(max($val, 4200), 10900);
+                $val = min(max($val, 4200), 9700);
                 $kw = round($val / 1000, 1);
                 $data = ['sn' => $serial, 'charge_power' => $kw];
                 $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
@@ -975,7 +975,7 @@ class Goodwe extends IPSModule
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
             IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 11000, 100); //Min, Max, Schritt
+            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); //Min, Max, Schritt
             IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0); //Nachkommastellen
             IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);

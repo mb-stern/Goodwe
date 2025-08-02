@@ -113,7 +113,8 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.6 (01.08.2025)
-- Die Ladeeinstellungen werden nicht mehr gepuffert sondern immer direkt an die API gesendet.
+- Die Ladeeinstellungen der Wallbox werden nicht mehr gepuffert, sondern immer direkt an die API gesendet.
+- Die maximale Leistung der Wallbox wurde auf 9700 W reduziert, da der WR ansonsten keine Leistung mehr abgibt (Ev. Bug des EMS)
 
 Version 2.5 (01.07.2025)
 - Es sind nun bis 4 Strings und bis 8 MPP-Tracker verfügbar. Ebenfalls ist der Isolationswiderstand verfügbar.
