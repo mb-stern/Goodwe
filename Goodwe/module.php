@@ -245,16 +245,18 @@ class Goodwe extends IPSModule
                 break;
 
             case 'WB_ChargePower':
-                SetValue($this->GetIDForIdent($ident), $value);
-                // Wenn Ladeleistung geändert wird → Modus auf Schnell (0)
-                SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
-                $offset = $this->ReadPropertyInteger('ChargePowerOffset');
-                $val = round($value / 100) * 100 + $offset;
-                $val = min(max($val, 4200), 9700);
-                $kw = round($val / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
-                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-                break;
+            $offset = $this->ReadPropertyInteger('ChargePowerOffset');
+            $val = round($value / 100) * 100 + $offset;
+            $val = min(max($val, 4200), 9700); // Begrenzung
+
+            // zuerst Variablen mit korrigiertem Wert setzen
+            SetValue($this->GetIDForIdent($ident), $val);
+            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
+
+            $kw = round($val / 1000, 1);
+            $data = ['sn' => $serial, 'charge_power' => $kw];
+            $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+            break;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
