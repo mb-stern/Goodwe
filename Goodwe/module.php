@@ -18,7 +18,6 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         $this->RegisterPropertyInteger("ChargePowerOffset", 200);
 
-
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
         
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
