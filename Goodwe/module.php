@@ -20,8 +20,8 @@ class Goodwe extends IPSModule
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
-        $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
-        $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
+        //$this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');  
+        //$this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);'); 
     }
 
     public function ApplyChanges()
@@ -30,8 +30,8 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
-        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        //$this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        //$this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
     
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
@@ -1145,14 +1145,4 @@ class Goodwe extends IPSModule
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
-
-    public function DeleteTimers(): void
-    {
-        $eventID = @IPS_GetObjectIDByIdent('TimerWR', $this->InstanceID);
-        if ($eventID && IPS_EventExists($eventID)) {
-            IPS_DeleteEvent($eventID);
-            $this->SendDebug(__FUNCTION__, "TimerWR gelöscht (ID $eventID)", 0);
-        }
-    }
-
 }
