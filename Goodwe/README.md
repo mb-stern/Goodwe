@@ -4,7 +4,7 @@ Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie
 Unterstützt sind folgende Komponenten:
 Goodwe Wechselrichter (ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
 Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
-Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2)ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
+Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2) ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
