@@ -112,6 +112,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 2.7 (10.08.2025)
+- Die Variablen werden nunr noch aktualisiert, wenn sich die Werte ändern.
+
 Version 2.6 (03.08.2025)
 - Die Ladeeinstellungen der Wallbox werden nicht mehr gepuffert, sondern immer direkt an die API gesendet.
 - Die maximale Leistung der Goodwe-Wallbox (Version 1) wurde auf 9700 W reduziert. Da die Box sowieso nie mit der vorgegebenen Leistung lädt, ist so sichergestellt, dass sie effektiv nicht über 9000W lädt, da der WR ansonsten keine Leistung mehr abgibt (Ev. Bug der EMS-SW).

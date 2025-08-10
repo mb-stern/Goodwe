@@ -357,7 +357,10 @@ class Goodwe extends IPSModule
                     continue;
                 }
     
-                SetValue($variableID, $scaledValue);
+                $currentValue = GetValue($variableID);
+                if ($currentValue !== $scaledValue) {
+                    SetValue($variableID, $scaledValue);
+                }
                 $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
@@ -432,8 +435,11 @@ class Goodwe extends IPSModule
                     $value = $value * 1000; // kW → W
                 }
         
-                SetValue($varID, $value);
-        
+                $currentValue = GetValue($varID);
+                if ($currentValue !== $value) {
+                    SetValue($varID, $value);
+                }
+
                 if ($key === "workstate") {
                     $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
                     $chargingVarID = @$this->GetIDForIdent('WB_Charging');
