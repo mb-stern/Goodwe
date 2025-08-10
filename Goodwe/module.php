@@ -431,44 +431,15 @@ class Goodwe extends IPSModule
                 $varID = @$this->GetIDForIdent($ident);
 
                 if ($varID !== false) {
-                    // ggf. Umrechnung
                     if ($key === 'power') {
                         $value = $value * 1000; // kW → W
                     }
 
-                    $old = GetValue($varID);
-
-                    switch ($key) {
-                        case 'current': // WB - Strom (A)
-                            $new = (float)$value;
-                            if (abs((float)$old - $new) > 0.05) { // 0.05 A Toleranz
-                                SetValue($varID, $new);
-                            }
-                            break;
-
-                        case 'chargeEnergy': // WB - Energie akt. Ladevorgang (kWh)
-                            $new = (float)$value;
-                            if (abs((float)$old - $new) > 0.001) { // 0.001 kWh Toleranz
-                                SetValue($varID, $new);
-                            }
-                            break;
-
-                        case 'time': // WB - Lädt seit (Sek.)
-                            $new = (int)$value;
-                            if (abs((int)$old - $new) > 0) { // nur wenn sich der Wert geändert hat
-                                SetValue($varID, $new);
-                            }
-                            break;
-
-                        default:
-                            // alle anderen WB-Keys normal updaten (locker vergleichen, um 16 vs 16.0 nicht ständig zu schreiben)
-                            if ($old != $value) {
-                                SetValue($varID, $value);
-                            }
-                            break;
+                    $currentValue = GetValue($varID);
+                    if ($currentValue !== $value) {
+                        SetValue($varID, $value);
                     }
 
-                    // Spezielle Behandlung für WB_Charging aus workstate
                     if ($key === "workstate") {
                         $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
                         $chargingVarID = @$this->GetIDForIdent('WB_Charging');
@@ -481,23 +452,18 @@ class Goodwe extends IPSModule
                         $isBlocked = ($holdUntil > $now);
 
                         if ($chargingVarID !== false && !$isPending && !$isBlocked) {
-                            $oldCharge = (bool)GetValue($chargingVarID);
-                            if ($oldCharge !== $chargingState) {
+                            if (GetValue($chargingVarID) !== $chargingState) {
                                 SetValue($chargingVarID, $chargingState);
                                 $this->SendDebug("FetchWallboxData", "WB_Charging geändert auf " . ($chargingState ? "true" : "false"), 0);
                             } else {
                                 $this->SendDebug("FetchWallboxData", "WB_Charging unverändert (" . ($chargingState ? "true" : "false") . ")", 0);
                             }
-                        } elseif ($isBlocked) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – blockiert bis " . date('H:i:s', $holdUntil), 0);
-                        } elseif ($isPending) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
                         }
-                    }
-                }
-            }
-
+                    } // end if workstate
+                } // end if varID
+            } // <<< fehlte vorher
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
