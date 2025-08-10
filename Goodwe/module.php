@@ -406,64 +406,61 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
-        try {
-            // Login und Datenabruf
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
-            }
+    try {
+        // Login und Datenabruf
+        $loginResponse = $this->GoodweLogin($user, $password);
+        if (!$loginResponse) {
+            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+            return;
+        }
 
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
+        $apiResponse = $this->GoodweFetchData($serial);
+        if (!$apiResponse) {
+            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+            return;
+        }
 
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
+        $data = json_decode($apiResponse, true);
+        if (!isset($data['data'])) {
+            $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+            return;
+        }
 
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varID = @$this->GetIDForIdent($ident);
-
-                if ($varID !== false) {
-                    if ($key === 'power') {
-                        $value = $value * 1000; // kW → W
+        foreach ($data['data'] as $key => $value) {
+            $ident = "WB_" . $key;
+            $varID = @$this->GetIDForIdent($ident);
+        
+            if ($varID !== false) {
+                if ($key === 'power') {
+                    $value = $value * 1000; // kW → W
+                }
+        
+                SetValue($varID, $value);
+        
+                if ($key === "workstate") {
+                    $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
+                    $chargingVarID = @$this->GetIDForIdent('WB_Charging');
+                
+                    $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
+                    $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
+                
+                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
+                    $now = time();
+                    $isBlocked = ($holdUntil > $now);
+                
+                    if ($chargingVarID !== false && !$isPending && !$isBlocked) {
+                        SetValue($chargingVarID, $chargingState);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                    } elseif ($isBlocked) {
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
+                    } elseif ($isPending) {
+                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
                     }
+                }
+            }
+        }        
 
-                    $currentValue = GetValue($varID);
-                    if ($currentValue !== $value) {
-                        SetValue($varID, $value);
-                    }
-
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
-                        $chargingVarID = @$this->GetIDForIdent('WB_Charging');
-
-                        $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
-                        $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
-
-                        $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
-                        $now = time();
-                        $isBlocked = ($holdUntil > $now);
-
-                        if ($chargingVarID !== false && !$isPending && !$isBlocked) {
-                            if (GetValue($chargingVarID) !== $chargingState) {
-                                SetValue($chargingVarID, $chargingState);
-                                $this->SendDebug("FetchWallboxData", "WB_Charging geändert auf " . ($chargingState ? "true" : "false"), 0);
-                            } else {
-                                $this->SendDebug("FetchWallboxData", "WB_Charging unverändert (" . ($chargingState ? "true" : "false") . ")", 0);
-                            }
-                        }
-                    } // end if workstate
-                } // end if varID
-            } // <<< fehlte vorher
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-
+        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
@@ -979,7 +976,7 @@ class Goodwe extends IPSModule
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
             IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200,11000, 100); //Min, Max, Schritt
+            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 11000, 100); //Min, Max, Schritt
             IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0); //Nachkommastellen
             IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);
