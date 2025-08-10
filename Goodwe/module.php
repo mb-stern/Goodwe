@@ -361,6 +361,7 @@ class Goodwe extends IPSModule
                 if ($currentValue !== $scaledValue) {
                     SetValue($variableID, $scaledValue);
                 }
+
                 $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
