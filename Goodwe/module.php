@@ -14,18 +14,14 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");     
         $this->RegisterPropertyString("WallboxPassword", "");  
         $this->RegisterPropertyString("WallboxSerial", "");  
-        $this->RegisterPropertyInteger("PollIntervalWB", 15);
+        $this->RegisterPropertyInteger("PollIntervalWB", 0);
         $this->RegisterPropertyInteger("PollIntervalWR", 5); 
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
-        if (@IPS_GetObjectIDByIdent('TimerWR', $this->InstanceID) === false) {
-            $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
-        }
-        if (@IPS_GetObjectIDByIdent('TimerWB', $this->InstanceID) === false) {
-            $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
-        }
+        $this->RegisterTimer("TimerWR", 0, "Goodwe_FetchInverterData($_IPS[\'TARGET\']);");
+        $this->RegisterTimer("TimerWB", 0, "Goodwe_FetchWallboxData($_IPS[\'TARGET\']);");
     }
 
     public function ApplyChanges()
