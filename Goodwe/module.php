@@ -244,7 +244,7 @@ class Goodwe extends IPSModule
             case 'WB_ChargePower':
             $offset = $this->ReadPropertyInteger('ChargePowerOffset');
             $val = round($value / 100) * 100 + $offset;
-            $val = min(max($val, 4200), 9700); // Begrenzung
+            $val = min(max($val, 4200), 11000); // Begrenzung
 
             // zuerst Variablen mit korrigiertem Wert setzen
             SetValue($this->GetIDForIdent($ident), $val);
@@ -979,7 +979,7 @@ class Goodwe extends IPSModule
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
             IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); //Min, Max, Schritt
+            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200,11000, 100); //Min, Max, Schritt
             IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0); //Nachkommastellen
             IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W"); //Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);
