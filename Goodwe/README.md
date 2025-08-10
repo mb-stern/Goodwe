@@ -113,7 +113,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.7 (10.08.2025)
-- Die Variablen werden nunr noch aktualisiert, wenn sich die Werte ändern.
+- Die Wechselrichter-Variablen werden nur noch aktualisiert, wenn sich die Werte ändern. Die Wallbox-Variablen werden weiterhin bei jedem Durchlauf aktualisiert.
 
 Version 2.6 (03.08.2025)
 - Die Ladeeinstellungen der Wallbox werden nicht mehr gepuffert, sondern immer direkt an die API gesendet.
