@@ -475,9 +475,6 @@ class Goodwe extends IPSModule
         $this->CalculateMaxPower();
     }
 
-        $this->CalculateMaxPower();
-    }
-
     private function WriteRegister(int $address, int $value): bool
     {
         // Daten für die Modbus-Kommunikation vorbereiten
