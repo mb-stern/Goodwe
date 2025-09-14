@@ -876,42 +876,35 @@ class Goodwe extends IPSModule
             $selected = [];
         }
 
-        // Bereits ausgewählte Adressen herausfinden (tolerant für alte Formate)
+        // Map der bereits ausgewählten Adressen (tolerant: address, addr, evtl. JSON in address)
         $selectedMap = [];
         foreach ($selected as $sr) {
+            $addr = null;
             if (is_string($sr)) {
                 $tmp = json_decode($sr, true);
                 if (is_array($tmp)) {
-                    $sr = $tmp;
+                    $addr = $tmp['address'] ?? $tmp['addr'] ?? null;
+                }
+            } elseif (is_array($sr)) {
+                $addr = $sr['address'] ?? $sr['addr'] ?? null;
+            }
+            if (is_string($addr) && $addr !== '' && $addr[0] === '{') {
+                $tmp = json_decode($addr, true);
+                if (is_array($tmp) && isset($tmp['address'])) {
+                    $addr = (string)$tmp['address'];
                 }
             }
-            if (is_array($sr)) {
-                // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
-                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
-                    $tmp = json_decode($sr['address'], true);
-                    if (is_array($tmp) && isset($tmp['address'])) {
-                        $sr['address'] = $tmp['address'];
-                    }
-                }
-
-                if (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
-                } elseif (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                }
+            if ($addr !== null) {
+                $selectedMap[(string)$addr] = true;
             }
         }
 
-        // Zeilen für die Liste aufbauen:
-        // - 'addr' bleibt unsichtbar, wird aber gespeichert (robust gegen Formatwechsel)
-        // - 'address_display' ist nur für die Anzeige (reine Registernummer)
+        // Zeilen für die Liste: nur aus Masterliste, Adresse als STRING in "addr"
         $values = array_map(function ($r) use ($selectedMap) {
-            $addr = (string)$r['address'];
             return [
-                "selected"        => isset($selectedMap[$addr]),
-                "addr"            => $addr,          // unsichtbar + gespeichert
-                "address_display" => $addr,          // nur Anzeige
-                "name"            => $r['name'],
+                "selected" => isset($selectedMap[(string)$r['address']]),
+                "addr"     => (string)$r['address'], // <- sichtbar anzeigen
+                "name"     => $r['name'],
             ];
         }, $all);
 
@@ -925,43 +918,40 @@ class Goodwe extends IPSModule
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        // Unsichtbare Spalte, damit die Adresse stabil gespeichert wird
-                        [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
-
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px" ],
-                        [ "caption" => "Name",      "name" => "name", "width" => "auto" ],
+                        ["caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => ["type" => "CheckBox"]],
+                        ["caption" => "Adresse",   "name" => "addr",     "width" => "110px"], // <- nur die Registernummer
+                        ["caption" => "Name",      "name" => "name",     "width" => "auto"],
                     ],
-                    "values" => $values
+                    "values"   => $values
                 ],
                 [
-                    "type"    => "IntervalBox",
-                    "name"    => "PollIntervalWR",
+                    "type"  => "IntervalBox",
+                    "name"  => "PollIntervalWR",
                     "caption" => "Sekunden",
-                    "suffix"  => "s"
+                    "suffix" => "s"
                 ],
                 [
-                    "type"    => "ExpansionPanel",
+                    "type" => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items"   => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                    "items" => [
+                        ["type" => "ValidationTextBox", "name" => "WallboxUser",     "caption" => "Benutzername"],
+                        ["type" => "ValidationTextBox", "name" => "WallboxPassword", "caption" => "Passwort"],
+                        ["type" => "ValidationTextBox", "name" => "WallboxSerial",   "caption" => "Seriennummer Wallbox"],
+                        ["type" => "IntervalBox",       "name" => "PollIntervalWB",  "caption" => "Sekunden", "suffix" => "s"],
+                        ["type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W"]
                     ]
                 ],
                 [
-                    "type"    => "ExpansionPanel",
+                    "type" => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
-                    "items"   => [
-                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+                    "items" => [
+                        ["type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen"],
+                        ["type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"]
                     ]
-                ],
+                ]
             ],
             "actions" => [
-                [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ]
+                ["type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);']
             ]
         ]);
     }
@@ -1209,6 +1199,8 @@ class Goodwe extends IPSModule
         ["address" => 35349, "name" => "WR - I MPPT5", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 352],
         ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353],
         ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
+        ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
+        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
 }
