@@ -131,40 +131,32 @@ class Goodwe extends IPSModule
 
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as &$r) {
-
-                // --- ALT-FORMATE TOLERANT EINLESEN (String -> Array) ---
-                if (!is_array($r)) {
-                    $s = trim((string)$r);
-                    $tmp = json_decode($s, true);
+                // Altbestand: kompletter JSON-String als Zeile?
+                if (is_string($r)) {
+                    $tmp = json_decode($r, true);
                     if (is_array($tmp)) {
-                        $r = $tmp;                        // z.B. '{"address":36025,"name":"..."}'
-                    } elseif ($s !== '' && ctype_digit($s)) {
-                        $r = ['address' => (int)$s];      // z.B. "36025"
+                        $r = $tmp; // jetzt als Array weiterverarbeiten
                     } else {
-                        $this->SendDebug("ApplyChanges", "Unlesbarer Eintrag: " . json_encode($r), 0);
+                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                         continue;
                     }
                 }
-                // -------------------------------------------------------
 
-                // Nur ausgewählte verarbeiten (wenn Spalte vorhanden)
                 if (isset($r['selected']) && !$r['selected']) {
                     continue;
                 }
 
-                // Fallback: wenn 'address' fehlt, nimm 'addr'
+                // Fallback: 'addr' -> 'address'
                 if (!isset($r['address']) && isset($r['addr'])) {
                     $r['address'] = $r['addr'];
                 }
 
-                // Historisches Format (JSON in 'address') tolerieren
-                if (isset($r['address']) && is_string($r['address'])) {
-                    $addrStr = trim($r['address']);
-                    if ($addrStr !== '' && $addrStr[0] === '{') {
-                        $decoded = json_decode($addrStr, true);
-                        if (is_array($decoded)) {
-                            $r = array_merge($decoded, $r);
-                        }
+                // Altes Format: JSON in 'address' -> DECODED SOLL ÜBERSCHREIBEN!
+                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                    $decoded = json_decode($r['address'], true);
+                    if (is_array($decoded)) {
+                        // WICHTIG: decoded muss die Felder überschreiben
+                        $r = array_replace($r, $decoded);
                     }
                 }
 
@@ -355,39 +347,28 @@ class Goodwe extends IPSModule
         }
 
         foreach ($selectedRegisters as &$r) {
-
-            // --- ALT-FORMATE TOLERANT EINLESEN (String -> Array) ---
-            if (!is_array($r)) {
-                $s = trim((string)$r);
-                $tmp = json_decode($s, true);
+            if (is_string($r)) {
+                $tmp = json_decode($r, true);
                 if (is_array($tmp)) {
                     $r = $tmp;
-                } elseif ($s !== '' && ctype_digit($s)) {
-                    $r = ['address' => (int)$s];
                 } else {
-                    $this->SendDebug("RequestRead", "Unlesbarer Eintrag: " . json_encode($r), 0);
+                    $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                     continue;
                 }
             }
-            // -------------------------------------------------------
 
             if (isset($r['selected']) && !$r['selected']) {
                 continue;
             }
 
-            // Fallback addr -> address
             if (!isset($r['address']) && isset($r['addr'])) {
                 $r['address'] = $r['addr'];
             }
 
-            // Historisches JSON im Feld 'address' tolerieren
-            if (isset($r['address']) && is_string($r['address'])) {
-                $addrStr = trim($r['address']);
-                if ($addrStr !== '' && $addrStr[0] === '{') {
-                    $decoded = json_decode($addrStr, true);
-                    if (is_array($decoded)) {
-                        $r = array_merge($decoded, $r);
-                    }
+            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                $decoded = json_decode($r['address'], true);
+                if (is_array($decoded)) {
+                    $r = array_replace($r, $decoded); // <-- decoded gewinnt
                 }
             }
 
