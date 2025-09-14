@@ -119,8 +119,60 @@ class Goodwe extends IPSModule
             }
         }
 
-        // -------- Register: robustes Anlegen + Aufräumen --------
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // --- Cleanup SelectedRegisters: entfernte/alte Adressen raus + Format normalisieren ---
+        $master = $this->GetRegisters();
+        $masterMap = [];
+        foreach ($master as $m) {
+            $masterMap[(string)$m['address']] = $m;
+        }
+
+        $selRaw = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+        $selRaw = is_array($selRaw) ? $selRaw : [];
+
+        $selectedState = [];  // addr(string) -> bool selected
+        foreach ($selRaw as $row) {
+            // Altfall: komplette Zeile als JSON-String?
+            if (is_string($row)) {
+                $tmp = json_decode($row, true);
+                if (is_array($tmp)) {
+                    $row = $tmp;
+                } else {
+                    continue;
+                }
+            }
+            // Adresse aus 'address' oder 'addr' holen; ggf. JSON in 'address' decodieren
+            $addr = $row['address'] ?? ($row['addr'] ?? null);
+            if (is_string($addr) && $addr !== '' && $addr[0] === '{') {
+                $tmp = json_decode($addr, true);
+                if (is_array($tmp) && isset($tmp['address'])) {
+                    $addr = $tmp['address'];
+                }
+            }
+            if ($addr === null) {
+                continue;
+            }
+            $selectedState[(string)$addr] = !empty($row['selected']);
+        }
+
+        // Neue, saubere Liste rein NUR aus dem Master bauen
+        $newRows = [];
+        foreach ($master as $r) {
+            $a = (string)$r['address'];
+            $newRows[] = [
+                'selected' => !empty($selectedState[$a]),
+                'addr'     => $a,              // wird gespeichert, bleibt stabil
+                'address'  => $r['address'],   // für deine Verarbeitung
+                'name'     => $r['name'],
+            ];
+        }
+
+        // Property aktualisieren (ohne IPS_ApplyChanges(), um Rekursion zu vermeiden)
+        if (json_encode($newRows) !== json_encode($selRaw)) {
+            IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($newRows));
+        }
+        // Ab hier im aktuellen Lauf schon die bereinigte Liste verwenden:
+        $selectedRegisters = $newRows;
+
         $registerCurrentIdents = [];
 
         // Masterindex: liefert fehlende Felder nach
