@@ -855,45 +855,57 @@ public function ApplyChanges()
 
     public function GetConfigurationForm()
     {
-        $all = $this->GetRegisters();
+        $master = $this->GetRegisters();
 
-        // Bisher gespeicherte Auswahl laden (Array von Arrays oder ggf. JSON-Strings)
-        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selected)) {
-            $selected = [];
-        }
+        // Bisher gespeicherte Auswahl (altes Dropdown-Format ODER neues Listenformat) tolerant einlesen
+        $raw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($raw)) { $raw = []; }
 
-        // Bereits ausgewählte Adressen herausfinden (tolerant)
         $selectedMap = [];
-        foreach ($selected as $sr) {
-            if (is_string($sr)) {
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp)) {
-                    if (isset($tmp['address'])) {
-                        $selectedMap[(string)$tmp['address']] = true;
-                    } elseif (isset($tmp['addr'])) {
-                        $selectedMap[(string)$tmp['addr']] = true;
-                    }
+        foreach ($raw as $row) {
+            if (is_string($row)) {
+                // alter Eintrag als JSON-String
+                $d = json_decode($row, true);
+                if (is_array($d) && isset($d['address'])) {
+                    $selectedMap[(string)$d['address']] = true;
+                } elseif (is_array($d) && isset($d['addr'])) {
+                    $selectedMap[(string)$d['addr']] = true;
                 }
-            } elseif (is_array($sr)) {
-                if (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                } elseif (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
+            } elseif (is_array($row)) {
+                if (isset($row['selected'])) {
+                    // neues Format
+                    $addr = $row['address'] ?? $row['addr'] ?? null;
+                    if ($addr !== null && !empty($row['selected'])) {
+                        $selectedMap[(string)$addr] = true;
+                    }
+                } else {
+                    // altes Dropdown-Format
+                    $addr = $row['address'] ?? $row['addr'] ?? null;
+                    if ($addr !== null) {
+                        $selectedMap[(string)$addr] = true;
+                    }
                 }
             }
         }
 
-        // Zeilen für die Liste aufbauen
-        $values = array_map(function($r) use ($selectedMap) {
-            return [
-                "selected" => isset($selectedMap[(string)$r['address']]),
-                "addr"     => (string)$r['address'],  // <- unsichtbar, aber editierbar -> wird gespeichert
-                "address"  => $r['address'],
-                "name"     => $r['name'],
+        // Ziel: volle Masterliste mit Häkchen (nur 3 Spalten)
+        $full = [];
+        foreach ($master as $r) {
+            $full[] = [
+                'selected' => isset($selectedMap[(string)$r['address']]),
+                'address'  => $r['address'],
+                'name'     => $r['name'],
             ];
-        }, $all);
+        }
 
+        // Einmalige stille Migration auf das neue Format (keine Extra-Property)
+        $isFull = is_array($raw) && (empty($raw) || array_key_exists('selected', $raw[0] ?? []));
+        if (!$isFull || count($raw) !== count($full)) {
+            IPS_SetProperty($this->InstanceID, "SelectedRegisters", json_encode($full));
+            // kein ApplyChanges hier – wird beim Speichern übernommen
+        }
+
+        // Formular mit nur Adresse & Name + Checkbox
         return json_encode([
             "elements" => [
                 [
@@ -904,30 +916,23 @@ public function ApplyChanges()
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        // Unsichtbare, aber editierbare Spalte – Symcon speichert so sicher die Adresse
-                        [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
-
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ],
-                        [ "caption" => "Name",      "name" => "name",     "width" => "auto"  ],
+                        [ "caption" => "Auswählen", "name" => "selected", "width" => "110px",
+                        "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",  "name" => "address",  "width" => "120px" ],
+                        [ "caption" => "Name",     "name" => "name",     "width" => "auto"  ],
                     ],
-                    "values"   => $values
+                    "values"   => $full
                 ],
-                [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix" => "s"
-                ],
+                [ "type" => "IntervalBox", "name" => "PollIntervalWR", "caption" => "Sekunden", "suffix" => "s" ],
                 [
                     "type" => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
                     "items" => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",     "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser", "caption" => "Benutzername" ],
                         [ "type" => "ValidationTextBox", "name" => "WallboxPassword", "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",   "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",  "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial", "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox", "name" => "PollIntervalWB", "caption" => "Sekunden", "suffix" => "s" ],
+                        [ "type" => "NumberSpinner", "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
                     ]
                 ],
                 [
@@ -935,7 +940,7 @@ public function ApplyChanges()
                     "caption" => "Zusätzliche Werte berechnen",
                     "items" => [
                         [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                        [ "type" => "CheckBox", "name" => "Laden_Max", "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
                     ]
                 ]
             ],
@@ -944,7 +949,6 @@ public function ApplyChanges()
             ]
         ]);
     }
-
 
     private function GetVariableDetails(string $unit): ?array
     {
