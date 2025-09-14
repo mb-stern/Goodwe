@@ -889,58 +889,64 @@ class Goodwe extends IPSModule
     {
         $all = $this->GetRegisters();
 
-        // Bisher gespeicherte Auswahl laden (Array von Arrays oder ggf. JSON-Strings)
-        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selected)) {
-            $selected = [];
-        }
-
-        // Bereits ausgewählte Adressen herausfinden (tolerant)
+        // Auswahl tolerant aus der bestehenden Property herausziehen (alt/neu gemischt)
+        $selectedRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $selectedMap = [];
-        foreach ($selected as $sr) {
-            if (is_string($sr)) {
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp)) {
-                    if (isset($tmp['address'])) {
-                        $selectedMap[(string)$tmp['address']] = true;
-                    } elseif (isset($tmp['addr'])) {
-                        $selectedMap[(string)$tmp['addr']] = true;
+        if (is_array($selectedRaw)) {
+            foreach ($selectedRaw as $sr) {
+                // Fall 1: kompletter JSON-String in der Property (altes Dropdown)
+                if (is_string($sr)) {
+                    $d = json_decode($sr, true);
+                    if (is_array($d) && isset($d['address'])) {
+                        $selectedMap[(string)$d['address']] = true;
+                    } elseif (ctype_digit($sr)) {
+                        $selectedMap[$sr] = true;
                     }
+                    continue;
                 }
-            } elseif (is_array($sr)) {
-                if (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                } elseif (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
+                // Fall 2: Array-Form (neu oder halb-alt)
+                if (is_array($sr)) {
+                    if (isset($sr['selected']) && !$sr['selected']) {
+                        continue;
+                    }
+                    $addr = $sr['address'] ?? ($sr['addr'] ?? null);
+                    if (is_string($addr)) {
+                        $d = json_decode($addr, true);
+                        if (is_array($d) && isset($d['address'])) {
+                            $addr = $d['address'];
+                        } elseif (ctype_digit($addr)) {
+                            $addr = (int)$addr;
+                        }
+                    }
+                    if (is_numeric($addr)) {
+                        $selectedMap[(string)$addr] = true;
+                    }
                 }
             }
         }
 
-        // Zeilen für die Liste aufbauen
-        $values = array_map(function($r) use ($selectedMap) {
-            return [
-                "selected" => isset($selectedMap[(string)$r['address']]),
-                "addr"     => (string)$r['address'],  // <- unsichtbar, aber editierbar -> wird gespeichert
-                "address"  => $r['address'],
-                "name"     => $r['name'],
+        // Sichtbare Liste: nur Checkbox + nackte Registernummer + Name
+        $values = [];
+        foreach ($all as $r) {
+            $values[] = [
+                'selected' => isset($selectedMap[(string)$r['address']]),
+                'address'  => (string)$r['address'], // nur die Zahl zeigen
+                'name'     => $r['name'],
             ];
-        }, $all);
+        }
 
         return json_encode([
             "elements" => [
                 [
                     "type"     => "List",
-                    "name"     => "SelectedRegisters",
+                    "name"     => "SelectedRegisters",                   // keine neue Property
                     "caption"  => "Register auswählen (Häkchen setzen)",
                     "rowCount" => 15,
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        // Unsichtbare, aber editierbare Spalte – Symcon speichert so sicher die Adresse
-                        [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
-
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ],
+                        [ "caption" => "Auswählen", "name" => "selected", "width" => "110px", "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ], // nur Anzeige
                         [ "caption" => "Name",      "name" => "name",     "width" => "auto"  ],
                     ],
                     "values"   => $values
@@ -976,7 +982,6 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
-
 
     private function GetVariableDetails(string $unit): ?array
     {
