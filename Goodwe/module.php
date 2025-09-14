@@ -119,6 +119,39 @@ class Goodwe extends IPSModule
             }
         }
 
+           $master = $this->GetRegisters();
+        $selRaw = json_decode($this->ReadPropertyString('SelectedRegisters'), true) ?: [];
+
+        $selectedOld = [];
+        foreach ($selRaw as $sr) {
+            $addr = $sr['address'] ?? ($sr['addr'] ?? null);
+            if (is_string($addr) && $addr !== '' && $addr[0] === '{') {
+                $tmp = json_decode($addr, true);
+                if (is_array($tmp) && isset($tmp['address'])) {
+                    $addr = (string)$tmp['address'];
+                }
+            }
+            if ($addr !== null) {
+                $selectedOld[(string)$addr] = !empty($sr['selected']);
+            }
+        }
+
+        $newRows = [];
+        foreach ($master as $r) {
+            $a = (string)$r['address'];
+            $newRows[] = [
+                'selected' => !empty($selectedOld[$a]),
+                'addr'     => $a,
+                'address'  => $r['address'],
+                'name'     => $r['name'],
+            ];
+        }
+
+        if (json_encode($newRows) !== json_encode($selRaw)) {
+            IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($newRows));
+
+        }
+
         // -------- Register: robustes Anlegen + Aufräumen --------
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
