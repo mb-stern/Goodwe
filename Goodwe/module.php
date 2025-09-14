@@ -119,60 +119,8 @@ class Goodwe extends IPSModule
             }
         }
 
-        // --- Cleanup SelectedRegisters: entfernte/alte Adressen raus + Format normalisieren ---
-        $master = $this->GetRegisters();
-        $masterMap = [];
-        foreach ($master as $m) {
-            $masterMap[(string)$m['address']] = $m;
-        }
-
-        $selRaw = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
-        $selRaw = is_array($selRaw) ? $selRaw : [];
-
-        $selectedState = [];  // addr(string) -> bool selected
-        foreach ($selRaw as $row) {
-            // Altfall: komplette Zeile als JSON-String?
-            if (is_string($row)) {
-                $tmp = json_decode($row, true);
-                if (is_array($tmp)) {
-                    $row = $tmp;
-                } else {
-                    continue;
-                }
-            }
-            // Adresse aus 'address' oder 'addr' holen; ggf. JSON in 'address' decodieren
-            $addr = $row['address'] ?? ($row['addr'] ?? null);
-            if (is_string($addr) && $addr !== '' && $addr[0] === '{') {
-                $tmp = json_decode($addr, true);
-                if (is_array($tmp) && isset($tmp['address'])) {
-                    $addr = $tmp['address'];
-                }
-            }
-            if ($addr === null) {
-                continue;
-            }
-            $selectedState[(string)$addr] = !empty($row['selected']);
-        }
-
-        // Neue, saubere Liste rein NUR aus dem Master bauen
-        $newRows = [];
-        foreach ($master as $r) {
-            $a = (string)$r['address'];
-            $newRows[] = [
-                'selected' => !empty($selectedState[$a]),
-                'addr'     => $a,              // wird gespeichert, bleibt stabil
-                'address'  => $r['address'],   // für deine Verarbeitung
-                'name'     => $r['name'],
-            ];
-        }
-
-        // Property aktualisieren (ohne IPS_ApplyChanges(), um Rekursion zu vermeiden)
-        if (json_encode($newRows) !== json_encode($selRaw)) {
-            IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($newRows));
-        }
-        // Ab hier im aktuellen Lauf schon die bereinigte Liste verwenden:
-        $selectedRegisters = $newRows;
-
+        // -------- Register: robustes Anlegen + Aufräumen --------
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
 
         // Masterindex: liefert fehlende Felder nach
@@ -1261,7 +1209,8 @@ class Goodwe extends IPSModule
         ["address" => 35349, "name" => "WR - I MPPT5", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 352],
         ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353],
         ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
-
+        ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
+        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
         ];
     }
 }
