@@ -122,35 +122,53 @@ class Goodwe extends IPSModule
         // 2. Verarbeitung der Registervariablen
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
-    
+
         if (is_array($selectedRegisters)) {
+
+            // NEU: Master-Index nach Address aufbauen
+            $masterIndex = [];
+            foreach ($this->GetRegisters() as $mr) {
+                $masterIndex[(string)$mr['address']] = $mr;
+            }
+
             foreach ($selectedRegisters as &$selectedRegister) {
-                // --- NEU: robustes Filtern & Validieren ---
+
+                // --- Robust filtern ---
                 if (!is_array($selectedRegister)) {
                     $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($selectedRegister), 0);
                     continue;
                 }
-                // Falls Liste eine CheckBox-Spalte enthält: nur ausgewählte verarbeiten
                 if (isset($selectedRegister['selected']) && !$selectedRegister['selected']) {
                     continue;
                 }
 
-                // Alt-Format (JSON-String) tolerieren
+                // Alt-Format tolerieren: "address" kann JSON eines kompletten Objekts sein
                 if (isset($selectedRegister['address']) && is_string($selectedRegister['address'])) {
                     $decoded = json_decode($selectedRegister['address'], true);
-                    if ($decoded !== null && is_array($decoded)) {
+                    if (is_array($decoded) && isset($decoded['address'])) {
                         $selectedRegister = array_merge($selectedRegister, $decoded);
+                    }
+                }
+
+                // NEU: Fehlende Felder per Address aus Masterliste ergänzen
+                if (isset($selectedRegister['address'])) {
+                    $addrKey = (string)$selectedRegister['address'];
+                    if (isset($masterIndex[$addrKey])) {
+                        // Masterwerte voranstellen, damit Benutzer-Overrides (z.B. pos) erhalten bleiben
+                        $selectedRegister = array_merge($masterIndex[$addrKey], $selectedRegister);
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                     }
                 }
 
                 // Pflichtfelder prüfen
                 $required = ['address','name','type','unit','scale','pos'];
-                $missing = array_filter($required, fn($k) => !array_key_exists($k, $selectedRegister));
+                $missing  = array_filter($required, fn($k) => !array_key_exists($k, $selectedRegister));
                 if (!empty($missing)) {
                     $this->SendDebug("ApplyChanges", "Ungültiger Registereintrag (fehlend: ".implode(',', $missing)."): " . json_encode($selectedRegister), 0);
                     continue;
                 }
-                // --- ENDE NEU ---
+                // --- Ende robust filtern ---
 
                 $variableDetails = $this->GetVariableDetails((string)$selectedRegister['unit']);
                 if ($variableDetails === null) {
@@ -176,14 +194,14 @@ class Goodwe extends IPSModule
                     $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", (int)$selectedRegister['pos']);
                 }
 
-                // Hier die aktiven Variablen definieren (dein bestehender Code)
-                $this->EnableAction('Addr45358'); //Min SOC offline
-                $this->EnableAction('Addr45356'); //Min SOC online
-                $this->EnableAction('Addr47511'); //EMSPowerMode
-                $this->EnableAction('Addr47512'); //EMSPowerSet
+                // deine EnableAction-Zeilen bleiben wie sie sind
+                $this->EnableAction('Addr45358');
+                $this->EnableAction('Addr45356');
+                $this->EnableAction('Addr47511');
+                $this->EnableAction('Addr47512');
             }
         }
-    
+
         // Nicht mehr benötigte Register-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
@@ -308,35 +326,61 @@ class Goodwe extends IPSModule
             return;
         }
     
-        foreach ($selectedRegisters as &$register) {
-            if (is_string($register['address'])) {
-                $decodedRegister = json_decode($register['address'], true);
-                if ($decodedRegister !== null) {
-                    $register = array_merge($register, $decodedRegister);
-                } else {
-                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
-                    continue;
-                }
+// NEU: Master-Index für Felder
+$masterIndex = [];
+foreach ($this->GetRegisters() as $mr) {
+    $masterIndex[(string)$mr['address']] = $mr;
+}
+
+    foreach ($selectedRegisters as &$register) {
+
+        // robust filtern
+        if (!is_array($register)) {
+            $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($register), 0);
+            continue;
+        }
+        if (isset($register['selected']) && !$register['selected']) {
+            continue;
+        }
+
+        // Alt-Format tolerieren
+        if (isset($register['address']) && is_string($register['address'])) {
+            $decoded = json_decode($register['address'], true);
+            if (is_array($decoded) && isset($decoded['address'])) {
+                $register = array_merge($register, $decoded);
             }
-    
-            // Validierung der Felder
-            if (!isset($register['address'], $register['type'], $register['scale'])) {
-                $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
-                continue;
+        }
+
+        // Fehlende Felder aus Masterliste ergänzen
+        if (isset($register['address'])) {
+            $addrKey = (string)$register['address'];
+            if (isset($masterIndex[$addrKey])) {
+                // Master zuerst, dann evtl. vom User veränderte Spalten (pos, scale etc.)
+                $register = array_merge($masterIndex[$addrKey], $register);
+            } else {
+                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
             }
-    
-            $ident = "Addr" . $register['address'];
-            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
-            try {
-                $response = $this->SendDataToParent(json_encode([
-                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                    "Function" => 3,
-                    "Address"  => $register['address'],
-                    "Quantity" => $quantity,
-                    "Data"     => ""
-                ]));
-    
+        }
+
+        // Validierung
+        if (!isset($register['address'], $register['type'], $register['scale'])) {
+            $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
+            continue;
+        }
+
+        // ====== HIER geht dein bestehender Code weiter ======
+        $ident = "Addr" . (string)$register['address'];
+        $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
+
+        try {
+            $response = $this->SendDataToParent(json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address"  => $register['address'],
+                "Quantity" => $quantity,
+                "Data"     => ""
+            ]));
+
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
                     $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
                     continue;
