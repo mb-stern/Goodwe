@@ -870,93 +870,95 @@ class Goodwe extends IPSModule
     {
         $all = $this->GetRegisters();
 
-        // Auswahl tolerant aus der bestehenden Property herausziehen (alt/neu gemischt)
-        $selectedRaw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Bisher gespeicherte Auswahl laden
+        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selected)) {
+            $selected = [];
+        }
+
+        // Bereits ausgewählte Adressen herausfinden (tolerant für alte Formate)
         $selectedMap = [];
-        if (is_array($selectedRaw)) {
-            foreach ($selectedRaw as $sr) {
-                // Fall 1: kompletter JSON-String in der Property (altes Dropdown)
-                if (is_string($sr)) {
-                    $d = json_decode($sr, true);
-                    if (is_array($d) && isset($d['address'])) {
-                        $selectedMap[(string)$d['address']] = true;
-                    } elseif (ctype_digit($sr)) {
-                        $selectedMap[$sr] = true;
-                    }
-                    continue;
+        foreach ($selected as $sr) {
+            if (is_string($sr)) {
+                $tmp = json_decode($sr, true);
+                if (is_array($tmp)) {
+                    $sr = $tmp;
                 }
-                // Fall 2: Array-Form (neu oder halb-alt)
-                if (is_array($sr)) {
-                    if (isset($sr['selected']) && !$sr['selected']) {
-                        continue;
+            }
+            if (is_array($sr)) {
+                // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
+                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
+                    $tmp = json_decode($sr['address'], true);
+                    if (is_array($tmp) && isset($tmp['address'])) {
+                        $sr['address'] = $tmp['address'];
                     }
-                    $addr = $sr['address'] ?? ($sr['addr'] ?? null);
-                    if (is_string($addr)) {
-                        $d = json_decode($addr, true);
-                        if (is_array($d) && isset($d['address'])) {
-                            $addr = $d['address'];
-                        } elseif (ctype_digit($addr)) {
-                            $addr = (int)$addr;
-                        }
-                    }
-                    if (is_numeric($addr)) {
-                        $selectedMap[(string)$addr] = true;
-                    }
+                }
+
+                if (isset($sr['addr'])) {
+                    $selectedMap[(string)$sr['addr']] = true;
+                } elseif (isset($sr['address'])) {
+                    $selectedMap[(string)$sr['address']] = true;
                 }
             }
         }
 
-        // Sichtbare Liste: nur Checkbox + nackte Registernummer + Name
-        $values = [];
-        foreach ($all as $r) {
-            $values[] = [
-                'selected' => isset($selectedMap[(string)$r['address']]),
-                'address'  => (string)$r['address'], // nur die Zahl zeigen
-                'name'     => $r['name'],
+        // Zeilen für die Liste aufbauen:
+        // - 'addr' bleibt unsichtbar, wird aber gespeichert (robust gegen Formatwechsel)
+        // - 'address_display' ist nur für die Anzeige (reine Registernummer)
+        $values = array_map(function ($r) use ($selectedMap) {
+            $addr = (string)$r['address'];
+            return [
+                "selected"        => isset($selectedMap[$addr]),
+                "addr"            => $addr,          // unsichtbar + gespeichert
+                "address_display" => $addr,          // nur Anzeige
+                "name"            => $r['name'],
             ];
-        }
+        }, $all);
 
         return json_encode([
             "elements" => [
                 [
                     "type"     => "List",
-                    "name"     => "SelectedRegisters",                   // keine neue Property
+                    "name"     => "SelectedRegisters",
                     "caption"  => "Register auswählen (Häkchen setzen)",
                     "rowCount" => 15,
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "110px", "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ], // nur Anzeige
-                        [ "caption" => "Name",      "name" => "name",     "width" => "auto"  ],
+                        // Unsichtbare Spalte, damit die Adresse stabil gespeichert wird
+                        [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
+
+                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px" ],
+                        [ "caption" => "Name",      "name" => "name", "width" => "auto" ],
                     ],
-                    "values"   => $values
+                    "values" => $values
                 ],
                 [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
+                    "type"    => "IntervalBox",
+                    "name"    => "PollIntervalWR",
                     "caption" => "Sekunden",
-                    "suffix" => "s"
+                    "suffix"  => "s"
                 ],
                 [
-                    "type" => "ExpansionPanel",
+                    "type"    => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items" => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",     "caption" => "Benutzername" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword", "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",   "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",  "caption" => "Sekunden", "suffix" => "s" ],
+                    "items"   => [
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
                         [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
                     ]
                 ],
                 [
-                    "type" => "ExpansionPanel",
+                    "type"    => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
-                    "items" => [
+                    "items"   => [
                         [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
                     ]
-                ]
+                ],
             ],
             "actions" => [
                 [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ]
