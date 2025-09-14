@@ -125,41 +125,58 @@ class Goodwe extends IPSModule
     
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as &$selectedRegister) {
-                if (is_string($selectedRegister['address'])) {
-                    $decodedRegister = json_decode($selectedRegister['address'], true);
-                    if ($decodedRegister !== null) {
-                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
-                        continue;
+                // --- NEU: robustes Filtern & Validieren ---
+                if (!is_array($selectedRegister)) {
+                    $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($selectedRegister), 0);
+                    continue;
+                }
+                // Falls Liste eine CheckBox-Spalte enthält: nur ausgewählte verarbeiten
+                if (isset($selectedRegister['selected']) && !$selectedRegister['selected']) {
+                    continue;
+                }
+
+                // Alt-Format (JSON-String) tolerieren
+                if (isset($selectedRegister['address']) && is_string($selectedRegister['address'])) {
+                    $decoded = json_decode($selectedRegister['address'], true);
+                    if ($decoded !== null && is_array($decoded)) {
+                        $selectedRegister = array_merge($selectedRegister, $decoded);
                     }
                 }
-    
-                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
+
+                // Pflichtfelder prüfen
+                $required = ['address','name','type','unit','scale','pos'];
+                $missing = array_filter($required, fn($k) => !array_key_exists($k, $selectedRegister));
+                if (!empty($missing)) {
+                    $this->SendDebug("ApplyChanges", "Ungültiger Registereintrag (fehlend: ".implode(',', $missing)."): " . json_encode($selectedRegister), 0);
+                    continue;
+                }
+                // --- ENDE NEU ---
+
+                $variableDetails = $this->GetVariableDetails((string)$selectedRegister['unit']);
                 if ($variableDetails === null) {
                     $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
                     continue;
                 }
-    
-                $ident = "Addr" . $selectedRegister['address'];
+
+                $ident = "Addr" . (string)$selectedRegister['address'];
                 $registerCurrentIdents[] = $ident;
-    
+
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($variableDetails['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], (int)$selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], (int)$selectedRegister['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
+                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], (int)$selectedRegister['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", (int)$selectedRegister['pos']);
                 }
 
-                //Hier die aktiven Variablen definieren
+                // Hier die aktiven Variablen definieren (dein bestehender Code)
                 $this->EnableAction('Addr45358'); //Min SOC offline
                 $this->EnableAction('Addr45356'); //Min SOC online
                 $this->EnableAction('Addr47511'); //EMSPowerMode
