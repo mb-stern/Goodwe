@@ -33,77 +33,147 @@ class Goodwe extends IPSModule
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
 
-        // ===== WALLBOX-TEIL (dein bestehender Code bleibt) =====
-        // ... (lass deinen bisherigen Wallbox-Block unverändert)
+        // Wallbox-Benutzerinformationen lesen
+        $user = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial = $this->ReadPropertyString("WallboxSerial");
 
-        // ===== REGISTERAUSWAHL über SelectedRegisters (Checkboxen) =====
-        $rows = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($rows)) $rows = [];
+        // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
+        $wbCurrentIdents = [];
+        if (!empty($user) && !empty($password) && !empty($serial)) {
+            $mapping = $this->GetWbVariables();
 
-        // Masterindex (liefert Typ/Einheit/Scale/Pos)
+            foreach ($mapping as $variable) {
+                if (!$variable['active']) {
+                    continue;
+                }
+
+                $ident = "WB_" . $variable['key'];
+                $wbCurrentIdents[] = $ident;
+
+                $type = VARIABLETYPE_STRING;
+                $profile = "";
+
+                if (!empty($variable['unit'])) {
+                    $details = $this->GetVariableDetails($variable['unit']);
+                    if ($details !== null) {
+                        $type = $details['type'];
+                        $profile = $details['profile'];
+                    }
+                }
+
+                if (!@$this->GetIDForIdent($ident)) {
+                    switch ($type) {
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
+                            break;
+                        case VARIABLETYPE_STRING:
+                            $this->RegisterVariableString($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
+                            break;
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($ident, "WB - " . $variable['name'], $profile, $variable['pos']);
+                            break;
+                    }
+                    $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: $ident mit Profil $profile.", 0);
+                }
+            }
+
+            // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
+            $specialVariables = [
+                ['ident' => 'WB_Charging', 'name' => 'WB - Ladevorgang', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Power_W', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+            ];
+
+            foreach ($specialVariables as $var) {
+                $wbCurrentIdents[] = $var['ident'];
+                if (!@$this->GetIDForIdent($var['ident'])) {
+                    switch ($var['type']) {
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($var['ident'], $var['name'], $var['profile'], $var['pos']);
+                            break;
+                    }
+                    $this->EnableAction($var['ident']);
+                    $this->SendDebug("ApplyChanges", "Wallbox-Variable erstellt: {$var['ident']} mit Profil {$var['profile']}.", 0);
+                }
+            }
+        } else {
+            $this->SendDebug("ApplyChanges", "Wallbox-Variablen werden nicht erstellt, da Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        }
+
+        // Nicht mehr benötigte Wallbox-Variablen löschen
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $object = IPS_GetObject($childID);
+            if (strpos($object['ObjectIdent'], 'WB_') === 0 && !in_array($object['ObjectIdent'], $wbCurrentIdents)) {
+                $this->UnregisterVariable($object['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Wallbox-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+            }
+        }
+
+        // 2) Register-Variablen anhand des ausgewählten Adress-Sets
+        $selectedMap = $this->BuildSelectedMap();
+
+        // Masterindex
+        $master = $this->GetRegisters();
         $masterIndex = [];
-        foreach ($this->GetRegisters() as $mr) {
+        foreach ($master as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         $registerCurrentIdents = [];
 
-        foreach ($rows as $row) {
-            if (!is_array($row)) continue;
-
-            // nur angehakte Zeilen verarbeiten – wenn Feld fehlt, behandeln wir es als "nicht gewählt"
-            if (isset($row['selected']) && !$row['selected']) continue;
-
-            // Adresse ermitteln (robust: Zahl oder JSON-String)
-            $addr = $row['address'] ?? null;
-            if ($addr === null) continue;
-            if (is_string($addr)) {
-                $d = json_decode($addr, true);
-                if (is_array($d) && isset($d['address'])) $addr = $d['address'];
-                elseif (ctype_digit($addr)) $addr = (int)$addr;
-            }
-            if (!is_numeric($addr)) continue;
-
-            $addrKey = (string)$addr;
+        foreach ($selectedMap as $addrKey => $_) {
             if (!isset($masterIndex[$addrKey])) {
                 $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                 continue;
             }
+            $r = $masterIndex[$addrKey];
 
-            $m = $masterIndex[$addrKey];
-            $details = $this->GetVariableDetails((string)$m['unit']);
-            if ($details === null) {
-                $this->SendDebug("ApplyChanges", "Kein Profil/Typ für Einheit '{$m['unit']}' (Addr $addrKey).", 0);
+            $variableDetails = $this->GetVariableDetails($r['unit']);
+            if ($variableDetails === null) {
+                $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$r['unit']} gefunden.", 0);
                 continue;
             }
 
-            $ident = "Addr" . $addrKey;
+            $ident = "Addr" . (string)$r['address'];
             $registerCurrentIdents[] = $ident;
 
             if (!@$this->GetIDForIdent($ident)) {
-                switch ($details['type']) {
+                switch ($variableDetails['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $m['name'], $details['profile'], (int)$m['pos']);
+                        $this->RegisterVariableInteger($ident, $r['name'], $variableDetails['profile'], (int)$r['pos']);
                         break;
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident,  $m['name'], $details['profile'], (int)$m['pos']);
+                        $this->RegisterVariableFloat($ident, $r['name'], $variableDetails['profile'], (int)$r['pos']);
                         break;
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $m['name'], $details['profile'], (int)$m['pos']);
+                        $this->RegisterVariableString($ident, $r['name'], $variableDetails['profile'], (int)$r['pos']);
+                        break;
+                    case VARIABLETYPE_BOOLEAN:
+                        $this->RegisterVariableBoolean($ident, $r['name'], $variableDetails['profile'], (int)$r['pos']);
                         break;
                 }
-                $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$m['name']}) Profil={$details['profile']}", 0);
+                $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", 0);
             }
         }
 
-        // Schreibbare Register-Aktionen nur aktivieren, wenn Variable existiert
-        foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
-            if (@$this->GetIDForIdent($writeIdent)) {
-                $this->EnableAction($writeIdent);
+        // Nur Aktionen setzen, wenn die Variable existiert
+        foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $aIdent) {
+            if (@$this->GetIDForIdent($aIdent)) {
+                $this->EnableAction($aIdent);
             }
         }
 
-        // nicht mehr benötigte Register-Variablen entfernen
+        // Nicht mehr benötigte Register-Variablen löschen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $object = IPS_GetObject($childID);
             if (strpos($object['ObjectIdent'], 'Addr') === 0 && !in_array($object['ObjectIdent'], $registerCurrentIdents)) {
@@ -112,7 +182,7 @@ class Goodwe extends IPSModule
             }
         }
 
-        // ===== Max-Laden/Entladen (unverändert) =====
+        // Max-Entladen/-Laden (dein bestehender Code bleibt)
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
@@ -120,7 +190,6 @@ class Goodwe extends IPSModule
         } else {
             if (@$this->GetIDForIdent("MaxEntladen") !== false) {
                 $this->UnregisterVariable("MaxEntladen");
-                $this->SendDebug("ApplyChanges", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
             }
         }
 
@@ -131,7 +200,6 @@ class Goodwe extends IPSModule
         } else {
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
                 $this->UnregisterVariable("MaxLaden");
-                $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
     }
@@ -204,9 +272,9 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        $rows = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($rows)) {
-            $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
+        $selectedMap = $this->BuildSelectedMap();
+        if (empty($selectedMap)) {
+            $this->SendDebug("RequestRead", "Keine ausgewählten Register.", 0);
             return;
         }
 
@@ -214,82 +282,78 @@ class Goodwe extends IPSModule
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
             $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
             return;
         }
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
             $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
 
         // Masterindex
+        $master = $this->GetRegisters();
         $masterIndex = [];
-        foreach ($this->GetRegisters() as $mr) {
+        foreach ($master as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
-        foreach ($rows as $row) {
-            if (!is_array($row)) continue;
-            if (isset($row['selected']) && !$row['selected']) continue;
-
-            $addr = $row['address'] ?? null;
-            if ($addr === null) continue;
-            if (is_string($addr)) {
-                $d = json_decode($addr, true);
-                if (is_array($d) && isset($d['address'])) $addr = $d['address'];
-                elseif (ctype_digit($addr)) $addr = (int)$addr;
+        foreach ($selectedMap as $addrKey => $_) {
+            if (!isset($masterIndex[$addrKey])) {
+                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste.", 0);
+                continue;
             }
-            if (!is_numeric($addr)) continue;
+            $r = $masterIndex[$addrKey];
 
-            $addrKey = (string)$addr;
-            if (!isset($masterIndex[$addrKey])) continue;
-
-            $reg   = $masterIndex[$addrKey];
-            $ident = "Addr" . $addrKey;
-            $qty   = ($reg['type'] === "U32" || $reg['type'] === "S32") ? 2 : 1;
+            $ident = "Addr" . (string)$r['address'];
+            $quantity = ($r['type'] === "U32" || $r['type'] === "S32") ? 2 : 1;
 
             try {
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
-                    "Address"  => (int)$reg['address'],
-                    "Quantity" => $qty,
+                    "Address"  => $r['address'],
+                    "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
 
-                if ($response === false || strlen($response) < (2 * $qty + 2)) {
-                    $this->SendDebug("RequestRead", "Keine/kurze Antwort für Register {$reg['address']}", 0);
+                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für {$r['address']}", 0);
                     continue;
                 }
 
-                $data  = unpack("n*", substr($response, 2));
+                $data = unpack("n*", substr($response, 2));
                 $value = 0;
-                switch ($reg['type']) {
+
+                switch ($r['type']) {
                     case "U16": $value = $data[1]; break;
                     case "S16": $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1]; break;
                     case "U32": $value = ($data[1] << 16) | $data[2]; break;
                     case "S32":
                         $combined = ($data[1] << 16) | $data[2];
-                        $value    = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
                 }
 
-                if ((float)$reg['scale'] == 0.0) continue;
-                $scaledValue = $value * $reg['scale'];
+                $scale = (float)$r['scale'];
+                if ($scale == 0.0) {
+                    $this->SendDebug("RequestRead", "Scale 0 bei {$r['address']}", 0);
+                    continue;
+                }
+                $scaledValue = $value * $scale;
 
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) continue;
-
-                if (GetValue($varID) !== $scaledValue) {
-                    SetValue($varID, $scaledValue);
+                $variableID = @$this->GetIDForIdent($ident);
+                if ($variableID === false) {
+                    $this->SendDebug("RequestRead", "Variable $ident nicht gefunden.", 0);
+                    continue;
                 }
 
-                $this->SendDebug("RequestRead", "Addr {$reg['address']} => $scaledValue", 0);
+                if (GetValue($variableID) !== $scaledValue) {
+                    SetValue($variableID, $scaledValue);
+                }
+
+                $this->SendDebug("RequestRead", "Wert {$r['address']}: $scaledValue", 0);
             } catch (Exception $e) {
-                $this->SendDebug("RequestRead", "Fehler Parent: " . $e->getMessage(), 0);
-                $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
+                $this->SendDebug("RequestRead", "Fehler Kommunikation Parent: " . $e->getMessage(), 0);
             }
         }
 
@@ -709,50 +773,9 @@ class Goodwe extends IPSModule
     public function GetConfigurationForm()
     {
         $all = $this->GetRegisters();
+        $selectedMap = $this->BuildSelectedMap();
 
-        // bisher gespeicherte Auswahl laden (kann alt/neu gemischt sein)
-        $raw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($raw)) $raw = [];
-
-        // Adressen, die als "ausgewählt" gelten
-        $selectedMap = [];
-
-        foreach ($raw as $row) {
-            // NEUES Format: {selected:true/false, address:36019, name:"..."}
-            if (is_array($row) && array_key_exists('selected', $row)) {
-                if (!empty($row['selected'])) {
-                    $addr = $row['address'] ?? null;
-                    // evtl. steckt hier ein JSON-String
-                    if (is_string($addr)) {
-                        $d = json_decode($addr, true);
-                        if (is_array($d) && isset($d['address'])) $addr = $d['address'];
-                    }
-                    if ($addr !== null) $selectedMap[(string)$addr] = true;
-                }
-                continue;
-            }
-
-            // ALTES Format: Zeile enthält nur "address" (oft als JSON-String)
-            if (is_array($row) && isset($row['address'])) {
-                $addr = $row['address'];
-                if (is_string($addr)) {
-                    $d = json_decode($addr, true);
-                    if (is_array($d) && isset($d['address'])) $selectedMap[(string)$d['address']] = true;
-                    elseif (ctype_digit($addr)) $selectedMap[$addr] = true;
-                } else {
-                    $selectedMap[(string)$addr] = true;
-                }
-                continue;
-            }
-
-            // ALTES Format: komplette Register-Zeile als JSON-String
-            if (is_string($row)) {
-                $d = json_decode($row, true);
-                if (is_array($d) && isset($d['address'])) $selectedMap[(string)$d['address']] = true;
-            }
-        }
-
-        // Liste für das Formular (nur Anzeige aus der Masterliste)
+        // Anzeige: ausschließlich Masterliste, Häkchen nach Property
         $values = array_map(function($r) use ($selectedMap) {
             return [
                 "selected" => isset($selectedMap[(string)$r['address']]),
@@ -771,7 +794,7 @@ class Goodwe extends IPSModule
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Auswählen", "name" => "selected", "width" => "110px", "edit" => [ "type" => "CheckBox" ] ],
                         [ "caption" => "Adresse",   "name" => "address",  "width" => "120px" ],
                         [ "caption" => "Name",      "name" => "name",     "width" => "auto"  ],
                     ],
@@ -787,11 +810,11 @@ class Goodwe extends IPSModule
                     "type" => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
                     "items" => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",     "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser", "caption" => "Benutzername" ],
                         [ "type" => "ValidationTextBox", "name" => "WallboxPassword", "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",   "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",  "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial", "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox", "name" => "PollIntervalWB", "caption" => "Sekunden", "suffix" => "s" ],
+                        [ "type" => "NumberSpinner", "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
                     ]
                 ],
                 [
@@ -799,14 +822,81 @@ class Goodwe extends IPSModule
                     "caption" => "Zusätzliche Werte berechnen",
                     "items" => [
                         [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                        [ "type" => "CheckBox", "name" => "Laden_Max", "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
                     ]
                 ]
             ],
             "actions" => [
-                [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ]
+                [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ],
+                [ "type" => "Label",  "caption" => "Sag danke und unterstütze den Modulentwickler:" ],
+                [
+                    "type" => "RowLayout",
+                    "items" => [
+                        [ "type" => "Image", "onClick" => "echo 'https://paypal.me/mbstern';",
+                        "image" => "data:image/jpeg;base64,/9j/4QAYRXhpZgAASUkqAAg..." ],
+                        [ "type" => "Label", "caption" => "" ]
+                    ]
+                ]
             ]
         ]);
+    }
+
+    private function BuildSelectedMap(): array
+    {
+        $raw = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        $selected = [];
+        if (!is_array($raw)) {
+            return $selected;
+        }
+
+        foreach ($raw as $row) {
+            // Neues Format: vollständige Liste mit "selected"
+            if (is_array($row) && array_key_exists('selected', $row)) {
+                if (!empty($row['selected'])) {
+                    $addr = $row['address'] ?? null;
+                    if (is_string($addr)) {
+                        $d = json_decode($addr, true);
+                        if (is_array($d) && isset($d['address'])) {
+                            $addr = $d['address'];
+                        } elseif (ctype_digit($addr)) {
+                            $addr = (int)$addr;
+                        }
+                    }
+                    if (is_numeric($addr)) {
+                        $selected[(string)$addr] = true;
+                    }
+                }
+                continue;
+            }
+
+            // Altes Format: jede Zeile repräsentiert eine Auswahl
+            if (is_array($row) && isset($row['address'])) {
+                $addr = $row['address'];
+                if (is_string($addr)) {
+                    $d = json_decode($addr, true);
+                    if (is_array($d) && isset($d['address'])) {
+                        $addr = $d['address'];
+                    } elseif (ctype_digit($addr)) {
+                        $addr = (int)$addr;
+                    }
+                }
+                if (is_numeric($addr)) {
+                    $selected[(string)$addr] = true;
+                }
+                continue;
+            }
+
+            // Ganze Zeile war ein JSON-String
+            if (is_string($row)) {
+                $d = json_decode($row, true);
+                if (is_array($d) && isset($d['address'])) {
+                    $selected[(string)$d['address']] = true;
+                } elseif (ctype_digit($row)) {
+                    $selected[$row] = true;
+                }
+            }
+        }
+        return $selected;
     }
 
     private function GetVariableDetails(string $unit): ?array
