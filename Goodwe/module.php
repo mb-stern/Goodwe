@@ -781,134 +781,113 @@ class Goodwe extends IPSModule
         return $value * $scale;
     }
 
-    public function GetConfigurationForm()
-    {
-        // Vollständige Registerliste holen
-        $registers = $this->GetRegisters();
+public function GetConfigurationForm()
+{
+    $all = $this->GetRegisters();
 
-        // Bereits gespeicherte Auswahl laden
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
-        }
+    // bisher gespeicherte Auswahl laden (kann Array von Arrays ODER JSON-Strings sein)
+    $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    if (!is_array($selected)) {
+        $selected = [];
+    }
 
-        // Für schnelles "ist-gewählt" Lookup
-        $isSelected = [];
-        foreach ($selectedRegisters as $sr) {
-            if (is_array($sr) && isset($sr['address'])) {
-                $isSelected[(string)$sr['address']] = true;
-            } elseif (is_string($sr)) {
-                // Fallback, falls noch alte Formate (JSON-String) vorhanden sind
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp) && isset($tmp['address'])) {
-                    $isSelected[(string)$tmp['address']] = true;
-                }
+    // Hash der bereits ausgewählten Adressen
+    $selectedMap = [];
+    foreach ($selected as $sr) {
+        if (is_string($sr)) {
+            $tmp = json_decode($sr, true);
+            if (is_array($tmp) && isset($tmp['address'])) {
+                $selectedMap[(string)$tmp['address']] = true;
             }
+        } elseif (is_array($sr) && isset($sr['address'])) {
+            $selectedMap[(string)$sr['address']] = true;
         }
+    }
 
-        // CheckBoxList-Optionen aufbauen – value enthält direkt das komplette Register-Array
-        $options = array_map(function ($r) use ($isSelected) {
-            $caption = "{$r['address']} - {$r['name']}";
-            $value   = $r; // komplettes Objekt
-            return [
-                "caption" => $caption,
-                "value"   => $value,
-                "checked" => isset($isSelected[(string)$r['address']]) // markiere bereits ausgewählte
-            ];
-        }, $registers);
+    // List-Values aufbauen: vollständige Registerobjekte + Flag "selected"
+    $values = array_map(function($r) use ($selectedMap) {
+        return [
+            "selected" => isset($selectedMap[(string)$r['address']]),
+            "address"  => $r['address'],
+            "name"     => $r['name'],
+            "unit"     => $r['unit'],
+            "type"     => $r['type'],
+            "scale"    => $r['scale'],
+            "pos"      => $r['pos'],
+        ];
+    }, $all);
 
-        return json_encode([
-            "elements" => [
-                [
-                    "type"    => "CheckBoxList",
-                    "name"    => "SelectedRegisters",
-                    "caption" => "Register auswählen",
-                    "options" => $options
+    return json_encode([
+        "elements" => [
+            [
+                "type"    => "List",
+                "name"    => "SelectedRegisters",
+                "caption" => "Register auswählen (Häkchen setzen)",
+                "rowCount"=> 15,
+                "add"     => false,
+                "delete"  => false,
+                "columns" => [
+                    [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
+                    [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ],
+                    [ "caption" => "Name",      "name" => "name",     "width" => "auto" ],
+                    [ "caption" => "Einheit",   "name" => "unit",     "width" => "100px" ],
+                    [ "caption" => "Typ",       "name" => "type",     "width" => "90px" ],
+                    [ "caption" => "Scale",     "name" => "scale",    "width" => "90px" ],
+                    [ "caption" => "Pos",       "name" => "pos",      "width" => "70px" ],
                 ],
-                [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix" => "s"
-                ],
-                [
-                    "type" => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items" => [
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxUser",
-                            "caption" => "Benutzername",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxPassword",
-                            "caption" => "Passwort",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxSerial",
-                            "caption" => "Seriennummer Wallbox",
-                        ],
-                        [
-                            "type"  => "IntervalBox",
-                            "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden",
-                            "suffix" => "s"
-                        ],
-                        [
-                            "type" => "NumberSpinner",
-                            "name" => "ChargePowerOffset",
-                            "caption" => "Soll-Ladeleistung erhöhen",
-                            "suffix" => "W"
-                        ]
-                    ]
-                ],
-                [
-                    "type" => "ExpansionPanel",
-                    "caption" => "Zusätzliche Werte berechnen",
-                    "items" => [
-                        [
-                            "type" => "CheckBox",
-                            "name" => "Entladen_Max",
-                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen",
-                        ],
-                        [
-                            "type" => "CheckBox",
-                            "name" => "Laden_Max",
-                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
-                        ]
-                    ]
+                "values"  => $values
+            ],
+            [
+                "type"  => "IntervalBox",
+                "name"  => "PollIntervalWR",
+                "caption" => "Sekunden",
+                "suffix" => "s"
+            ],
+            [
+                "type" => "ExpansionPanel",
+                "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
+                "items" => [
+                    [ "type" => "ValidationTextBox", "name" => "WallboxUser", "caption" => "Benutzername" ],
+                    [ "type" => "ValidationTextBox", "name" => "WallboxPassword", "caption" => "Passwort" ],
+                    [ "type" => "ValidationTextBox", "name" => "WallboxSerial", "caption" => "Seriennummer Wallbox" ],
+                    [ "type" => "IntervalBox", "name" => "PollIntervalWB", "caption" => "Sekunden", "suffix" => "s" ],
+                    [ "type" => "NumberSpinner", "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
                 ]
             ],
-            "actions" => [
-                [
-                    "type" => "Button",
-                    "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchAll($id);'
-                ],
-                [
-                    "type" => "Label",
-                    "caption" => "Sag danke und unterstütze den Modulentwickler:"
-                ],
-                [
-                    "type" => "RowLayout",
-                    "items" => [
-                        [
-                            "type" => "Image",
-                            "onClick" => "echo 'https://paypal.me/mbstern';",
-                            "image" => "data:image/jpeg;base64,/9j/4QAYRXhpZgAASUkqAAgAAAAAAAAAAAAAAP/sABFEdWNreQABAAQAAAA8AAD/7gAOQWRvYmUAZMAAAAAB/9sAhAAGBAQEBQQGBQUGCQYFBgkLCAYGCAsMCgoLCgoMEAwMDAwMDBAMDg8QDw4MExMUFBMTHBsbGxwfHx8fHx8fHx8fAQcHBw0MDRgQEBgaFREVGh8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx//wAARCABLAGQDAREAAhEBAxEB/8QA..." // gekürzt
-                        ],
-                        [
-                            "type" => "Label",
-                            "caption" => ""
-                        ]
-                    ]
+            [
+                "type" => "ExpansionPanel",
+                "caption" => "Zusätzliche Werte berechnen",
+                "items" => [
+                    [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
+                    [ "type" => "CheckBox", "name" => "Laden_Max", "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
                 ]
             ]
-        ]);
-    }
-    
+        ],
+        "actions" => [
+            [
+                "type" => "Button",
+                "caption" => "Werte lesen",
+                "onClick" => 'Goodwe_FetchAll($id);'
+            ],
+            [
+                "type" => "Label",
+                "caption" => "Sag danke und unterstütze den Modulentwickler:"
+            ],
+            [
+                "type" => "RowLayout",
+                "items" => [
+                    [
+                        "type" => "Image",
+                        "onClick" => "echo 'https://paypal.me/mbstern';",
+                        "image" => "data:image/jpeg;base64,/9j/4QAYRXhpZgAASUkqAAgAAAAAAAAAAAAAAP/sABFEdWNreQABAAQAAAA8AAD/7gAOQWRvYmUAZMAAAAAB/9sAhAAGBAQEBQQGBQUGCQYFBgkLCAYGCAsMCgoLCgoMEAwMDAwMDBAMDg8QDw4MExMUFBMTHBsbGxwfHx8fHx8fHx8fAQcHBw0MDRgQEBgaFREVGh8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx//wAARCABLAGQDAREAAhEBAxEB/8QA..."
+                    ],
+                    [ "type" => "Label", "caption" => "" ]
+                ]
+            ]
+        ]
+    ]);
+}
+
     private function GetVariableDetails(string $unit): ?array
     {
         switch ($unit) {
