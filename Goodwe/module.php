@@ -1211,6 +1211,7 @@ class Goodwe extends IPSModule
         ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
         ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
         ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
+        ["address" => 35366, "name" => "WR - Test", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 371],
         ];
     }
 }
