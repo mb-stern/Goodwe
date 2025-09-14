@@ -807,10 +807,6 @@ public function ApplyChanges()
                 "addr"     => (string)$r['address'],  // <- unsichtbar, aber editierbar -> wird gespeichert
                 "address"  => $r['address'],
                 "name"     => $r['name'],
-                "unit"     => $r['unit'],
-                "type"     => $r['type'],
-                "scale"    => $r['scale'],
-                "pos"      => $r['pos'],
             ];
         }, $all);
 
@@ -830,10 +826,6 @@ public function ApplyChanges()
                         [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
                         [ "caption" => "Adresse",   "name" => "address",  "width" => "110px" ],
                         [ "caption" => "Name",      "name" => "name",     "width" => "auto"  ],
-                        [ "caption" => "Einheit",   "name" => "unit",     "width" => "100px" ],
-                        [ "caption" => "Typ",       "name" => "type",     "width" => "90px"  ],
-                        [ "caption" => "Scale",     "name" => "scale",    "width" => "90px"  ],
-                        [ "caption" => "Pos",       "name" => "pos",      "width" => "70px"  ],
                     ],
                     "values"   => $values
                 ],
