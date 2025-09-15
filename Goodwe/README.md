@@ -113,7 +113,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 ### 8. Versionen
 
 Version 2.7 (14.09.2025)
-- Das Konfigurationsformular wurde überarbeiten, alle gewünschten Register sind nun gleichzeitig über Checkboxen auswählbar, statt wie voher jedes einzeln über ein Dropdownfeld. Achtung: Ein Downgrade auf eine Vorgängerversion führt zum Verlust der Variablen zusammen mit den aufgezeichneten Daten.
+- Das Konfigurationsformular wurde überarbeiten, alle gewünschten Register sind nun gleichzeitig über Checkboxen auswählbar, statt wie voher jedes einzeln über ein Dropdownfeld. Achtung: Ein Downgrade auf eine Vorgängerversion führt zu einem fehlehaften Verhalten des Moduls.
 
 Version 2.6 (10.08.2025)
 - Die Ladeeinstellungen der Wallbox werden nicht mehr gepuffert, sondern immer direkt an die API gesendet.
