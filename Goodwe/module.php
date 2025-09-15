@@ -971,7 +971,7 @@ class Goodwe extends IPSModule
                         [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
                         [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
                         [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen um (Offset)", "suffix" => "W" ]
                     ]
                 ],
                 [
