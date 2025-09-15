@@ -30,6 +30,8 @@ class Goodwe extends IPSModule
 
         $this->CreateProfile();
 
+        $selectedRegisters = $this->NormalizeSelected(true);
+
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
 
@@ -120,101 +122,60 @@ class Goodwe extends IPSModule
         }
 
         // -------- Register: robustes Anlegen + Aufräumen --------
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        // Property auf addr-only normalisieren (hängt alte/gelöschte raus)
+        $selectedRegisters = $this->NormalizeSelected(true);
         $registerCurrentIdents = [];
 
-        // Masterindex: liefert fehlende Felder nach
+        // Masterindex (Metadaten kommen NUR aus Master)
         $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$r) {
-                // Altbestand: kompletter JSON-String als Zeile?
-                if (is_string($r)) {
-                    $tmp = json_decode($r, true);
-                    if (is_array($tmp)) {
-                        $r = $tmp; // jetzt als Array weiterverarbeiten
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                        continue;
-                    }
-                }
+        foreach ($selectedRegisters as $row) {
+            if (empty($row['selected'])) {
+                continue; // nur angehakte
+            }
+            $addr = (string)$row['addr'];
 
-                if (isset($r['selected']) && !$r['selected']) {
-                    continue;
-                }
-
-                // Fallback: 'addr' -> 'address'
-                if (!isset($r['address']) && isset($r['addr'])) {
-                    $r['address'] = $r['addr'];
-                }
-
-                // Altes Format: JSON in 'address' -> DECODED SOLL ÜBERSCHREIBEN!
-                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                    $decoded = json_decode($r['address'], true);
-                    if (is_array($decoded)) {
-                        // WICHTIG: decoded muss die Felder überschreiben
-                        $r = array_replace($r, $decoded);
-                    }
-                }
-
-                // Aus Master vervollständigen
-                if (!isset($r['address'])) {
-                    $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
-                    continue;
-                }
-                $addrKey = (string)$r['address'];
-                if (isset($masterIndex[$addrKey])) {
-                    $r = array_merge($masterIndex[$addrKey], $r);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
-                    continue;
-                }
-
-                // Pflichtfelder vorhanden?
-                foreach (['address','name','type','unit','scale','pos'] as $need) {
-                    if (!array_key_exists($need, $r)) {
-                        $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
-                        continue 2;
-                    }
-                }
-
-                // Profil/Typ zur Einheit
-                $details = $this->GetVariableDetails((string)$r['unit']);
-                if ($details === null) {
-                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
-                    continue;
-                }
-
-                $ident = "Addr" . $addrKey;
-                $registerCurrentIdents[] = $ident;
-
-                if (!@$this->GetIDForIdent($ident)) {
-                    switch ($details['type']) {
-                        case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
-                            break;
-                        case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
-                            break;
-                        case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
-                            break;
-                        case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
-                            break;
-                    }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
-                }
+            if (!isset($masterIndex[$addr])) {
+                $this->SendDebug("ApplyChanges", "Adresse $addr nicht mehr in Masterliste.", 0);
+                continue;
             }
 
-            // ggf. Schreib-Aktionen aktivieren (nur wenn vorhanden)
-            foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
-                if (@$this->GetIDForIdent($writeIdent)) {
-                    $this->EnableAction($writeIdent);
+            $r = $masterIndex[$addr]; // Metadaten: name, type, unit, scale, pos
+            $details = $this->GetVariableDetails((string)$r['unit']);
+            if ($details === null) {
+                $this->SendDebug("ApplyChanges", "Kein Profil/Typ für Einheit '{$r['unit']}' (Addr $addr).", 0);
+                continue;
+            }
+
+            $ident = "Addr" . $addr;
+            $registerCurrentIdents[] = $ident;
+
+            if (!@$this->GetIDForIdent($ident)) {
+                switch ($details['type']) {
+                    case VARIABLETYPE_INTEGER:
+                        $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        break;
+                    case VARIABLETYPE_FLOAT:
+                        $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        break;
+                    case VARIABLETYPE_STRING:
+                        $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        break;
+                    case VARIABLETYPE_BOOLEAN:
+                        $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        break;
                 }
+                $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
+            }
+        }
+
+        // ggf. Schreib-Aktionen aktivieren (nur wenn vorhanden)
+        foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
+            if (@$this->GetIDForIdent($writeIdent)) {
+                $this->EnableAction($writeIdent);
             }
         }
 
@@ -320,11 +281,7 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
-        }
+        $selectedRegisters = $this->NormalizeSelected(false);
 
         // Parent prüfen
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
@@ -346,49 +303,22 @@ class Goodwe extends IPSModule
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
-        foreach ($selectedRegisters as &$r) {
-            if (is_string($r)) {
-                $tmp = json_decode($r, true);
-                if (is_array($tmp)) {
-                    $r = $tmp;
-                } else {
-                    $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                    continue;
-                }
-            }
-
-            if (isset($r['selected']) && !$r['selected']) {
+        foreach ($selectedRegisters as $row) {
+            if (empty($row['selected'])) {
                 continue;
             }
+            $addrKey = (string)$row['addr'];
 
-            if (!isset($r['address']) && isset($r['addr'])) {
-                $r['address'] = $r['addr'];
-            }
-
-            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                $decoded = json_decode($r['address'], true);
-                if (is_array($decoded)) {
-                    $r = array_replace($r, $decoded); // <-- decoded gewinnt
-                }
-            }
-
-            if (!isset($r['address'])) {
-                $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
+            if (!isset($masterIndex[$addrKey])) {
+                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste.", 0);
                 continue;
             }
+            $r = $masterIndex[$addrKey]; // type, unit, scale etc. ausschließlich aus Master
 
-            $addrKey = (string)$r['address'];
-            if (isset($masterIndex[$addrKey])) {
-                $r = array_merge($masterIndex[$addrKey], $r);
-            } else {
-                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
-                continue;
-            }
-
-            // Pflichtfelder
-            foreach (['address','type','scale'] as $need) {
+            // Pflichtfelder prüfen (aus Master)
+            foreach (['type','scale'] as $need) {
                 if (!array_key_exists($need, $r)) {
-                    $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                    $this->SendDebug("RequestRead", "Fehlendes Feld '$need' im Master für $addrKey", 0);
                     continue 2;
                 }
             }
@@ -400,13 +330,13 @@ class Goodwe extends IPSModule
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
-                    "Address"  => (int)$r['address'],
+                    "Address"  => (int)$addrKey,
                     "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
 
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
+                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$addrKey}", 0);
                     continue;
                 }
 
@@ -430,7 +360,7 @@ class Goodwe extends IPSModule
                 }
 
                 if ((float)$r['scale'] == 0.0) {
-                    $this->SendDebug("RequestRead", "Scale = 0 (Division/Multiplikation nicht möglich) für {$r['address']}", 0);
+                    $this->SendDebug("RequestRead", "Scale = 0 für {$addrKey}", 0);
                     continue;
                 }
 
@@ -446,7 +376,7 @@ class Goodwe extends IPSModule
                     SetValue($varID, $scaledValue);
                 }
 
-                $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}): $scaledValue", 0);
+                $this->SendDebug("RequestRead", "Wert für {$addrKey} ({$r['name']}): $scaledValue", 0);
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
                 $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
@@ -870,21 +800,17 @@ class Goodwe extends IPSModule
     {
         $all = $this->GetRegisters();
 
-        // Bisher gespeicherte Auswahl laden
-        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selected)) {
-            $selected = [];
+        // Normalisierte Auswahl (addr-only) aus Property
+        $selectedRows = $this->NormalizeSelected(false);
+
+        // Map der angehakten Adressen
+        $selectedMap = [];
+        foreach ($selectedRows as $sr) {
+            if (!empty($sr['selected'])) {
+                $selectedMap[(string)$sr['addr']] = true;
+            }
         }
 
-        // Bereits ausgewählte Adressen herausfinden (tolerant für alte Formate)
-        $selectedMap = [];
-        foreach ($selected as $sr) {
-            if (is_string($sr)) {
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp)) {
-                    $sr = $tmp;
-                }
-            }
             if (is_array($sr)) {
                 // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
                 if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
@@ -902,15 +828,12 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Zeilen für die Liste aufbauen:
-        // - 'addr' bleibt unsichtbar, wird aber gespeichert (robust gegen Formatwechsel)
-        // - 'address_display' ist nur für die Anzeige (reine Registernummer)
         $values = array_map(function ($r) use ($selectedMap) {
             $addr = (string)$r['address'];
             return [
                 "selected"        => isset($selectedMap[$addr]),
                 "addr"            => $addr,          // unsichtbar + gespeichert
-                "address_display" => $addr,          // nur Anzeige
+                "address_display" => $addr,          // nur Anzeige (Registernummer)
                 "name"            => $r['name'],
             ];
         }, $all);
@@ -964,6 +887,48 @@ class Goodwe extends IPSModule
                 [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ]
             ]
         ]);
+    }
+
+    private function NormalizeSelected(bool $save): array
+    {
+        $master = $this->GetRegisters();
+        $selRaw = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
+        $selRaw = is_array($selRaw) ? $selRaw : [];
+
+        // 1) Auswahlzustand aus aktuellem Property herausziehen (addr-only)
+        $state = [];
+        foreach ($selRaw as $row) {
+            if (is_string($row)) {
+                $row = json_decode($row, true);
+                if (!is_array($row)) {
+                    continue;
+                }
+            }
+            if (!isset($row['addr'])) {
+                continue;
+            }
+            $a = (string)$row['addr'];
+            if ($a === '') {
+                continue;
+            }
+            $state[$a] = !empty($row['selected']);
+        }
+
+        // 2) Neuaufbau rein aus Masterliste (verhindert hängende Checkboxen)
+        $new = [];
+        foreach ($master as $m) {
+            $a = (string)$m['address'];
+            $new[] = [
+                'selected' => !empty($state[$a]),
+                'addr'     => $a
+            ];
+        }
+
+        // 3) Optional zurückschreiben (ohne ApplyChanges triggern)
+        if ($save && json_encode($new) !== json_encode($selRaw)) {
+            IPS_SetProperty($this->InstanceID, 'SelectedRegisters', json_encode($new));
+        }
+        return $new;
     }
 
     private function GetVariableDetails(string $unit): ?array
