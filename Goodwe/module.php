@@ -811,23 +811,7 @@ class Goodwe extends IPSModule
             }
         }
 
-            if (is_array($sr)) {
-                // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
-                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
-                    $tmp = json_decode($sr['address'], true);
-                    if (is_array($tmp) && isset($tmp['address'])) {
-                        $sr['address'] = $tmp['address'];
-                    }
-                }
-
-                if (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
-                } elseif (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                }
-            }
-        }
-
+        // Zeilen für die Liste
         $values = array_map(function ($r) use ($selectedMap) {
             $addr = (string)$r['address'];
             return [
@@ -848,9 +832,7 @@ class Goodwe extends IPSModule
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        // Unsichtbare Spalte, damit die Adresse stabil gespeichert wird
                         [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
-
                         [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "edit" => [ "type" => "CheckBox" ] ],
                         [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px" ],
                         [ "caption" => "Name",      "name" => "name", "width" => "auto" ],
