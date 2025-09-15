@@ -347,7 +347,6 @@ class Goodwe extends IPSModule
         }
 
         foreach ($selectedRegisters as &$r) {
-            // Altformat: komplette Zeile als JSON-String?
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
                 if (is_array($tmp)) {
@@ -358,17 +357,14 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Checkbox-basierte Auswahl (neues Format)
             if (isset($r['selected']) && !$r['selected']) {
                 continue;
             }
 
-            // Fallback Altname: 'addr' -> 'address'
             if (!isset($r['address']) && isset($r['addr'])) {
                 $r['address'] = $r['addr'];
             }
 
-            // Altes Format: JSON in 'address' -> dekodieren und DECODED gewinnt (überschreibt)
             if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
                 $decoded = json_decode($r['address'], true);
                 if (is_array($decoded)) {
@@ -376,13 +372,11 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Ohne Adresse geht's nicht
             if (!isset($r['address'])) {
                 $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                 continue;
             }
 
-            // Mit Master vervollständigen (Masterwerte zuerst, dann vom Benutzer/Altformat überschreiben)
             $addrKey = (string)$r['address'];
             if (isset($masterIndex[$addrKey])) {
                 $r = array_merge($masterIndex[$addrKey], $r);
@@ -391,7 +385,6 @@ class Goodwe extends IPSModule
                 continue;
             }
 
-            // Pflichtfelder prüfen
             foreach (['address', 'type', 'scale'] as $need) {
                 if (!array_key_exists($need, $r)) {
                     $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
@@ -488,8 +481,6 @@ class Goodwe extends IPSModule
                     SetValue($varID, $scaledValue);
                     $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
                 } else {
-                    // Kein Log-Spam bei jedem Poll
-                    //$this->SendDebug("RequestRead", "Wert unverändert für {$r['address']} ({$r['name']}): $scaledValue", 0);
                 }
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
@@ -497,7 +488,6 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Zusatzberechnungen (optional)
         $this->CalculateMaxPower();
     }
 
@@ -1270,10 +1260,6 @@ class Goodwe extends IPSModule
         ];
     }
 
-    /**
-     * Helper: Setzt eine Variable nur, wenn der Wert sich geändert hat.
-     * Kapselt auch das Casting passend zum Variablentyp.
-     */
     private function SetValueIfChanged(string $ident, $value): void
     {
         $vid = @$this->GetIDForIdent($ident);
