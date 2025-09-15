@@ -11,11 +11,11 @@ class Goodwe extends IPSModule
 
         $this->RegisterPropertyBoolean("Entladen_Max", false);
         $this->RegisterPropertyBoolean("Laden_Max", false);
-        $this->RegisterPropertyString("WallboxUser", "");     
-        $this->RegisterPropertyString("WallboxPassword", "");  
-        $this->RegisterPropertyString("WallboxSerial", "");  
+        $this->RegisterPropertyString("WallboxUser", "");
+        $this->RegisterPropertyString("WallboxPassword", "");
+        $this->RegisterPropertyString("WallboxSerial", "");
         $this->RegisterPropertyInteger("PollIntervalWB", 0);
-        $this->RegisterPropertyInteger("PollIntervalWR", 5); 
+        $this->RegisterPropertyInteger("PollIntervalWR", 5);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
@@ -32,13 +32,13 @@ class Goodwe extends IPSModule
 
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
         $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
-    
+
         // Wallbox-Benutzerinformationen lesen
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial = $this->ReadPropertyString("WallboxSerial");
 
-        // 1. Verarbeitung der Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
+        // 1) Wallbox-Variablen nur, wenn Benutzername, Passwort und Seriennummer gesetzt sind
         $wbCurrentIdents = [];
         if (!empty($user) && !empty($password) && !empty($serial)) {
             $mapping = $this->GetWbVariables();
@@ -83,9 +83,9 @@ class Goodwe extends IPSModule
 
             // Variablen mit Aktion für Start/Stopp, Ladeleistung und Modus
             $specialVariables = [
-                ['ident' => 'WB_Charging', 'name' => 'WB - Ladevorgang', 'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch', 'pos' => 1],
-                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Power_W', 'pos' => 2],
-                ['ident' => 'WB_ChargeMode', 'name' => 'WB - Modus Soll', 'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode', 'pos' => 3],
+                ['ident' => 'WB_Charging',    'name' => 'WB - Ladevorgang',  'type' => VARIABLETYPE_BOOLEAN, 'profile' => '~Switch',            'pos' => 1],
+                ['ident' => 'WB_ChargePower', 'name' => 'WB - Leistung Soll','type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Power_W', 'pos' => 2],
+                ['ident' => 'WB_ChargeMode',  'name' => 'WB - Modus Soll',   'type' => VARIABLETYPE_INTEGER, 'profile' => 'Goodwe.WB_Mode',    'pos' => 3],
             ];
 
             foreach ($specialVariables as $var) {
@@ -119,64 +119,115 @@ class Goodwe extends IPSModule
             }
         }
 
-        // 2. Verarbeitung der Registervariablen
+        // -------- 2) Register: robustes Anlegen + Aufräumen (Checkbox-Ansicht) --------
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
-    
+
+        // Masterindex: liefert fehlende Felder nach
+        $masterIndex = [];
+        foreach ($this->GetRegisters() as $mr) {
+            $masterIndex[(string)$mr['address']] = $mr;
+        }
+
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$selectedRegister) {
-                if (is_string($selectedRegister['address'])) {
-                    $decodedRegister = json_decode($selectedRegister['address'], true);
-                    if ($decodedRegister !== null) {
-                        $selectedRegister = array_merge($selectedRegister, $decodedRegister);
+            foreach ($selectedRegisters as &$r) {
+                // Altbestand: kompletter JSON-String als Zeile?
+                if (is_string($r)) {
+                    $tmp = json_decode($r, true);
+                    if (is_array($tmp)) {
+                        $r = $tmp; // jetzt als Array weiterverarbeiten
                     } else {
-                        $this->SendDebug("ApplyChanges", "Ungültiger JSON-String für Address: " . $selectedRegister['address'], 0);
+                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                         continue;
                     }
                 }
-    
-                $variableDetails = $this->GetVariableDetails($selectedRegister['unit']);
-                if ($variableDetails === null) {
-                    $this->SendDebug("ApplyChanges", "Kein Profil oder Typ für Einheit {$selectedRegister['unit']} gefunden.", 0);
+
+                // Checkbox (neues Format): nur ausgewählte Zeilen
+                if (isset($r['selected']) && !$r['selected']) {
                     continue;
                 }
-    
-                $ident = "Addr" . $selectedRegister['address'];
-                $registerCurrentIdents[] = $ident;
-    
-                if (!@$this->GetIDForIdent($ident)) {
-                    switch ($variableDetails['type']) {
-                        case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
-                            break;
-                        case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
-                            break;
-                        case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $selectedRegister['name'], $variableDetails['profile'], $selectedRegister['pos']);
-                            break;
-                    }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident mit Profil {$variableDetails['profile']}.", $selectedRegister['pos']);
+
+                // Fallback: 'addr' -> 'address' (neues Format speichert addr unsichtbar)
+                if (!isset($r['address']) && isset($r['addr'])) {
+                    $r['address'] = $r['addr'];
                 }
 
-                //Hier die aktiven Variablen definieren
-                $this->EnableAction('Addr45358'); //Min SOC offline
-                $this->EnableAction('Addr45356'); //Min SOC online
-                $this->EnableAction('Addr47511'); //EMSPowerMode
-                $this->EnableAction('Addr47512'); //EMSPowerSet
+                // Altes Format: JSON in 'address' -> decoded überschreibt
+                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                    $decoded = json_decode($r['address'], true);
+                    if (is_array($decoded)) {
+                        $r = array_replace($r, $decoded);
+                    }
+                }
+
+                // Aus Master vervollständigen
+                if (!isset($r['address'])) {
+                    $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
+                    continue;
+                }
+                $addrKey = (string)$r['address'];
+                if (isset($masterIndex[$addrKey])) {
+                    $r = array_merge($masterIndex[$addrKey], $r);
+                } else {
+                    $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
+                    continue;
+                }
+
+                // Pflichtfelder vorhanden?
+                foreach (['address','name','type','unit','scale','pos'] as $need) {
+                    if (!array_key_exists($need, $r)) {
+                        $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
+                        continue 2;
+                    }
+                }
+
+                // Profil/Typ zur Einheit
+                $details = $this->GetVariableDetails((string)$r['unit']);
+                if ($details === null) {
+                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
+                    continue;
+                }
+
+                $ident = "Addr" . $addrKey;
+                $registerCurrentIdents[] = $ident;
+
+                if (!@$this->GetIDForIdent($ident)) {
+                    switch ($details['type']) {
+                        case VARIABLETYPE_INTEGER:
+                            $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            break;
+                        case VARIABLETYPE_FLOAT:
+                            $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            break;
+                        case VARIABLETYPE_STRING:
+                            $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            break;
+                        case VARIABLETYPE_BOOLEAN:
+                            $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            break;
+                    }
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
+                }
             }
-        }
-    
-        // Nicht mehr benötigte Register-Variablen löschen
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-            $object = IPS_GetObject($childID);
-            if (strpos($object['ObjectIdent'], 'Addr') === 0 && !in_array($object['ObjectIdent'], $registerCurrentIdents)) {
-                $this->UnregisterVariable($object['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Register-Variable mit Ident {$object['ObjectIdent']} gelöscht.", 0);
+
+            // ggf. Schreib-Aktionen aktivieren (nur wenn die Variablen existieren)
+            foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
+                if (@$this->GetIDForIdent($writeIdent)) {
+                    $this->EnableAction($writeIdent);
+                }
             }
         }
 
-        // Max-Entladen-Variable für Speicher anlegen oder löschen:
+        // Nicht mehr benötigte Register-Variablen entfernen
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $obj = IPS_GetObject($childID);
+            if (strpos($obj['ObjectIdent'], 'Addr') === 0 && !in_array($obj['ObjectIdent'], $registerCurrentIdents)) {
+                $this->UnregisterVariable($obj['ObjectIdent']);
+                $this->SendDebug("ApplyChanges", "Register-Variable entfernt: {$obj['ObjectIdent']}", 0);
+            }
+        }
+
+        // 3) Max-Entladen-Variable für Speicher anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
@@ -188,7 +239,7 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Max-Laden-Variable für Speicher anlegen oder löschen:
+        // 4) Max-Laden-Variable für Speicher anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
                 $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
@@ -208,8 +259,8 @@ class Goodwe extends IPSModule
         // Für Register
         if (strpos($ident, 'Addr') === 0) {
             $address = intval(substr($ident, 4));
-            if ($this->WriteRegister($address, $value)) {
-                SetValue($this->GetIDForIdent($ident), $value);
+            if ($this->WriteRegister($address, (int)$value)) {
+                $this->SetValueIfChanged($ident, (int)$value);
                 $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
             } else {
                 $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
@@ -226,40 +277,40 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                SetValue($this->GetIDForIdent($ident), $value);
+                $this->SetValueIfChanged($ident, (bool)$value);
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
                 if ($value) {
-                    $data['mode'] = GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                    $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
                 $this->SendWallboxRequest($data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
-                SetValue($this->GetIDForIdent($ident), $value);
-                $data = ['sn' => $serial, 'mode' => $value];
+                $this->SetValueIfChanged($ident, (int)$value);
+                $data = ['sn' => $serial, 'mode' => (int)$value];
                 $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
                 break;
 
             case 'WB_ChargePower':
-            $offset = $this->ReadPropertyInteger('ChargePowerOffset');
-            $val = round($value / 100) * 100 + $offset;
-            $val = min(max($val, 4200), 9700); // Begrenzung
+                $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
+                $val = (int)(round(((int)$value) / 100) * 100 + $offset);
+                $val = min(max($val, 4200), 9700); // Begrenzung
 
-            // zuerst Variablen mit korrigiertem Wert setzen
-            SetValue($this->GetIDForIdent($ident), $val);
-            SetValue($this->GetIDForIdent('WB_ChargeMode'), 0);
+                // zuerst Variablen mit korrigiertem Wert setzen
+                $this->SetValueIfChanged($ident, $val);
+                $this->SetValueIfChanged('WB_ChargeMode', 0);
 
-            $kw = round($val / 1000, 1);
-            $data = ['sn' => $serial, 'charge_power' => $kw];
-            $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
-            break;
+                $kw = round($val / 1000, 1);
+                $data = ['sn' => $serial, 'charge_power' => $kw];
+                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+                break;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
         }
     }
-    
+
     public function FetchAll()
     {
         $this->FetchWallboxData();
@@ -274,61 +325,95 @@ class Goodwe extends IPSModule
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
-    
-        // Prüfen, ob eine Verbindung zum Parent besteht
+
+        // Parent prüfen
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
             $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
             $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
             return;
         }
-    
-        // Prüfen, ob der Parent geöffnet ist
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
             $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
             $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
             return;
         }
-    
-        foreach ($selectedRegisters as &$register) {
-            if (is_string($register['address'])) {
-                $decodedRegister = json_decode($register['address'], true);
-                if ($decodedRegister !== null) {
-                    $register = array_merge($register, $decodedRegister);
+
+        // Masterindex zum Vervollständigen/Fixen von Feldern
+        $masterIndex = [];
+        foreach ($this->GetRegisters() as $mr) {
+            $masterIndex[(string)$mr['address']] = $mr;
+        }
+
+        foreach ($selectedRegisters as &$r) {
+            if (is_string($r)) {
+                $tmp = json_decode($r, true);
+                if (is_array($tmp)) {
+                    $r = $tmp;
                 } else {
-                    $this->SendDebug("RequestRead", "Ungültiger JSON-String für Address: " . $register['address'], 0);
+                    $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                     continue;
                 }
             }
-    
-            // Validierung der Felder
-            if (!isset($register['address'], $register['type'], $register['scale'])) {
-                $this->SendDebug("RequestRead", "Ungültiger Registereintrag: " . json_encode($register), 0);
+
+            if (isset($r['selected']) && !$r['selected']) {
                 continue;
             }
-    
-            $ident = "Addr" . $register['address'];
-            $quantity = ($register['type'] === "U32" || $register['type'] === "S32") ? 2 : 1;
-    
+
+            if (!isset($r['address']) && isset($r['addr'])) {
+                $r['address'] = $r['addr'];
+            }
+
+            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                $decoded = json_decode($r['address'], true);
+                if (is_array($decoded)) {
+                    $r = array_replace($r, $decoded);
+                }
+            }
+
+            if (!isset($r['address'])) {
+                $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
+                continue;
+            }
+
+            $addrKey = (string)$r['address'];
+            if (isset($masterIndex[$addrKey])) {
+                $r = array_merge($masterIndex[$addrKey], $r);
+            } else {
+                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
+                continue;
+            }
+
+            foreach (['address', 'type', 'scale'] as $need) {
+                if (!array_key_exists($need, $r)) {
+                    $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                    continue 2;
+                }
+            }
+
+            $ident    = "Addr" . $addrKey;
+            $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
+
             try {
+                // Modbus lesen
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
-                    "Address"  => $register['address'],
+                    "Address"  => (int)$r['address'],
                     "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
-    
+
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("RequestRead", "Keine oder unvollständige Antwort für Register {$register['address']}", 0);
+                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
                     continue;
                 }
-    
-                $data = unpack("n*", substr($response, 2));
+
+                $data  = unpack("n*", substr($response, 2));
                 $value = 0;
-    
-                switch ($register['type']) {
+
+                switch ($r['type']) {
                     case "U16":
                         $value = $data[1];
                         break;
@@ -342,33 +427,68 @@ class Goodwe extends IPSModule
                         $combined = ($data[1] << 16) | $data[2];
                         $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
+                    default:
+                        $this->SendDebug("RequestRead", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        continue 2;
                 }
-    
-                if ($register['scale'] == 0) {
-                    $this->SendDebug("RequestRead", "Division durch Null für Register {$register['address']}", 0);
+
+                // Scale prüfen
+                $scale = (float)$r['scale'];
+                if ($scale == 0.0) {
+                    $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
-    
-                $scaledValue = $value * $register['scale'];
-    
-                $variableID = @$this->GetIDForIdent($ident);
-                if ($variableID === false) {
+
+                // Skalierten Wert bilden
+                $scaledValue = $value * $scale;
+
+                // Zielvariable holen
+                $varID = @$this->GetIDForIdent($ident);
+                if ($varID === false) {
                     $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
-    
-                $currentValue = GetValue($variableID);
-                if ($currentValue !== $scaledValue) {
-                    SetValue($variableID, $scaledValue);
+
+                // Typgerechte Normalisierung, damit strikter Vergleich funktioniert
+                $var = IPS_GetVariable($varID);
+                switch ($var['VariableType']) {
+                    case VARIABLETYPE_INTEGER:
+                        // Immer sauber auf int runden/casten (verhindert int/float-Mismatch)
+                        $scaledValue = (int)round($scaledValue);
+                        break;
+
+                    case VARIABLETYPE_FLOAT:
+                        // Nachkommastellen aus Scale ableiten (0.1 => 1, 0.25 => 2, 1 => 0)
+                        $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
+                        $dotPos   = strpos($scaleStr, '.');
+                        $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
+                        $scaledValue = round((float)$scaledValue, $decimals);
+                        break;
+
+                    case VARIABLETYPE_STRING:
+                        $scaledValue = (string)$scaledValue;
+                        break;
+
+                    case VARIABLETYPE_BOOLEAN:
+                        // Falls je benötigt: alles != 0 wird true
+                        $scaledValue = ((int)round($scaledValue)) !== 0;
+                        break;
                 }
 
-                $this->SendDebug("RequestRead", "Wert für Register {$register['address']}: $scaledValue", 0);
+                // Nur setzen, wenn sich der (typgleiche) Wert geändert hat
+                $current = GetValue($varID);
+                if ($current !== $scaledValue) {
+                    SetValue($varID, $scaledValue);
+                    $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
+                } else {
+                }
             } catch (Exception $e) {
-                $this->SendDebug("RequestRead", "Fehler bei Kommunikation mit Parent: " . $e->getMessage(), 0);
-                $this->LogMessage("Goodwe", "Fehler bei Kommunikation mit Parent: " . $e->getMessage());
+                $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
+                $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
-        $this->CalculateMaxPower(); //Zusätzlich Variablen für Max. Lade/Entladeleistung ebenfalls aktualisieren
+
+        $this->CalculateMaxPower();
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -378,8 +498,8 @@ class Goodwe extends IPSModule
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1, // Schreibe genau ein Register (16-Bit)
-            "Data"     => utf8_encode(pack("n", $value)), // 16-Bit unsigned Wert packen
+            "Quantity" => 1, // 1 Register (16-Bit)
+            "Data"     => utf8_encode(pack("n", $value)), // 16-Bit unsigned packen
         ];
 
         // Anfrage an Parent senden
@@ -407,61 +527,61 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
-    try {
-        // Login und Datenabruf
-        $loginResponse = $this->GoodweLogin($user, $password);
-        if (!$loginResponse) {
-            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-            return;
-        }
+        try {
+            // Login und Datenabruf
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
+            }
 
-        $apiResponse = $this->GoodweFetchData($serial);
-        if (!$apiResponse) {
-            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-            return;
-        }
+            $apiResponse = $this->GoodweFetchData($serial);
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
+            }
 
-        $data = json_decode($apiResponse, true);
-        if (!isset($data['data'])) {
-            $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-            return;
-        }
+            $data = json_decode($apiResponse, true);
+            if (!isset($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                return;
+            }
 
-        foreach ($data['data'] as $key => $value) {
-            $ident = "WB_" . $key;
-            $varID = @$this->GetIDForIdent($ident);
-        
-            if ($varID !== false) {
-                if ($key === 'power') {
-                    $value = $value * 1000; // kW → W
-                }
-        
-                SetValue($varID, $value);
-        
-                if ($key === "workstate") {
-                    $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
-                    $chargingVarID = @$this->GetIDForIdent('WB_Charging');
-                
-                    $pending = json_decode($this->GetBuffer("WallboxChanges"), true);
-                    $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
-                
-                    $holdUntil = intval($this->GetBuffer("ChargingHoldUntil"));
-                    $now = time();
-                    $isBlocked = ($holdUntil > $now);
-                
-                    if ($chargingVarID !== false && !$isPending && !$isBlocked) {
-                        SetValue($chargingVarID, $chargingState);
-                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
-                    } elseif ($isBlocked) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                    } elseif ($isPending) {
-                        $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+            foreach ($data['data'] as $key => $value) {
+                $ident = "WB_" . $key;
+                $varID = @$this->GetIDForIdent($ident);
+
+                if ($varID !== false) {
+                    if ($key === 'power') {
+                        // API liefert kW (float) -> wir speichern W (int)
+                        $value = (int)round(((float)$value) * 1000);
+                    }
+
+                    $this->SetValueIfChanged($ident, $value);
+
+                    if ($key === "workstate") {
+                        $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
+
+                        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
+                        $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
+
+                        $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
+                        $now = time();
+                        $isBlocked = ($holdUntil > $now);
+
+                        if (!$isPending && !$isBlocked) {
+                            $this->SetValueIfChanged('WB_Charging', $chargingState);
+                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                        } elseif ($isBlocked) {
+                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
+                        } elseif ($isPending) {
+                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                        }
                     }
                 }
             }
-        }        
 
-        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
@@ -510,8 +630,8 @@ class Goodwe extends IPSModule
 
         $body = http_build_query([
             "account" => $email,
-            "pwd" => $password,
-            "code" => "",
+            "pwd"     => $password,
+            "code"    => "",
         ]);
 
         $ch = curl_init('https://eu.semsportal.com/Home/Login');
@@ -537,23 +657,21 @@ class Goodwe extends IPSModule
     public function StartCharging()
     {
         $serial = $this->ReadPropertyString("WallboxSerial");
-
         if (empty($serial)) {
             $this->SendDebug("StartCharging", "Keine Seriennummer angegeben.", 0);
             return;
         }
 
-        $mode = GetValue($this->GetIDForIdent("ChargingMode")); // Aktuellen Modus auslesen
-
+        $mode = @GetValue($this->GetIDForIdent("ChargingMode")); // Bestandsvariable (alt)
         $requestData = [
-            "sn" => $serial,
-            "mode" => $mode // Den ausgewählten Lade-Modus an die API übergeben
+            "sn"   => $serial,
+            "mode" => $mode
         ];
 
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StartCharging");
         if ($response) {
             $this->SendDebug("StartCharging", "Ladevorgang gestartet mit Modus $mode.", 0);
-            SetValue($this->GetIDForIdent("ChargingState"), true); // Ladezustand auf aktiv setzen
+            $this->SetValueIfChanged("ChargingState", true); // nur falls die alte Variable existiert
         } else {
             $this->SendDebug("StartCharging", "Fehler beim Starten des Ladevorgangs.", 0);
         }
@@ -562,45 +680,41 @@ class Goodwe extends IPSModule
     public function StopCharging()
     {
         $serial = $this->ReadPropertyString("WallboxSerial");
-
         if (empty($serial)) {
             $this->SendDebug("StopCharging", "Keine Seriennummer angegeben.", 0);
             return;
         }
 
-        $requestData = [
-            "sn" => $serial
-        ];
+        $requestData = [ "sn" => $serial ];
 
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StopCharging");
         if ($response) {
             $this->SendDebug("StopCharging", "Ladevorgang gestoppt.", 0);
-            SetValue($this->GetIDForIdent("ChargingState"), false); // Ladezustand auf inaktiv setzen
+            $this->SetValueIfChanged("ChargingState", false); // nur falls die alte Variable existiert
         } else {
             $this->SendDebug("StopCharging", "Fehler beim Stoppen des Ladevorgangs.", 0);
         }
     }
-    
+
     public function SetChargingPower(float $power)
     {
         $serial = $this->ReadPropertyString("WallboxSerial");
-
         if (empty($serial)) {
             $this->SendDebug("SetChargingPower", "Keine Seriennummer angegeben.", 0);
             return;
         }
 
-        $chargePowerKW = round($power / 1000, 1); // Watt in Kilowatt umrechnen
+        $chargePowerKW = round($power / 1000, 1); // Watt -> kW
 
         $requestData = [
-            "sn" => $serial,
+            "sn"           => $serial,
             "charge_power" => $chargePowerKW
         ];
 
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingPower", "Ladeleistung auf {$chargePowerKW} kW gesetzt.", 0);
-            SetValue($this->GetIDForIdent("ChargingPower"), $power);
+            $this->SetValueIfChanged("ChargingPower", (int)$power); // Bestandsvariable (alt)
         } else {
             $this->SendDebug("SetChargingPower", "Fehler beim Setzen der Ladeleistung.", 0);
         }
@@ -609,21 +723,20 @@ class Goodwe extends IPSModule
     public function SetChargingMode(int $mode)
     {
         $serial = $this->ReadPropertyString("WallboxSerial");
-
         if (empty($serial)) {
             $this->SendDebug("SetChargingMode", "Keine Seriennummer angegeben.", 0);
             return;
         }
 
         $requestData = [
-            "sn" => $serial,
+            "sn"   => $serial,
             "mode" => $mode
         ];
 
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
-            SetValue($this->GetIDForIdent("ChargingMode"), $mode);
+            $this->SetValueIfChanged("ChargingMode", (int)$mode); // Bestandsvariable (alt)
         } else {
             $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
         }
@@ -633,58 +746,58 @@ class Goodwe extends IPSModule
     {
         $email = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
-    
+
         if (empty($email) || empty($password)) {
             $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
             return null;
         }
-    
+
         // Login zur Wallbox
         if (!$this->LoginToWallbox($email, $password)) {
             $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
             return null;
         }
-    
+
         $headers = [
             "Content-Type: application/json",
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         ];
-    
+
         $body = json_encode([
             "str" => json_encode([
-                "api" => $endpoint,
+                "api"   => $endpoint,
                 "param" => $data
             ])
         ]);
-    
+
         $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies für Session-Reuse
-    
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-    
+
         if ($httpCode !== 200 || !$response) {
             $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return null;
         }
-    
+
         $decodedResponse = json_decode($response, true);
-    
+
         // API-Erfolgsprüfung
         if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
             return null;
         }
-    
+
         $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decodedResponse), 0);
         return $decodedResponse;
     }
-    
+
     private function LoginToWallbox(string $email, string $password): bool
     {
         $headers = [
@@ -694,7 +807,7 @@ class Goodwe extends IPSModule
 
         $body = http_build_query([
             "account" => $email,
-            "pwd" => $password
+            "pwd"     => $password
         ]);
 
         $ch = curl_init('https://eu.semsportal.com/Home/Login');
@@ -723,39 +836,39 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    public function CalculateMaxPower() //Berechnen der maximal möglichen Leistung des Speichers
+    public function CalculateMaxPower() // Berechnen der maximal möglichen Leistung des Speichers
     {
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
             if ($entladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47904, 0.1);
-                $strom = $this->ReadRegisterValue(47905, 0.1);
+                $strom    = $this->ReadRegisterValue(47905, 0.1);
                 if ($spannung !== null && $strom !== null) {
-                    $leistung = intval($spannung * $strom);
-                    SetValue($entladenID, $leistung);
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen", $leistung);
                     $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
                 }
             }
         }
-    
+
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             $ladenID = @$this->GetIDForIdent("MaxLaden");
             if ($ladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47902, 0.1);
-                $strom = $this->ReadRegisterValue(47903, 0.1);
+                $strom    = $this->ReadRegisterValue(47903, 0.1);
                 if ($spannung !== null && $strom !== null) {
-                    $leistung = intval($spannung * $strom);
-                    SetValue($ladenID, $leistung);
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden", $leistung);
                     $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
                 }
             }
         }
-    }    
+    }
 
-    private function ReadRegisterValue(int $address, float $scale = 1.0) //Auslesen der Register für Zusätzliche Werte
+    private function ReadRegisterValue(int $address, float $scale = 1.0) // Auslesen der Register für zusätzliche Werte
     {
         $quantity = 1; // 1 Register (16 Bit)
-    
+
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 3,
@@ -763,118 +876,115 @@ class Goodwe extends IPSModule
             "Quantity" => $quantity,
             "Data"     => ""
         ]));
-    
+
         if ($response === false || strlen($response) < 4) {
             $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
             return null;
         }
-    
-        $data = unpack("n*", substr($response, 2));
+
+        $data  = unpack("n*", substr($response, 2));
         $value = $data[1];
-    
+
         // Umwandlung für signed S16:
         if ($value & 0x8000) {
             $value = -((~$value & 0xFFFF) + 1);
         }
-    
+
         // Skalierung:
         return $value * $scale;
     }
 
     public function GetConfigurationForm()
     {
-        // Aktuelle Liste der Register abrufen und in der Property aktualisieren
-        $registers = $this->GetRegisters();
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    
-        // Optionen für die Auswahlliste
-        $registerOptions = array_map(function ($register) {
+        $all = $this->GetRegisters();
+
+        // Bisher gespeicherte Auswahl laden
+        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selected)) {
+            $selected = [];
+        }
+
+        // Bereits ausgewählte Adressen herausfinden (tolerant für alte Formate)
+        $selectedMap = [];
+        foreach ($selected as $sr) {
+            if (is_string($sr)) {
+                $tmp = json_decode($sr, true);
+                if (is_array($tmp)) {
+                    $sr = $tmp;
+                }
+            }
+            if (is_array($sr)) {
+                // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
+                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
+                    $tmp = json_decode($sr['address'], true);
+                    if (is_array($tmp) && isset($tmp['address'])) {
+                        $sr['address'] = $tmp['address'];
+                    }
+                }
+
+                if (isset($sr['addr'])) {
+                    $selectedMap[(string)$sr['addr']] = true;
+                } elseif (isset($sr['address'])) {
+                    $selectedMap[(string)$sr['address']] = true;
+                }
+            }
+        }
+
+        // Zeilen für die Liste aufbauen (Checkboxen):
+        $values = array_map(function ($r) use ($selectedMap) {
+            $addr = (string)$r['address'];
             return [
-                "caption" => "{$register['address']} - {$register['name']}",
-                "value" => json_encode($register)
+                "selected"        => isset($selectedMap[$addr]),
+                "addr"            => $addr,          // unsichtbar + gespeichert
+                "address_display" => $addr,          // nur Anzeige
+                "name"            => $r['name'],
             ];
-        }, $registers);
-        
+        }, $all);
+
         return json_encode([
             "elements" => [
                 [
-                    "type"  => "List",
-                    "name"  => "SelectedRegisters",
-                    "caption" => "Ausgewählte Register",
+                    "type"     => "List",
+                    "name"     => "SelectedRegisters",
+                    "caption"  => "Register auswählen (Häkchen setzen)",
                     "rowCount" => 15,
-                    "add" => true,
-                    "delete" => true,
-                    "columns" => [
-                        [
-                            "caption" => "Register auswählen",
-                            "name" => "address",
-                            "width" => "400px",
-                            "add" => json_encode($registers[0] ?? ""),
-                            "edit" => [
-                                "type" => "Select",
-                                "options" => $registerOptions
-                            ]
-                        ]
+                    "add"      => false,
+                    "delete"   => false,
+                    "columns"  => [
+                        [ "caption" => "",          "name" => "addr",             "width" => "0px",  "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
+                        [ "caption" => "Auswählen", "name" => "selected",         "width" => "120px","edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address_display",  "width" => "110px" ],
+                        [ "caption" => "Name",      "name" => "name",             "width" => "auto" ],
                     ],
-                    "values" => $selectedRegisters
+                    "values" => $values
                 ],
                 [
-                    "type"  => "IntervalBox",
-                    "name"  => "PollIntervalWR",
+                    "type"    => "IntervalBox",
+                    "name"    => "PollIntervalWR",
                     "caption" => "Sekunden",
-                    "suffix" => "s"
+                    "suffix"  => "s"
                 ],
                 [
-                    "type" => "ExpansionPanel",
+                    "type"    => "ExpansionPanel",
                     "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items" => [
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxUser",
-                            "caption" => "Benutzername",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxPassword",
-                            "caption" => "Passwort",
-                        ],
-                        [
-                            "type" => "ValidationTextBox",
-                            "name" => "WallboxSerial",
-                            "caption" => "Seriennummer Wallbox",
-                        ],
-                        [
-                            "type"  => "IntervalBox",
-                            "name"  => "PollIntervalWB",
-                            "caption" => "Sekunden",
-                            "suffix" => "s"
-                        ],
-                        [
-                            "type" => "NumberSpinner",
-                            "name" => "ChargePowerOffset",
-                            "caption" => "Soll-Ladeleistung erhöhen",
-                            "suffix" => "W"
-                        ]
+                    "items"   => [
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
+                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
                     ]
                 ],
                 [
-                    "type" => "ExpansionPanel",
+                    "type"    => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
-                    "items" => [
-                        [
-                            "type" => "CheckBox",
-                            "name" => "Entladen_Max",
-                            "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen",
-                        ],
-                        [
-                            "type" => "CheckBox",
-                            "name" => "Laden_Max",
-                            "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen"
-                        ]
-                    ]   
-                ]            
+                    "items"   => [
+                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+                    ]
+                ],
             ],
-            "actions" => [
+             "actions" => [
                 [
                     "type" => "Button",
                     "caption" => "Werte lesen",
@@ -901,7 +1011,7 @@ class Goodwe extends IPSModule
             ]
         ]);
     }
-    
+
     private function GetVariableDetails(string $unit): ?array
     {
         switch ($unit) {
@@ -946,58 +1056,58 @@ class Goodwe extends IPSModule
     {
         if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
             IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0', 'Stoped', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1', 'Auto', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '2', 'Charge-PV', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '3', 'Discharge+PV', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '4', 'Import-AC', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '5', 'Export-AC', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '6', 'Conserve', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '7', 'Off-Grid', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8', 'Battery-Standby', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '9', 'Buy-Power', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '10', 'Sell-Power', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0',  'Stoped',           '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1',  'Auto',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '2',  'Charge-PV',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '3',  'Discharge+PV',     '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '4',  'Import-AC',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '5',  'Export-AC',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '6',  'Conserve',         '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '7',  'Off-Grid',         '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8',  'Battery-Standby',  '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '9',  'Buy-Power',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '10', 'Sell-Power',       '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT',       '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT',    '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_State')){
             IPS_CreateVariableProfile('Goodwe.WB_State', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '2', 'gesteckt und lädt', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt',      '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt',            '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '2', 'gesteckt und lädt',   '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_State', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Mode')){
             IPS_CreateVariableProfile('Goodwe.WB_Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität',   '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
             IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); //Min, Max, Schritt
-            IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0); //Nachkommastellen
-            IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W"); //Präfix, Suffix
+            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); // Min, Max, Schritt
+            IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0);               // Nachkommastellen
+            IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W");          // Präfix, Suffix
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Mode')){
             IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '2', 'entlädt', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie',      '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '2', 'entlädt',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt',                '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden',    '', -1);
             IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Mode', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
             IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang startet', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'Ladevorgang läuft', '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang endet', '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus',                   '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang startet',   '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'Ladevorgang läuft',     '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang endet',     '', -1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
         }
         if (!IPS_VariableProfileExists('Goodwe.Watt')){
@@ -1021,13 +1131,13 @@ class Goodwe extends IPSModule
             IPS_SetVariableProfileValues('Goodwe.Percent', 0, 100, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Percent', 0);
         }
-         if (!IPS_VariableProfileExists('Goodwe.kOhm')){
+        if (!IPS_VariableProfileExists('Goodwe.kOhm')){
             IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileText('Goodwe.kOhm', '', ' KΩ');
             IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
             IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
-        }       
+        }
     }
 
     private function GetWbVariables(): array
@@ -1041,7 +1151,7 @@ class Goodwe extends IPSModule
             ["key" => "workstate", "name" => "Ladestatus", "unit" => "wb_work", "pos" => 7, "active" => true],
             ["key" => "workstatus", "name" => "Work Status", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "lastUpdate", "name" => "Letztes Update", "unit" => "", "pos" => 0, "active" => false],
-            ["key" => "model", "name" => "Modell", "unit" => "", "pos" => 0, "active" => false], 
+            ["key" => "model", "name" => "Modell", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "fireware", "name" => "Firmware", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "last_fireware", "name" => "Letzte Firmware", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "startStatus", "name" => "Start Status", "unit" => "", "pos" => 0, "active" => false],
@@ -1083,70 +1193,99 @@ class Goodwe extends IPSModule
             ["key" => "local_date", "name" => "Lokales Datum", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeSpan", "name" => "Zeitspanne", "unit" => "", "pos" => 0, "active" => false],
             ["key" => "timeZone", "name" => "Zeitzone", "unit" => "", "pos" => 0, "active" => false],
-            ];
+        ];
         return $defaultMapping;
     }
-        
+
     private function GetRegisters()
     {
         return [
-        // Smartmeter
-        ["address" => 36019, "name" => "SM - Leistung PH1", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 15],
-        ["address" => 36021, "name" => "SM - Leistung PH2", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 20],
-        ["address" => 36023, "name" => "SM - Leistung PH3", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 30],
-        ["address" => 36025, "name" => "SM - Leistung gesamt", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 40],
-        // Batterie
-        ["address" => 35182, "name" => "BAT - Leistung", "type" => "S32", "unit" => "W", "scale" => 1, "pos" => 50],
-        ["address" => 35184, "name" => "BAT - Mode", "type" => "U16", "unit" => "mode", "scale" => 1, "pos" => 60],
-        ["address" => 35206, "name" => "BAT - Laden", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 70],
-        ["address" => 35209, "name" => "BAT - Entladen", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 80],
-        ["address" => 37003, "name" => "BAT - Temperatur", "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
-        ["address" => 45356, "name" => "BAT - Min SOC online", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 100],
-        ["address" => 45358, "name" => "BAT - Min SOC offline", "type" => "U16", "unit" => "%", "scale" => 1, "pos" => 110],
-        ["address" => 47511, "name" => "BAT - EMSPowerMode", "type" => "U16", "unit" => "ems", "scale" => 1, "pos" => 120],
-        ["address" => 47512, "name" => "BAT - EMSPowerSet", "type" => "U16", "unit" => "watt_ems", "scale" => 1, "pos" => 130],
-        ["address" => 47902, "name" => "BAT - Laden Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 141],
-        ["address" => 47903, "name" => "BAT - Laden Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 140],
-        ["address" => 47904, "name" => "BAT - Entladen Spannung max", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 151],
-        ["address" => 47905, "name" => "BAT - Entladen Strom max", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 150],
-        ["address" => 47906, "name" => "BAT - Spannung", "type" => "S16", "unit" => "V", "scale" => 0.1, "pos" => 160],
-        ["address" => 47907, "name" => "BAT - Strom", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 170],
-        ["address" => 47908, "name" => "BAT - SOC", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 180],
-        ["address" => 47909, "name" => "BAT - SOH", "type" => "S16", "unit" => "%", "scale" => 1, "pos" => 190],
-        // Wechselrichter
-        ["address" => 35103, "name" => "WR - Spannung String 1", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 200],
-        ["address" => 35104, "name" => "WR - Strom String 1", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 210],
-        ["address" => 35105, "name" => "WR - Leistung String 1", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 220],
-        ["address" => 35107, "name" => "WR - Spannung String 2", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 230],
-        ["address" => 35108, "name" => "WR - Strom String 2", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 240],
-        ["address" => 35109, "name" => "WR - Leistung String 2", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 250],
-        ["address" => 35111, "name" => "WR - Spannung String 3", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 251],
-        ["address" => 35112, "name" => "WR - Strom String 3", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 252],
-        ["address" => 35113, "name" => "WR - Leistung String 3", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 253],
-        ["address" => 35115, "name" => "WR - Spannung String 4", "type" => "U16", "unit" => "V", "scale" => 0.1, "pos" => 254],
-        ["address" => 35116, "name" => "WR - Strom String 4", "type" => "U16", "unit" => "A", "scale" => 0.1, "pos" => 255],
-        ["address" => 35117, "name" => "WR - Leistung String 4", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 256],
-        ["address" => 35174, "name" => "WR - Temperatur", "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
-        ["address" => 35191, "name" => "WR - Erzeugung Gesamt", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 270],
-        ["address" => 35193, "name" => "WR - Erzeugung Tag", "type" => "U32", "unit" => "kWh", "scale" => 0.1, "pos" => 280],
-        ["address" => 35301, "name" => "WR - Leistung Gesamt", "type" => "U32", "unit" => "W", "scale" => 1, "pos" => 290],
-        ["address" => 35337, "name" => "WR - P MPPT1", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 300],
-        ["address" => 35338, "name" => "WR - P MPPT2", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 310],
-        ["address" => 35339, "name" => "WR - P MPPT3", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 320],
-        ["address" => 35340, "name" => "WR - P MPPT4", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 321],
-        ["address" => 35341, "name" => "WR - P MPPT5", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 322],
-        ["address" => 35342, "name" => "WR - P MPPT6", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 323],
-        ["address" => 35343, "name" => "WR - P MPPT7", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 324],
-        ["address" => 35344, "name" => "WR - P MPPT8", "type" => "S16", "unit" => "W", "scale" => 1, "pos" => 325],
-        ["address" => 35345, "name" => "WR - I MPPT1", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 330],
-        ["address" => 35346, "name" => "WR - I MPPT2", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 340],
-        ["address" => 35347, "name" => "WR - I MPPT3", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 350],
-        ["address" => 35348, "name" => "WR - I MPPT4", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 351],
-        ["address" => 35349, "name" => "WR - I MPPT5", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 352],
-        ["address" => 35350, "name" => "WR - I MPPT6", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 353],
-        ["address" => 35351, "name" => "WR - I MPPT7", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 354],
-        ["address" => 35352, "name" => "WR - I MPPT8", "type" => "S16", "unit" => "A", "scale" => 0.1, "pos" => 355],
-        ["address" => 35365, "name" => "WR - Isolationswiderstand", "type" => "U16", "unit" => "KΩ", "scale" => 1, "pos" => 370],
+            // Smartmeter
+            ["address" => 36019, "name" => "SM - Leistung PH1",       "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 15],
+            ["address" => 36021, "name" => "SM - Leistung PH2",       "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 20],
+            ["address" => 36023, "name" => "SM - Leistung PH3",       "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 30],
+            ["address" => 36025, "name" => "SM - Leistung gesamt",    "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 40],
+            // Batterie
+            ["address" => 35182, "name" => "BAT - Leistung",          "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 50],
+            ["address" => 35184, "name" => "BAT - Mode",              "type" => "U16", "unit" => "mode","scale" => 1,  "pos" => 60],
+            ["address" => 35206, "name" => "BAT - Laden",             "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 70],
+            ["address" => 35209, "name" => "BAT - Entladen",          "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 80],
+            ["address" => 37003, "name" => "BAT - Temperatur",        "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 90],
+            ["address" => 45356, "name" => "BAT - Min SOC online",    "type" => "U16", "unit" => "%",  "scale" => 1,   "pos" => 100],
+            ["address" => 45358, "name" => "BAT - Min SOC offline",   "type" => "U16", "unit" => "%",  "scale" => 1,   "pos" => 110],
+            ["address" => 47511, "name" => "BAT - EMSPowerMode",      "type" => "U16", "unit" => "ems","scale" => 1,   "pos" => 120],
+            ["address" => 47512, "name" => "BAT - EMSPowerSet",       "type" => "U16", "unit" => "watt_ems","scale" => 1,"pos" => 130],
+            ["address" => 47902, "name" => "BAT - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 141],
+            ["address" => 47903, "name" => "BAT - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 140],
+            ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 151],
+            ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 150],
+            ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
+            ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
+            ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 180],
+            ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 190],
+            // Wechselrichter
+            ["address" => 35103, "name" => "WR - Spannung String 1",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 200],
+            ["address" => 35104, "name" => "WR - Strom String 1",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 210],
+            ["address" => 35105, "name" => "WR - Leistung String 1",  "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 220],
+            ["address" => 35107, "name" => "WR - Spannung String 2",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 230],
+            ["address" => 35108, "name" => "WR - Strom String 2",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 240],
+            ["address" => 35109, "name" => "WR - Leistung String 2",  "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 250],
+            ["address" => 35111, "name" => "WR - Spannung String 3",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 251],
+            ["address" => 35112, "name" => "WR - Strom String 3",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 252],
+            ["address" => 35113, "name" => "WR - Leistung String 3",  "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 253],
+            ["address" => 35115, "name" => "WR - Spannung String 4",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 254],
+            ["address" => 35116, "name" => "WR - Strom String 4",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 255],
+            ["address" => 35117, "name" => "WR - Leistung String 4",  "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 256],
+            ["address" => 35174, "name" => "WR - Temperatur",         "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 260],
+            ["address" => 35191, "name" => "WR - Erzeugung Gesamt",   "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 270],
+            ["address" => 35193, "name" => "WR - Erzeugung Tag",      "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 280],
+            ["address" => 35301, "name" => "WR - Leistung Gesamt",    "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 290],
+            ["address" => 35337, "name" => "WR - P MPPT1",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 300],
+            ["address" => 35338, "name" => "WR - P MPPT2",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 310],
+            ["address" => 35339, "name" => "WR - P MPPT3",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 320],
+            ["address" => 35340, "name" => "WR - P MPPT4",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 321],
+            ["address" => 35341, "name" => "WR - P MPPT5",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 322],
+            ["address" => 35342, "name" => "WR - P MPPT6",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 323],
+            ["address" => 35343, "name" => "WR - P MPPT7",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 324],
+            ["address" => 35344, "name" => "WR - P MPPT8",            "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 325],
+            ["address" => 35345, "name" => "WR - I MPPT1",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 330],
+            ["address" => 35346, "name" => "WR - I MPPT2",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 340],
+            ["address" => 35347, "name" => "WR - I MPPT3",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 350],
+            ["address" => 35348, "name" => "WR - I MPPT4",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 351],
+            ["address" => 35349, "name" => "WR - I MPPT5",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 352],
+            ["address" => 35350, "name" => "WR - I MPPT6",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 353],
+            ["address" => 35351, "name" => "WR - I MPPT7",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 354],
+            ["address" => 35352, "name" => "WR - I MPPT8",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 355],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ","scale" => 1,   "pos" => 370],
         ];
+    }
+
+    private function SetValueIfChanged(string $ident, $value): void
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === false) {
+            return;
+        }
+
+        $var = IPS_GetVariable($vid);
+        switch ($var['VariableType']) {
+            case VARIABLETYPE_BOOLEAN:
+                $new = (bool)$value;
+                break;
+            case VARIABLETYPE_INTEGER:
+                $new = (int)$value;
+                break;
+            case VARIABLETYPE_FLOAT:
+                $new = (float)$value;
+                break;
+            case VARIABLETYPE_STRING:
+            default:
+                $new = (string)$value;
+                break;
+        }
+
+        if (GetValue($vid) !== $new) {
+            SetValue($vid, $new);
+        }
     }
 }
