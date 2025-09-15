@@ -340,13 +340,14 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // Masterindex
+        // Masterindex zum Vervollständigen/Fixen von Feldern
         $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         foreach ($selectedRegisters as &$r) {
+            // Altformat: komplette Zeile als JSON-String?
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
                 if (is_array($tmp)) {
@@ -357,26 +358,31 @@ class Goodwe extends IPSModule
                 }
             }
 
+            // Checkbox-basierte Auswahl (neues Format)
             if (isset($r['selected']) && !$r['selected']) {
                 continue;
             }
 
+            // Fallback Altname: 'addr' -> 'address'
             if (!isset($r['address']) && isset($r['addr'])) {
                 $r['address'] = $r['addr'];
             }
 
+            // Altes Format: JSON in 'address' -> dekodieren und DECODED gewinnt (überschreibt)
             if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
                 $decoded = json_decode($r['address'], true);
                 if (is_array($decoded)) {
-                    $r = array_replace($r, $decoded); // decoded gewinnt
+                    $r = array_replace($r, $decoded);
                 }
             }
 
+            // Ohne Adresse geht's nicht
             if (!isset($r['address'])) {
                 $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                 continue;
             }
 
+            // Mit Master vervollständigen (Masterwerte zuerst, dann vom Benutzer/Altformat überschreiben)
             $addrKey = (string)$r['address'];
             if (isset($masterIndex[$addrKey])) {
                 $r = array_merge($masterIndex[$addrKey], $r);
@@ -385,8 +391,8 @@ class Goodwe extends IPSModule
                 continue;
             }
 
-            // Pflichtfelder
-            foreach (['address','type','scale'] as $need) {
+            // Pflichtfelder prüfen
+            foreach (['address', 'type', 'scale'] as $need) {
                 if (!array_key_exists($need, $r)) {
                     $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
                     continue 2;
@@ -397,6 +403,7 @@ class Goodwe extends IPSModule
             $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
 
             try {
+                // Modbus lesen
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
@@ -427,32 +434,70 @@ class Goodwe extends IPSModule
                         $combined = ($data[1] << 16) | $data[2];
                         $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
+                    default:
+                        $this->SendDebug("RequestRead", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        continue 2;
                 }
 
-                if ((float)$r['scale'] == 0.0) {
-                    $this->SendDebug("RequestRead", "Scale = 0 (Division/Multiplikation nicht möglich) für {$r['address']}", 0);
+                // Scale prüfen
+                $scale = (float)$r['scale'];
+                if ($scale == 0.0) {
+                    $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
-                $scaledValue = $value * (float)$r['scale'];
+                // Skalierten Wert bilden
+                $scaledValue = $value * $scale;
 
+                // Zielvariable holen
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
                     $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
 
-                if (GetValue($varID) !== $scaledValue) {
-                    SetValue($varID, $scaledValue);
+                // Typgerechte Normalisierung, damit strikter Vergleich funktioniert
+                $var = IPS_GetVariable($varID);
+                switch ($var['VariableType']) {
+                    case VARIABLETYPE_INTEGER:
+                        // Immer sauber auf int runden/casten (verhindert int/float-Mismatch)
+                        $scaledValue = (int)round($scaledValue);
+                        break;
+
+                    case VARIABLETYPE_FLOAT:
+                        // Nachkommastellen aus Scale ableiten (0.1 => 1, 0.25 => 2, 1 => 0)
+                        $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
+                        $dotPos   = strpos($scaleStr, '.');
+                        $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
+                        $scaledValue = round((float)$scaledValue, $decimals);
+                        break;
+
+                    case VARIABLETYPE_STRING:
+                        $scaledValue = (string)$scaledValue;
+                        break;
+
+                    case VARIABLETYPE_BOOLEAN:
+                        // Falls je benötigt: alles != 0 wird true
+                        $scaledValue = ((int)round($scaledValue)) !== 0;
+                        break;
                 }
 
-                $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}): $scaledValue", 0);
+                // Nur setzen, wenn sich der (typgleiche) Wert geändert hat
+                $current = GetValue($varID);
+                if ($current !== $scaledValue) {
+                    SetValue($varID, $scaledValue);
+                    $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
+                } else {
+                    // Kein Log-Spam bei jedem Poll
+                    //$this->SendDebug("RequestRead", "Wert unverändert für {$r['address']} ({$r['name']}): $scaledValue", 0);
+                }
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
                 $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
 
+        // Zusatzberechnungen (optional)
         $this->CalculateMaxPower();
     }
 
