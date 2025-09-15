@@ -1015,7 +1015,7 @@ class Goodwe extends IPSModule
                         ]
                     ]
                 ]
-            ]
+            
         ]);
     }
 
