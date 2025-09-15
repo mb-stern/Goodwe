@@ -994,10 +994,13 @@ class Goodwe extends IPSModule
                     ]
                 ],
             ],
-            "actions" => [
-                [ "type" => "Button", "caption" => "Werte lesen", "onClick" => 'Goodwe_FetchAll($id);' ]
-            ],
-                            [
+             "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Werte lesen",
+                    "onClick" => 'Goodwe_FetchAll($id);'
+                ],
+                [
                     "type" => "Label",
                     "caption" => "Sag danke und unterstütze den Modulentwickler:"
                 ],
@@ -1015,6 +1018,7 @@ class Goodwe extends IPSModule
                         ]
                     ]
                 ]
+            ]
         ]);
     }
 
