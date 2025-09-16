@@ -946,7 +946,7 @@ class Goodwe extends IPSModule
                 [
                     "type"     => "List",
                     "name"     => "SelectedRegisters",
-                    "caption"  => "Register auswählen (Häkchen setzen)",
+                    "caption"  => "Register auswählen",
                     "rowCount" => 15,
                     "add"      => false,
                     "delete"   => false,
@@ -1010,6 +1010,35 @@ class Goodwe extends IPSModule
                 ]
             ]
         ]);
+    }
+
+        private function SetValueIfChanged(string $ident, $value): void
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === false) {
+            return;
+        }
+
+        $var = IPS_GetVariable($vid);
+        switch ($var['VariableType']) {
+            case VARIABLETYPE_BOOLEAN:
+                $new = (bool)$value;
+                break;
+            case VARIABLETYPE_INTEGER:
+                $new = (int)$value;
+                break;
+            case VARIABLETYPE_FLOAT:
+                $new = (float)$value;
+                break;
+            case VARIABLETYPE_STRING:
+            default:
+                $new = (string)$value;
+                break;
+        }
+
+        if (GetValue($vid) !== $new) {
+            SetValue($vid, $new);
+        }
     }
 
     private function GetVariableDetails(string $unit): ?array
@@ -1258,34 +1287,5 @@ class Goodwe extends IPSModule
             ["address" => 35352, "name" => "WR - I MPPT8",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 355],
             ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ","scale" => 1,   "pos" => 370],
         ];
-    }
-
-    private function SetValueIfChanged(string $ident, $value): void
-    {
-        $vid = @$this->GetIDForIdent($ident);
-        if ($vid === false) {
-            return;
-        }
-
-        $var = IPS_GetVariable($vid);
-        switch ($var['VariableType']) {
-            case VARIABLETYPE_BOOLEAN:
-                $new = (bool)$value;
-                break;
-            case VARIABLETYPE_INTEGER:
-                $new = (int)$value;
-                break;
-            case VARIABLETYPE_FLOAT:
-                $new = (float)$value;
-                break;
-            case VARIABLETYPE_STRING:
-            default:
-                $new = (string)$value;
-                break;
-        }
-
-        if (GetValue($vid) !== $new) {
-            SetValue($vid, $new);
-        }
     }
 }
