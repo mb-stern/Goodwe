@@ -605,6 +605,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -640,6 +641,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -776,6 +778,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies für Session-Reuse
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -816,6 +819,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
