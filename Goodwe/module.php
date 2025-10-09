@@ -119,40 +119,33 @@ class Goodwe extends IPSModule
             }
         }
 
-        // -------- 2) Register: robustes Anlegen + Aufräumen (Checkbox-Ansicht) --------
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
 
-        // Masterindex: liefert fehlende Felder nach
-        $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as &$r) {
-                // Altbestand: kompletter JSON-String als Zeile?
                 if (is_string($r)) {
                     $tmp = json_decode($r, true);
                     if (is_array($tmp)) {
-                        $r = $tmp; // jetzt als Array weiterverarbeiten
+                        $r = $tmp;
                     } else {
                         $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                         continue;
                     }
                 }
 
-                // Checkbox (neues Format): nur ausgewählte Zeilen
                 if (isset($r['selected']) && !$r['selected']) {
                     continue;
                 }
 
-                // Fallback: 'addr' -> 'address' (neues Format speichert addr unsichtbar)
                 if (!isset($r['address']) && isset($r['addr'])) {
                     $r['address'] = $r['addr'];
                 }
 
-                // Altes Format: JSON in 'address' -> decoded überschreibt
                 if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
                     $decoded = json_decode($r['address'], true);
                     if (is_array($decoded)) {
@@ -160,7 +153,6 @@ class Goodwe extends IPSModule
                     }
                 }
 
-                // Aus Master vervollständigen
                 if (!isset($r['address'])) {
                     $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                     continue;
@@ -173,7 +165,6 @@ class Goodwe extends IPSModule
                     continue;
                 }
 
-                // Pflichtfelder vorhanden?
                 foreach (['address','name','type','unit','scale','pos'] as $need) {
                     if (!array_key_exists($need, $r)) {
                         $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
@@ -181,7 +172,6 @@ class Goodwe extends IPSModule
                     }
                 }
 
-                // Profil/Typ zur Einheit
                 $details = $this->GetVariableDetails((string)$r['unit']);
                 if ($details === null) {
                     $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
@@ -210,7 +200,6 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // ggf. Schreib-Aktionen aktivieren (nur wenn die Variablen existieren)
             foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
                 if (@$this->GetIDForIdent($writeIdent)) {
                     $this->EnableAction($writeIdent);
@@ -218,7 +207,6 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Nicht mehr benötigte Register-Variablen entfernen
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $obj = IPS_GetObject($childID);
             if (strpos($obj['ObjectIdent'], 'Addr') === 0 && !in_array($obj['ObjectIdent'], $registerCurrentIdents)) {
@@ -227,7 +215,6 @@ class Goodwe extends IPSModule
             }
         }
 
-        // 3) Max-Entladen-Variable für Speicher anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
@@ -239,7 +226,6 @@ class Goodwe extends IPSModule
             }
         }
 
-        // 4) Max-Laden-Variable für Speicher anlegen oder löschen:
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
                 $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
