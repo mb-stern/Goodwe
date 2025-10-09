@@ -283,7 +283,6 @@ class Goodwe extends IPSModule
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700); // Begrenzung
 
-                // zuerst Variablen mit korrigiertem Wert setzen
                 $this->SetValueIfChanged($ident, $val);
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
@@ -312,7 +311,6 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // Parent prüfen
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
             $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
@@ -326,7 +324,6 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // Masterindex zum Vervollständigen/Fixen von Feldern
         $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
@@ -382,7 +379,6 @@ class Goodwe extends IPSModule
             $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
 
             try {
-                // Modbus lesen
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
@@ -418,33 +414,27 @@ class Goodwe extends IPSModule
                         continue 2;
                 }
 
-                // Scale prüfen
                 $scale = (float)$r['scale'];
                 if ($scale == 0.0) {
                     $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
-                // Skalierten Wert bilden
                 $scaledValue = $value * $scale;
 
-                // Zielvariable holen
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
                     $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
 
-                // Typgerechte Normalisierung, damit strikter Vergleich funktioniert
                 $var = IPS_GetVariable($varID);
                 switch ($var['VariableType']) {
                     case VARIABLETYPE_INTEGER:
-                        // Immer sauber auf int runden/casten (verhindert int/float-Mismatch)
                         $scaledValue = (int)round($scaledValue);
                         break;
 
                     case VARIABLETYPE_FLOAT:
-                        // Nachkommastellen aus Scale ableiten (0.1 => 1, 0.25 => 2, 1 => 0)
                         $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
                         $dotPos   = strpos($scaleStr, '.');
                         $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
@@ -456,12 +446,10 @@ class Goodwe extends IPSModule
                         break;
 
                     case VARIABLETYPE_BOOLEAN:
-                        // Falls je benötigt: alles != 0 wird true
                         $scaledValue = ((int)round($scaledValue)) !== 0;
                         break;
                 }
 
-                // Nur setzen, wenn sich der (typgleiche) Wert geändert hat
                 $current = GetValue($varID);
                 if ($current !== $scaledValue) {
                     SetValue($varID, $scaledValue);
