@@ -611,8 +611,8 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -635,7 +635,7 @@ class Goodwe extends IPSModule
             return;
         }
 
-        $mode = @GetValue($this->GetIDForIdent("ChargingMode")); // Bestandsvariable (alt)
+        $mode = @GetValue($this->GetIDForIdent("ChargingMode"));
         $requestData = [
             "sn"   => $serial,
             "mode" => $mode
@@ -644,7 +644,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StartCharging");
         if ($response) {
             $this->SendDebug("StartCharging", "Ladevorgang gestartet mit Modus $mode.", 0);
-            $this->SetValueIfChanged("ChargingState", true); // nur falls die alte Variable existiert
+            $this->SetValueIfChanged("ChargingState", true);
         } else {
             $this->SendDebug("StartCharging", "Fehler beim Starten des Ladevorgangs.", 0);
         }
@@ -663,7 +663,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StopCharging");
         if ($response) {
             $this->SendDebug("StopCharging", "Ladevorgang gestoppt.", 0);
-            $this->SetValueIfChanged("ChargingState", false); // nur falls die alte Variable existiert
+            $this->SetValueIfChanged("ChargingState", false);
         } else {
             $this->SendDebug("StopCharging", "Fehler beim Stoppen des Ladevorgangs.", 0);
         }
@@ -677,7 +677,7 @@ class Goodwe extends IPSModule
             return;
         }
 
-        $chargePowerKW = round($power / 1000, 1); // Watt -> kW
+        $chargePowerKW = round($power / 1000, 1);
 
         $requestData = [
             "sn"           => $serial,
@@ -687,7 +687,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingPower", "Ladeleistung auf {$chargePowerKW} kW gesetzt.", 0);
-            $this->SetValueIfChanged("ChargingPower", (int)$power); // Bestandsvariable (alt)
+            $this->SetValueIfChanged("ChargingPower", (int)$power);
         } else {
             $this->SendDebug("SetChargingPower", "Fehler beim Setzen der Ladeleistung.", 0);
         }
@@ -709,7 +709,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
-            $this->SetValueIfChanged("ChargingMode", (int)$mode); // Bestandsvariable (alt)
+            $this->SetValueIfChanged("ChargingMode", (int)$mode);
         } else {
             $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
         }
@@ -748,8 +748,8 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies für Session-Reuse
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -762,7 +762,6 @@ class Goodwe extends IPSModule
 
         $decodedResponse = json_decode($response, true);
 
-        // API-Erfolgsprüfung
         if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
             return null;
@@ -789,8 +788,8 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt'); // Cookies speichern
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -811,7 +810,7 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    public function CalculateMaxPower() // Berechnen der maximal möglichen Leistung des Speichers
+    public function CalculateMaxPower()
     {
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
@@ -840,9 +839,9 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function ReadRegisterValue(int $address, float $scale = 1.0) // Auslesen der Register für zusätzliche Werte
+    private function ReadRegisterValue(int $address, float $scale = 1.0)
     {
-        $quantity = 1; // 1 Register (16 Bit)
+        $quantity = 1;
 
         $response = $this->SendDataToParent(json_encode([
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
@@ -860,12 +859,10 @@ class Goodwe extends IPSModule
         $data  = unpack("n*", substr($response, 2));
         $value = $data[1];
 
-        // Umwandlung für signed S16:
         if ($value & 0x8000) {
             $value = -((~$value & 0xFFFF) + 1);
         }
 
-        // Skalierung:
         return $value * $scale;
     }
 
@@ -873,13 +870,11 @@ class Goodwe extends IPSModule
     {
         $all = $this->GetRegisters();
 
-        // Bisher gespeicherte Auswahl laden
         $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selected)) {
             $selected = [];
         }
 
-        // Bereits ausgewählte Adressen herausfinden (tolerant für alte Formate)
         $selectedMap = [];
         foreach ($selected as $sr) {
             if (is_string($sr)) {
@@ -889,7 +884,6 @@ class Goodwe extends IPSModule
                 }
             }
             if (is_array($sr)) {
-                // Manche alten Einträge hatten in 'address' wieder ein JSON-Objekt als String
                 if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
                     $tmp = json_decode($sr['address'], true);
                     if (is_array($tmp) && isset($tmp['address'])) {
@@ -905,13 +899,12 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Zeilen für die Liste aufbauen (Checkboxen):
         $values = array_map(function ($r) use ($selectedMap) {
             $addr = (string)$r['address'];
             return [
                 "selected"        => isset($selectedMap[$addr]),
-                "addr"            => $addr,          // unsichtbar + gespeichert
-                "address_display" => $addr,          // nur Anzeige
+                "addr"            => $addr,      
+                "address_display" => $addr,     
                 "name"            => $r['name'],
             ];
         }, $all);
