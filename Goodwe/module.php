@@ -467,9 +467,8 @@ class Goodwe extends IPSModule
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // Daten für die Modbus-Kommunikation vorbereiten
         $data = [
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}", // Modbus Gateway GUID
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
             "Quantity" => 1, // 1 Register (16-Bit)
@@ -502,7 +501,6 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
         try {
-            // Login und Datenabruf
             $loginResponse = $this->GoodweLogin($user, $password);
             if (!$loginResponse) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
@@ -527,14 +525,13 @@ class Goodwe extends IPSModule
 
                 if ($varID !== false) {
                     if ($key === 'power') {
-                        // API liefert kW (float) -> wir speichern W (int)
                         $value = (int)round(((float)$value) * 1000);
                     }
 
                     $this->SetValueIfChanged($ident, $value);
 
                     if ($key === "workstate") {
-                        $chargingState = ($value !== 0); // true = lädt, false = lädt nicht
+                        $chargingState = ($value !== 0);
 
                         $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
                         $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
@@ -578,8 +575,8 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt'); // Cookies wiederverwenden
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // <<--- Timeout
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
