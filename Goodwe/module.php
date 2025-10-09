@@ -1045,7 +1045,7 @@ class Goodwe extends IPSModule
             case "String":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
-                return null; // Kein bekanntes Profil oder Typ
+                return null;
         }
     }
 
