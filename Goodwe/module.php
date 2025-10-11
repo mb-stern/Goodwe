@@ -304,14 +304,16 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        // Nicht-blockierender Reentrancy-Guard (0 ms Timeout)
-        $sem = __CLASS__ . '_WR_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($sem, 0)) {
-            $this->SendDebug(__FUNCTION__, 'Übersprungen (bereits in Ausführung).', 0);
+        // --- superleichtes Reentrancy-Guard, 0 Wartezeit ---
+        if ($this->GetBuffer('WR_BUSY') === '1') {
+            $this->SendDebug(__FUNCTION__, 'Übersprungen (läuft noch).', 0);
             return;
         }
+        $this->SetBuffer('WR_BUSY', '1');
 
         try {
+            $this->SendDebug(__FUNCTION__, 'Timer-Tick gestartet.', 0);
+
             $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
             if (!is_array($selectedRegisters)) {
                 $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
@@ -440,18 +442,15 @@ class Goodwe extends IPSModule
                         case VARIABLETYPE_INTEGER:
                             $scaledValue = (int)round($scaledValue);
                             break;
-
                         case VARIABLETYPE_FLOAT:
                             $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
                             $dotPos   = strpos($scaleStr, '.');
                             $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
                             $scaledValue = round((float)$scaledValue, $decimals);
                             break;
-
                         case VARIABLETYPE_STRING:
                             $scaledValue = (string)$scaledValue;
                             break;
-
                         case VARIABLETYPE_BOOLEAN:
                             $scaledValue = ((int)round($scaledValue)) !== 0;
                             break;
@@ -460,7 +459,7 @@ class Goodwe extends IPSModule
                     $current = GetValue($varID);
                     if ($current !== $scaledValue) {
                         SetValue($varID, $scaledValue);
-                        $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
+                        $this->SendDebug("RequestRead", "Wert {$r['name']} ({$r['address']}): $current -> $scaledValue", 0);
                     }
                 } catch (Exception $e) {
                     $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
@@ -469,8 +468,13 @@ class Goodwe extends IPSModule
             }
 
             $this->CalculateMaxPower();
-        } finally {
-            IPS_SemaphoreLeave($sem);
+        }
+        finally {
+            // Busy-Flag freigeben
+            $this->SetBuffer('WR_BUSY', '0');
+            // Timer sicherstellen (keine Wartezeit, nur re-arming)
+            $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
+            $this->SendDebug(__FUNCTION__, 'Timer-Tick beendet.', 0);
         }
     }
 
