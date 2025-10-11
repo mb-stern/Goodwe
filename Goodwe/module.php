@@ -304,33 +304,14 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        // --- Reentrancy-Guard (ohne Warten) ---
-        $flagKey = 'WR_busy';
-        $tsKey   = 'WR_busy_ts';
-        $intervalSec = max(1, (int)$this->ReadPropertyInteger('PollIntervalWR'));
-        $staleAfter  = max(5, $intervalSec * 3); // nur Watchdog, KEIN Warten
-
-        $busy = $this->GetBuffer($flagKey);
-        $ts   = (int)$this->GetBuffer($tsKey);
-
-        // Watchdog: hängt der vorherige Lauf zu lange? -> freigeben
-        if ($busy === '1' && $ts > 0 && (time() - $ts) > $staleAfter) {
-            $this->SendDebug(__FUNCTION__, "Busy-Flag war stale, wird zurückgesetzt.", 0);
-            $busy = '0';
-        }
-
-        if ($busy === '1') {
-            // sofortiger Early-Return, KEINE Verzögerung
-            $this->SendDebug(__FUNCTION__, "Übersprungen: bereits in Ausführung.", 0);
+        // Nicht-blockierender Reentrancy-Guard (0 ms Timeout)
+        $sem = __CLASS__ . '_WR_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($sem, 0)) {
+            $this->SendDebug(__FUNCTION__, 'Übersprungen (bereits in Ausführung).', 0);
             return;
         }
 
-        // Lauf markieren
-        $this->SetBuffer($flagKey, '1');
-        $this->SetBuffer($tsKey, (string)time());
-
         try {
-            // --------- ab hier dein bestehender Code ---------
             $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
             if (!is_array($selectedRegisters)) {
                 $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
@@ -480,8 +461,6 @@ class Goodwe extends IPSModule
                     if ($current !== $scaledValue) {
                         SetValue($varID, $scaledValue);
                         $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
-                    } else {
-                        // unverändert
                     }
                 } catch (Exception $e) {
                     $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
@@ -490,11 +469,8 @@ class Goodwe extends IPSModule
             }
 
             $this->CalculateMaxPower();
-            // --------- Ende deines bestehenden Codes ----------
         } finally {
-            // Cleanup ohne Verzögerung
-            $this->SetBuffer($flagKey, '0');
-            $this->SetBuffer($tsKey, (string)time());
+            IPS_SemaphoreLeave($sem);
         }
     }
 
