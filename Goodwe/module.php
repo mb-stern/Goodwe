@@ -17,7 +17,6 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWB", 0);
         $this->RegisterPropertyInteger("PollIntervalWR", 5);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
-        $this->RegisterAttributeInteger('RunGen', 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
@@ -28,8 +27,6 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        $this->WriteAttributeInteger('RunGen', $this->ReadAttributeInteger('RunGen') + 1);
 
         $this->CreateProfile();
 
@@ -298,35 +295,6 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function runLockedSmart(string $tag, int $intervalMs, callable $fn): void
-    {
-        // $_IPS ist in Methoden nicht automatisch sichtbar:
-        global $_IPS;
-
-        $sem = get_class($this) . '_' . $tag . '_' . $this->InstanceID;
-
-        // Timer-Call sicher erkennen
-        $isTimerCall = isset($_IPS['SENDER']) && $_IPS['SENDER'] === 'TimerEvent'
-                    && isset($_IPS['TARGET']) && (int)$_IPS['TARGET'] === (int)$this->InstanceID;
-
-        // Timer wartet nie (vermeidet Stau); manuelle Aufrufe warten kurz auf Freigabe
-        $timeout = $isTimerCall ? 0 : max(1, $intervalMs + 500);
-
-        if (!IPS_SemaphoreEnter($sem, $timeout)) {
-            $this->SendDebug($tag, ($isTimerCall ? 'Timer übersprungen' : 'Manueller Aufruf abgebrochen') . ' (Lock belegt).', 0);
-            return;
-        }
-
-        try {
-            $fn();
-        } catch (Throwable $e) {
-            $this->SendDebug($tag, 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe/' . $tag . ': ' . $e->getMessage());
-        } finally {
-            IPS_SemaphoreLeave($sem);
-        }
-    }
-
     public function FetchAll()
     {
         $this->FetchWallboxData();
@@ -336,168 +304,186 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-        $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->runLockedSmart('WR', $intervalMs, function () 
-        {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
+        $sem = __CLASS__ . '_WR_' . $this->InstanceID;
+
+        // Wenn bereits ein Lauf aktiv ist: sofort überspringen (kein Warten).
+        if (!IPS_SemaphoreEnter($sem, 0)) {
+            $this->SendDebug('FetchInverterData', 'Übersprungen: bereits in Ausführung.', 0);
             return;
         }
 
-        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-        if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
-            $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
-            return;
-        }
-        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
-        if ($parentStatus !== IS_ACTIVE) {
-            $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
-            return;
-        }
+        // Status signalisieren
+        $this->SetBuffer('WR_running', '1');
+        $this->SetBuffer('WR_started', (string)time());
 
-        $masterIndex = [];
-        foreach ($this->GetRegisters() as $mr) {
-            $masterIndex[(string)$mr['address']] = $mr;
-        }
+        try {
+            $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+            if (!is_array($selectedRegisters)) {
+                $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
+                return;
+            }
 
-        foreach ($selectedRegisters as &$r) {
-            if (is_string($r)) {
-                $tmp = json_decode($r, true);
-                if (is_array($tmp)) {
-                    $r = $tmp;
+            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+            if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
+                $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
+                $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+                return;
+            }
+            $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
+            if ($parentStatus !== IS_ACTIVE) {
+                $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+                $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
+                return;
+            }
+
+            $masterIndex = [];
+            foreach ($this->GetRegisters() as $mr) {
+                $masterIndex[(string)$mr['address']] = $mr;
+            }
+
+            foreach ($selectedRegisters as &$r) {
+                if (is_string($r)) {
+                    $tmp = json_decode($r, true);
+                    if (is_array($tmp)) {
+                        $r = $tmp;
+                    } else {
+                        $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+                        continue;
+                    }
+                }
+
+                if (isset($r['selected']) && !$r['selected']) {
+                    continue;
+                }
+
+                if (!isset($r['address']) && isset($r['addr'])) {
+                    $r['address'] = $r['addr'];
+                }
+
+                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                    $decoded = json_decode($r['address'], true);
+                    if (is_array($decoded)) {
+                        $r = array_replace($r, $decoded);
+                    }
+                }
+
+                if (!isset($r['address'])) {
+                    $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
+                    continue;
+                }
+
+                $addrKey = (string)$r['address'];
+                if (isset($masterIndex[$addrKey])) {
+                    $r = array_merge($masterIndex[$addrKey], $r);
                 } else {
-                    $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                    continue;
-                }
-            }
-
-            if (isset($r['selected']) && !$r['selected']) {
-                continue;
-            }
-
-            if (!isset($r['address']) && isset($r['addr'])) {
-                $r['address'] = $r['addr'];
-            }
-
-            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                $decoded = json_decode($r['address'], true);
-                if (is_array($decoded)) {
-                    $r = array_replace($r, $decoded);
-                }
-            }
-
-            if (!isset($r['address'])) {
-                $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
-                continue;
-            }
-
-            $addrKey = (string)$r['address'];
-            if (isset($masterIndex[$addrKey])) {
-                $r = array_merge($masterIndex[$addrKey], $r);
-            } else {
-                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
-                continue;
-            }
-
-            foreach (['address', 'type', 'scale'] as $need) {
-                if (!array_key_exists($need, $r)) {
-                    $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
-                    continue 2;
-                }
-            }
-
-            $ident    = "Addr" . $addrKey;
-            $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
-
-            try {
-                $response = $this->SendDataToParent(json_encode([
-                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                    "Function" => 3,
-                    "Address"  => (int)$r['address'],
-                    "Quantity" => $quantity,
-                    "Data"     => ""
-                ]));
-
-                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
+                    $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                     continue;
                 }
 
-                $data  = unpack("n*", substr($response, 2));
-                $value = 0;
-
-                switch ($r['type']) {
-                    case "U16":
-                        $value = $data[1];
-                        break;
-                    case "S16":
-                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-                        break;
-                    case "U32":
-                        $value = ($data[1] << 16) | $data[2];
-                        break;
-                    case "S32":
-                        $combined = ($data[1] << 16) | $data[2];
-                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
-                        break;
-                    default:
-                        $this->SendDebug("RequestRead", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                foreach (['address', 'type', 'scale'] as $need) {
+                    if (!array_key_exists($need, $r)) {
+                        $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
                         continue 2;
+                    }
                 }
 
-                $scale = (float)$r['scale'];
-                if ($scale == 0.0) {
-                    $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
-                    continue;
+                $ident    = "Addr" . $addrKey;
+                $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
+
+                try {
+                    $response = $this->SendDataToParent(json_encode([
+                        "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                        "Function" => 3,
+                        "Address"  => (int)$r['address'],
+                        "Quantity" => $quantity,
+                        "Data"     => ""
+                    ]));
+
+                    if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                        $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
+                        continue;
+                    }
+
+                    $data  = unpack("n*", substr($response, 2));
+                    $value = 0;
+
+                    switch ($r['type']) {
+                        case "U16":
+                            $value = $data[1];
+                            break;
+                        case "S16":
+                            $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                            break;
+                        case "U32":
+                            $value = ($data[1] << 16) | $data[2];
+                            break;
+                        case "S32":
+                            $combined = ($data[1] << 16) | $data[2];
+                            $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                            break;
+                        default:
+                            $this->SendDebug("RequestRead", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                            continue 2;
+                    }
+
+                    $scale = (float)$r['scale'];
+                    if ($scale == 0.0) {
+                        $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
+                        continue;
+                    }
+
+                    $scaledValue = $value * $scale;
+
+                    $varID = @$this->GetIDForIdent($ident);
+                    if ($varID === false) {
+                        $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
+                        continue;
+                    }
+
+                    $var = IPS_GetVariable($varID);
+                    switch ($var['VariableType']) {
+                        case VARIABLETYPE_INTEGER:
+                            $scaledValue = (int)round($scaledValue);
+                            break;
+
+                        case VARIABLETYPE_FLOAT:
+                            $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
+                            $dotPos   = strpos($scaleStr, '.');
+                            $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
+                            $scaledValue = round((float)$scaledValue, $decimals);
+                            break;
+
+                        case VARIABLETYPE_STRING:
+                            $scaledValue = (string)$scaledValue;
+                            break;
+
+                        case VARIABLETYPE_BOOLEAN:
+                            $scaledValue = ((int)round($scaledValue)) !== 0;
+                            break;
+                    }
+
+                    $current = GetValue($varID);
+                    if ($current !== $scaledValue) {
+                        SetValue($varID, $scaledValue);
+                        $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
+                    }
+                } catch (Exception $e) {
+                    $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
+                    $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
                 }
-
-                $scaledValue = $value * $scale;
-
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
-                    continue;
-                }
-
-                $var = IPS_GetVariable($varID);
-                switch ($var['VariableType']) {
-                    case VARIABLETYPE_INTEGER:
-                        $scaledValue = (int)round($scaledValue);
-                        break;
-
-                    case VARIABLETYPE_FLOAT:
-                        $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
-                        $dotPos   = strpos($scaleStr, '.');
-                        $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
-                        $scaledValue = round((float)$scaledValue, $decimals);
-                        break;
-
-                    case VARIABLETYPE_STRING:
-                        $scaledValue = (string)$scaledValue;
-                        break;
-
-                    case VARIABLETYPE_BOOLEAN:
-                        $scaledValue = ((int)round($scaledValue)) !== 0;
-                        break;
-                }
-
-                $current = GetValue($varID);
-                if ($current !== $scaledValue) {
-                    SetValue($varID, $scaledValue);
-                    $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
-                } else {
-                }
-            } catch (Exception $e) {
-                $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
-                $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
-        }
 
-        $this->CalculateMaxPower();
-        });
+            $this->CalculateMaxPower();
+
+        } catch (Throwable $e) {
+            $this->SendDebug('FetchInverterData', 'Fehler: ' . $e->getMessage(), 0);
+            $this->LogMessage('Goodwe/FetchInverterData: ' . $e->getMessage());
+        } finally {
+            // Status „fertig“ setzen und Sperre freigeben
+            $this->SetBuffer('WR_running', '0');
+            $this->SetBuffer('WR_finished', (string)time());
+            IPS_SemaphoreLeave($sem);
+        }
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -524,77 +510,96 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWB') * 1000);
-        $this->runLockedSmart('WB', $intervalMs, function () 
-        {
-        $user = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
+        $sem = __CLASS__ . '_WB_' . $this->InstanceID;
 
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        // Wenn bereits ein Lauf aktiv ist: sofort überspringen (kein Warten).
+        if (!IPS_SemaphoreEnter($sem, 0)) {
+            $this->SendDebug('FetchWallboxData', 'Übersprungen: bereits in Ausführung.', 0);
             return;
         }
 
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+        // Status signalisieren
+        $this->SetBuffer('WB_running', '1');
+        $this->SetBuffer('WB_started', (string)time());
 
         try {
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+            $user = $this->ReadPropertyString("WallboxUser");
+            $password = $this->ReadPropertyString("WallboxPassword");
+            $serial = $this->ReadPropertyString("WallboxSerial");
+
+            if (empty($user) || empty($password) || empty($serial)) {
+                $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
                 return;
             }
 
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
+            $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
+            try {
+                $loginResponse = $this->GoodweLogin($user, $password);
+                if (!$loginResponse) {
+                    $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                    return;
+                }
 
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varID = @$this->GetIDForIdent($ident);
+                $apiResponse = $this->GoodweFetchData($serial);
+                if (!$apiResponse) {
+                    $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                    return;
+                }
 
-                if ($varID !== false) {
-                    if ($key === 'power') {
-                        $value = (int)round(((float)$value) * 1000);
-                    }
+                $data = json_decode($apiResponse, true);
+                if (!isset($data['data'])) {
+                    $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+                    return;
+                }
 
-                    $this->SetValueIfChanged($ident, $value);
+                foreach ($data['data'] as $key => $value) {
+                    $ident = "WB_" . $key;
+                    $varID = @$this->GetIDForIdent($ident);
 
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0);
+                    if ($varID !== false) {
+                        if ($key === 'power') {
+                            $value = (int)round(((float)$value) * 1000);
+                        }
 
-                        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-                        $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
+                        $this->SetValueIfChanged($ident, $value);
 
-                        $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-                        $now = time();
-                        $isBlocked = ($holdUntil > $now);
+                        if ($key === "workstate") {
+                            $chargingState = ($value !== 0);
 
-                        if (!$isPending && !$isBlocked) {
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
-                        } elseif ($isBlocked) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                        } elseif ($isPending) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                            $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
+                            $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
+
+                            $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
+                            $now = time();
+                            $isBlocked = ($holdUntil > $now);
+
+                            if (!$isPending && !$isBlocked) {
+                                $this->SetValueIfChanged('WB_Charging', $chargingState);
+                                $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                            } elseif ($isBlocked) {
+                                $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
+                            } elseif ($isPending) {
+                                $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                            }
                         }
                     }
                 }
+
+                $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+            } catch (Exception $e) {
+                $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
             }
 
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
-            }
-        });
+        } catch (Throwable $e) {
+            $this->SendDebug('FetchWallboxData', 'Fehler: ' . $e->getMessage(), 0);
+            $this->LogMessage('Goodwe/FetchWallboxData: ' . $e->getMessage());
+        } finally {
+            // Status „fertig“ setzen und Sperre freigeben
+            $this->SetBuffer('WB_running', '0');
+            $this->SetBuffer('WB_finished', (string)time());
+            IPS_SemaphoreLeave($sem);
+        }
     }
 
     private function GoodweFetchData(string $serial): ?string
