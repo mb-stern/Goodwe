@@ -31,14 +31,7 @@ class Goodwe extends IPSModule
         $this->CreateProfile();
 
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        if ($this->ReadPropertyInteger('PollIntervalWR') > 0) {
-            Goodwe_FetchInverterData($this->InstanceID);
-        }
-
         $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
-        if ($this->ReadPropertyInteger('PollIntervalWB') > 0) {
-            Goodwe_FetchWallboxData($this->InstanceID);
-        }
 
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
