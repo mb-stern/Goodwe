@@ -597,7 +597,7 @@ class Goodwe extends IPSModule
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
             }
-        }
+        });
     }
 
     private function GoodweFetchData(string $serial): ?string
