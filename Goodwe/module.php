@@ -303,12 +303,22 @@ class Goodwe extends IPSModule
         $sem = get_class($this) . '_' . $tag . '_' . $this->InstanceID;
         $gen = $this->ReadAttributeInteger('RunGen');
 
-        // Timer pausieren, damit kein neuer Tick geplant wird
-        $this->SetTimerInterval($timerIdent, 0);
+        // Nur pausieren, wenn wirklich der Timer uns aufgerufen hat
+        $isTimerCall = (isset($_IPS['SENDER']) && $_IPS['SENDER'] === 'TimerEvent'
+                        && isset($_IPS['TARGET']) && $_IPS['TARGET'] == $this->InstanceID);
+        $pausedByUs = false;
+        if ($isTimerCall) {
+            $this->SetTimerInterval($timerIdent, 0);
+            $pausedByUs = true;
+        }
 
-        // Warten bis anderer Lauf fertig ist (blockierend, max. Intervall + 500 ms)
+        // Warten maximal bis zum regulären Intervall + 500ms
         $timeout = max(1, $intervalMs + 500);
         if (!IPS_SemaphoreEnter($sem, $timeout)) {
+            // Lock nicht bekommen → wenn wir pausiert haben, Timer sofort wieder aktivieren
+            if ($pausedByUs && $gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
+                $this->SetTimerInterval($timerIdent, $intervalMs);
+            }
             $this->SendDebug($timerIdent, "Übersprungen: Konnte Lock nicht bekommen (Timeout).", 0);
             return;
         }
@@ -321,10 +331,10 @@ class Goodwe extends IPSModule
         } finally {
             IPS_SemaphoreLeave($sem);
 
-            // Nach dem Lauf: vollen Intervall neu setzen (nur wenn kein Reload dazwischen)
-            if ($gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
+            // Timer nur dann wieder setzen, wenn wir ihn in diesem Lauf pausiert haben
+            if ($pausedByUs && $gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
                 $this->SetTimerInterval($timerIdent, $intervalMs);
-            } else {
+            } else if ($pausedByUs) {
                 $this->SendDebug($timerIdent, "Timer nicht wiederhergestellt (Reload erkannt oder Intervall=0).", 0);
             }
         }
