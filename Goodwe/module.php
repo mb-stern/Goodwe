@@ -17,6 +17,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWB", 0);
         $this->RegisterPropertyInteger("PollIntervalWR", 5);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
+        $this->RegisterAttributeInteger('RunGen', 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
@@ -27,6 +28,8 @@ class Goodwe extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        $this->WriteAttributeInteger('RunGen', $this->ReadAttributeInteger('RunGen') + 1);
 
         $this->CreateProfile();
 
@@ -295,6 +298,38 @@ class Goodwe extends IPSModule
         }
     }
 
+    private function runLockedTimerStrict(string $tag, string $timerIdent, int $intervalMs, callable $fn): void
+    {
+        $sem = get_class($this) . '_' . $tag . '_' . $this->InstanceID;
+        $gen = $this->ReadAttributeInteger('RunGen');
+
+        // Timer pausieren, damit kein neuer Tick geplant wird
+        $this->SetTimerInterval($timerIdent, 0);
+
+        // Warten bis anderer Lauf fertig ist (blockierend, max. Intervall + 500 ms)
+        $timeout = max(1, $intervalMs + 500);
+        if (!IPS_SemaphoreEnter($sem, $timeout)) {
+            $this->SendDebug($timerIdent, "Übersprungen: Konnte Lock nicht bekommen (Timeout).", 0);
+            return;
+        }
+
+        try {
+            $fn(); // eigentliche Arbeit
+        } catch (Throwable $e) {
+            $this->SendDebug($timerIdent, "Fehler: " . $e->getMessage(), 0);
+            $this->LogMessage("Goodwe/$timerIdent: " . $e->getMessage());
+        } finally {
+            IPS_SemaphoreLeave($sem);
+
+            // Nach dem Lauf: vollen Intervall neu setzen (nur wenn kein Reload dazwischen)
+            if ($gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
+                $this->SetTimerInterval($timerIdent, $intervalMs);
+            } else {
+                $this->SendDebug($timerIdent, "Timer nicht wiederhergestellt (Reload erkannt oder Intervall=0).", 0);
+            }
+        }
+    }
+
     public function FetchAll()
     {
         $this->FetchWallboxData();
@@ -303,6 +338,9 @@ class Goodwe extends IPSModule
     }
 
     public function FetchInverterData()
+    {
+    $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWR') * 1000);
+    $this->runLockedTimerStrict('WR', 'TimerWR', $intervalMs, function () 
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
@@ -462,6 +500,7 @@ class Goodwe extends IPSModule
         }
 
         $this->CalculateMaxPower();
+        });
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -488,6 +527,9 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
+        $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        $this->runLockedTimerStrict('WB', 'TimerWB', $intervalMs, function () 
+        {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial = $this->ReadPropertyString("WallboxSerial");
@@ -554,7 +596,7 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
-        }
+        });
     }
 
     private function GoodweFetchData(string $serial): ?string
