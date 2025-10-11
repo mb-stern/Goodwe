@@ -298,45 +298,32 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function runLockedTimerStrict(string $tag, string $timerIdent, int $intervalMs, callable $fn): void
+    private function runLockedSmart(string $tag, int $intervalMs, callable $fn): void
     {
+        // $_IPS ist in Methoden nicht automatisch sichtbar:
+        global $_IPS;
+
         $sem = get_class($this) . '_' . $tag . '_' . $this->InstanceID;
-        $gen = $this->ReadAttributeInteger('RunGen');
 
-        // Nur pausieren, wenn wirklich der Timer uns aufgerufen hat
-        $isTimerCall = (isset($_IPS['SENDER']) && $_IPS['SENDER'] === 'TimerEvent'
-                        && isset($_IPS['TARGET']) && $_IPS['TARGET'] == $this->InstanceID);
-        $pausedByUs = false;
-        if ($isTimerCall) {
-            $this->SetTimerInterval($timerIdent, 0);
-            $pausedByUs = true;
-        }
+        // Timer-Call sicher erkennen
+        $isTimerCall = isset($_IPS['SENDER']) && $_IPS['SENDER'] === 'TimerEvent'
+                    && isset($_IPS['TARGET']) && (int)$_IPS['TARGET'] === (int)$this->InstanceID;
 
-        // Warten maximal bis zum regulären Intervall + 500ms
-        $timeout = max(1, $intervalMs + 500);
+        // Timer wartet nie (vermeidet Stau); manuelle Aufrufe warten kurz auf Freigabe
+        $timeout = $isTimerCall ? 0 : max(1, $intervalMs + 500);
+
         if (!IPS_SemaphoreEnter($sem, $timeout)) {
-            // Lock nicht bekommen → wenn wir pausiert haben, Timer sofort wieder aktivieren
-            if ($pausedByUs && $gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
-                $this->SetTimerInterval($timerIdent, $intervalMs);
-            }
-            $this->SendDebug($timerIdent, "Übersprungen: Konnte Lock nicht bekommen (Timeout).", 0);
+            $this->SendDebug($tag, ($isTimerCall ? 'Timer übersprungen' : 'Manueller Aufruf abgebrochen') . ' (Lock belegt).', 0);
             return;
         }
 
         try {
-            $fn(); // eigentliche Arbeit
+            $fn();
         } catch (Throwable $e) {
-            $this->SendDebug($timerIdent, "Fehler: " . $e->getMessage(), 0);
-            $this->LogMessage("Goodwe/$timerIdent: " . $e->getMessage());
+            $this->SendDebug($tag, 'Fehler: ' . $e->getMessage(), 0);
+            $this->LogMessage('Goodwe/' . $tag . ': ' . $e->getMessage());
         } finally {
             IPS_SemaphoreLeave($sem);
-
-            // Timer nur dann wieder setzen, wenn wir ihn in diesem Lauf pausiert haben
-            if ($pausedByUs && $gen === $this->ReadAttributeInteger('RunGen') && $intervalMs > 0) {
-                $this->SetTimerInterval($timerIdent, $intervalMs);
-            } else if ($pausedByUs) {
-                $this->SendDebug($timerIdent, "Timer nicht wiederhergestellt (Reload erkannt oder Intervall=0).", 0);
-            }
         }
     }
 
@@ -349,9 +336,9 @@ class Goodwe extends IPSModule
 
     public function FetchInverterData()
     {
-    $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWR') * 1000);
-    $this->runLockedTimerStrict('WR', 'TimerWR', $intervalMs, function () 
-    {
+        $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWR') * 1000);
+        $this->runLockedSmart('WR', $intervalMs, function () 
+        {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
             $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
@@ -538,7 +525,7 @@ class Goodwe extends IPSModule
     public function FetchWallboxData()
     {
         $intervalMs = max(50, (int)$this->ReadPropertyInteger('PollIntervalWB') * 1000);
-        $this->runLockedTimerStrict('WB', 'TimerWB', $intervalMs, function () 
+        $this->runLockedSmart('WB', $intervalMs, function () 
         {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
