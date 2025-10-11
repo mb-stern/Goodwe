@@ -502,19 +502,16 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $sem = __CLASS__ . '_WB_' . $this->InstanceID;
-
-        // Wenn bereits ein Lauf aktiv ist: sofort überspringen (kein Warten).
-        if (!IPS_SemaphoreEnter($sem, 0)) {
-            $this->SendDebug('FetchWallboxData', 'Übersprungen: bereits in Ausführung.', 0);
+        // --- superleichtes Reentrancy-Guard, 0 Wartezeit ---
+        if ($this->GetBuffer('WB_BUSY') === '1') {
+            $this->SendDebug(__FUNCTION__, 'Übersprungen (läuft noch).', 0);
             return;
         }
-
-        // Status signalisieren
-        $this->SetBuffer('WB_running', '1');
-        $this->SetBuffer('WB_started', (string)time());
+        $this->SetBuffer('WB_BUSY', '1');
 
         try {
+            $this->SendDebug(__FUNCTION__, 'Timer-Tick gestartet.', 0);
+
             $user = $this->ReadPropertyString("WallboxUser");
             $password = $this->ReadPropertyString("WallboxPassword");
             $serial = $this->ReadPropertyString("WallboxSerial");
@@ -523,8 +520,6 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
                 return;
             }
-
-            $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
             try {
                 $loginResponse = $this->GoodweLogin($user, $password);
@@ -568,11 +563,11 @@ class Goodwe extends IPSModule
 
                             if (!$isPending && !$isBlocked) {
                                 $this->SetValueIfChanged('WB_Charging', $chargingState);
-                                $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                                $this->SendDebug("FetchWallboxData", "WB_Charging -> " . ($chargingState ? "true" : "false"), 0);
                             } elseif ($isBlocked) {
-                                $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
+                                $this->SendDebug("FetchWallboxData", "WB_Charging Feedback blockiert bis " . date('H:i:s', $holdUntil), 0);
                             } elseif ($isPending) {
-                                $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                                $this->SendDebug("FetchWallboxData", "WB_Charging nicht überschrieben (eigene Änderung pending).", 0);
                             }
                         }
                     }
@@ -582,15 +577,13 @@ class Goodwe extends IPSModule
             } catch (Exception $e) {
                 $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
             }
-
-        } catch (Throwable $e) {
-            $this->SendDebug('FetchWallboxData', 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe/FetchWallboxData: ' . $e->getMessage());
-        } finally {
-            // Status „fertig“ setzen und Sperre freigeben
-            $this->SetBuffer('WB_running', '0');
-            $this->SetBuffer('WB_finished', (string)time());
-            IPS_SemaphoreLeave($sem);
+        }
+        finally {
+            // Busy-Flag freigeben
+            $this->SetBuffer('WB_BUSY', '0');
+            // Timer sicherstellen (keine Wartezeit, nur re-arming)
+            $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+            $this->SendDebug(__FUNCTION__, 'Timer-Tick beendet.', 0);
         }
     }
 
