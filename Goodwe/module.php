@@ -239,9 +239,9 @@ class Goodwe extends IPSModule
 
     public function RequestAction($ident, $value)
     {
-        $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
+        $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: " . json_encode($value), 0);
 
-        // Für Register
+        // 1) Schreibbare Register (Modbus)
         if (strpos($ident, 'Addr') === 0) {
             $address = intval(substr($ident, 4));
             if ($this->WriteRegister($address, (int)$value)) {
@@ -253,7 +253,7 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // Für Wallbox
+        // 2) Wallbox-Aktionen
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer vorhanden – Abbruch.", 0);
@@ -262,12 +262,13 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
 
+            // Start/Stop Laden
             case 'WB_Charging':
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
 
                 if ($value) {
-                    // aktuellen Modus als Soll übernehmen
+                    // aktuellen Modus als Soll mitschicken
                     $modeID = @$this->GetIDForIdent('WB_ChargeMode');
                     if ($modeID !== false) {
                         $data['mode'] = (int)GetValue($modeID);
@@ -277,9 +278,9 @@ class Goodwe extends IPSModule
                 $response = $this->SendWallboxRequest($data, $endpoint);
 
                 if ($response) {
-                    // lokal Sollzustand setzen
+                    // Sollzustand lokal übernehmen
                     $this->SetValueIfChanged($ident, (bool)$value);
-                    // Istwerte aus SEMS nachziehen
+                    // Istwerte direkt nachladen
                     $this->FetchWallboxData();
                     $this->SendDebug("RequestAction", "WB_Charging erfolgreich auf " . ((bool)$value ? 'true' : 'false') . " gesetzt.", 0);
                 } else {
@@ -287,6 +288,7 @@ class Goodwe extends IPSModule
                 }
                 break;
 
+            // Modus ändern
             case 'WB_ChargeMode':
                 $mode = (int)$value;
                 $data = ['sn' => $serial, 'mode' => $mode];
@@ -302,11 +304,12 @@ class Goodwe extends IPSModule
                 }
                 break;
 
+            // Soll-Ladeleistung
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $valInput = (int)$value;
 
-                // auf 100er runden + Offset
+                // auf 100 W runden und Offset addieren
                 $val = (int)(round($valInput / 100) * 100 + $offset);
                 // Begrenzung der Wallbox
                 $val = min(max($val, 4200), 9700);
@@ -320,11 +323,11 @@ class Goodwe extends IPSModule
                 $response = $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
 
                 if ($response) {
-                    // Slider (Soll) anpassen
+                    // Slider (Soll) aktualisieren
                     $this->SetValueIfChanged($ident, $val);
-                    // Schnellmodus (0) lokal setzen
+                    // Modus Schnell (0) lokal setzen
                     $this->SetValueIfChanged('WB_ChargeMode', 0);
-                    // Istwerte nachziehen (power, chargeMode, workstate, ...)
+                    // Istwerte nachziehen
                     $this->FetchWallboxData();
                     $this->SendDebug("RequestAction", "WB_ChargePower erfolgreich auf $val W gesetzt.", 0);
                 } else {
