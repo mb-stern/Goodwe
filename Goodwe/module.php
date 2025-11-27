@@ -18,11 +18,8 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("PollIntervalWR", 5);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
-        $this->RegisterAttributeString("WallboxVariableMapping", "[]");
-
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('TimerWB', 0, 'Goodwe_WallboxTick($_IPS[\'TARGET\']);');
-
+        $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges()
@@ -254,95 +251,85 @@ class Goodwe extends IPSModule
             return;
         }
 
-            // Für Wallbox
+        // Für Wallbox
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer vorhanden – Abbruch.", 0);
             return;
         }
 
-        // Pending-Befehle laden
-        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-        if (!is_array($pending)) {
-            $pending = [];
-        }
-
         switch ($ident) {
             case 'WB_Charging':
-                $desired = (bool)$value;
+                $targetState = (bool)$value;
 
-                // Lokale Variable zeigt zunächst den gewünschten Zustand
-                $this->SetValueIfChanged($ident, $desired);
+                // Zuerst zur API
+                $endpoint = $targetState ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $mode = (int)@GetValue($this->GetIDForIdent('WB_ChargeMode'));
 
-                $endpoint = $desired ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($desired) {
-                    // Aktuellen Modus verwenden
-                    $modeID = @$this->GetIDForIdent('WB_ChargeMode');
-                    $mode   = $modeID !== false ? (int)GetValue($modeID) : 0;
-                    $data['mode'] = $mode;
+                $payload = ['mode' => $mode];
+                if (!$targetState) {
+                    // Stop braucht meist nur sn, sn wird in SendWallboxRequest ergänzt
+                    $payload = [];
                 }
 
-                $pending['WB_Charging'] = [
-                    'endpoint'  => $endpoint,
-                    'data'      => $data,
-                    'desired'   => $desired,
-                    'retries'   => 0,
-                    'lastSend'  => 0
-                ];
+                $result = $this->SendWallboxRequest($payload, $endpoint);
 
-                // Rückmeldungen der Box für ein paar Sekunden ausblenden
-                $this->SetBuffer("ChargingHoldUntil", (string)(time() + 15));
+                if ($result !== null) {
+                    // Lokalen Zustand setzen
+                    $this->SetValueIfChanged($ident, $targetState);
+
+                    // Direkt danach frische Daten holen
+                    $this->FetchWallboxData();
+                } else {
+                    $this->SendDebug("RequestAction", "WB_Charging: API-Fehler, Wert lokal nicht geändert.", 0);
+                }
                 break;
 
             case 'WB_ChargeMode':
-                $desired = (int)$value;
+                $newMode = (int)$value;
 
-                // Lokale Variable zunächst auf gewünschten Modus setzen
-                $this->SetValueIfChanged($ident, $desired);
+                $result = $this->SendWallboxRequest(
+                    ['mode' => $newMode],
+                    '/v3/EvCharger/SetChargeMode'
+                );
 
-                $data = ['sn' => $serial, 'mode' => $desired];
-
-                $pending['WB_ChargeMode'] = [
-                    'endpoint'  => '/v3/EvCharger/SetChargeMode',
-                    'data'      => $data,
-                    'desired'   => $desired,
-                    'retries'   => 0,
-                    'lastSend'  => 0
-                ];
+                if ($result !== null) {
+                    $this->SetValueIfChanged($ident, $newMode);
+                    $this->FetchWallboxData();
+                } else {
+                    $this->SendDebug("RequestAction", "WB_ChargeMode: API-Fehler, Wert lokal nicht geändert.", 0);
+                }
                 break;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
+                $valInput = (int)$value;
 
-                // Schrittweite 100 W, Offset berücksichtigen, Grenzen 4.2–9.7 kW
-                $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-                $val = min(max($val, 4200), 9700);
+                // auf 100 W runden + Offset
+                $val = (int)(round($valInput / 100) * 100 + $offset);
+                $val = min(max($val, 4200), 9700); // Begrenzung
 
-                // Lokale Variable zeigt zunächst gewünschten Wert
-                $this->SetValueIfChanged($ident, $val);
+                $kw = round($val / 1000, 1);
 
-                // Modus für "feste Ladeleistung" setzen
-                $this->SetValueIfChanged('WB_ChargeMode', 0);
+                $result = $this->SendWallboxRequest(
+                    ['charge_power' => $kw, 'mode' => 0],  // mode 0 = "Schnell"
+                    '/v3/EvCharger/SetChargeMode'
+                );
 
-                // API erwartet kW
-                $kw   = round($val / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
+                if ($result !== null) {
+                    // Lokale Sollwerte setzen
+                    $this->SetValueIfChanged($ident, $val);
+                    $this->SetValueIfChanged('WB_ChargeMode', 0);
 
-                $pending['WB_ChargePower'] = [
-                    'endpoint'  => '/v3/EvCharger/SetChargeMode',
-                    'data'      => $data,
-                    'desired'   => $val,   // in W
-                    'retries'   => 0,
-                    'lastSend'  => 0
-                ];
+                    $this->FetchWallboxData();
+                } else {
+                    $this->SendDebug("RequestAction", "WB_ChargePower: API-Fehler, Wert lokal nicht geändert.", 0);
+                }
                 break;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
         }
-
-        $this->SetBuffer("WallboxChanges", json_encode($pending));
     }
 
     public function FetchAll()
@@ -352,6 +339,279 @@ class Goodwe extends IPSModule
         $this->CalculateMaxPower();
     }
 
+        private function SetValueIfChanged(string $ident, $value): void
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === false) {
+            return;
+        }
+
+        $var = IPS_GetVariable($vid);
+        switch ($var['VariableType']) {
+            case VARIABLETYPE_BOOLEAN:
+                $new = (bool)$value;
+                break;
+            case VARIABLETYPE_INTEGER:
+                $new = (int)$value;
+                break;
+            case VARIABLETYPE_FLOAT:
+                $new = (float)$value;
+                break;
+            case VARIABLETYPE_STRING:
+            default:
+                $new = (string)$value;
+                break;
+        }
+
+        if (GetValue($vid) !== $new) {
+            SetValue($vid, $new);
+        }
+    }
+
+        public function GetConfigurationForm()
+    {
+        $all = $this->GetRegisters();
+
+        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selected)) {
+            $selected = [];
+        }
+
+        $selectedMap = [];
+        foreach ($selected as $sr) {
+            if (is_string($sr)) {
+                $tmp = json_decode($sr, true);
+                if (is_array($tmp)) {
+                    $sr = $tmp;
+                }
+            }
+            if (is_array($sr)) {
+                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
+                    $tmp = json_decode($sr['address'], true);
+                    if (is_array($tmp) && isset($tmp['address'])) {
+                        $sr['address'] = $tmp['address'];
+                    }
+                }
+
+                if (isset($sr['addr'])) {
+                    $selectedMap[(string)$sr['addr']] = true;
+                } elseif (isset($sr['address'])) {
+                    $selectedMap[(string)$sr['address']] = true;
+                }
+            }
+        }
+
+        $values = array_map(function ($r) use ($selectedMap) {
+            $addr = (string)$r['address'];
+            return [
+                "selected"        => isset($selectedMap[$addr]),
+                "addr"            => $addr,      
+                "address_display" => $addr,     
+                "name"            => $r['name'],
+            ];
+        }, $all);
+
+        return json_encode([
+            "elements" => [
+                [
+                    "type"     => "List",
+                    "name"     => "SelectedRegisters",
+                    "caption"  => "Register auswählen",
+                    "rowCount" => 15,
+                    "add"      => false,
+                    "delete"   => false,
+                    "columns"  => [
+                        [ "caption" => "",          "name" => "addr",             "width" => "0px",  "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
+                        [ "caption" => "Auswählen", "name" => "selected",         "width" => "120px","edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address_display",  "width" => "110px" ],
+                        [ "caption" => "Name",      "name" => "name",             "width" => "auto" ],
+                    ],
+                    "values" => $values
+                ],
+                [
+                    "type"    => "IntervalBox",
+                    "name"    => "PollIntervalWR",
+                    "caption" => "Sekunden",
+                    "suffix"  => "s"
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
+                    "items"   => [
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
+                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                    ]
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Zusätzliche Werte berechnen",
+                    "items"   => [
+                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+                    ]
+                ],
+            ],
+             "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Werte lesen",
+                    "onClick" => 'Goodwe_FetchAll($id);'
+                ],
+                [
+                    "type" => "Label",
+                    "caption" => "Sag danke und unterstütze den Modulentwickler:"
+                ],
+                [
+                    "type" => "RowLayout",
+                    "items" => [
+                        [
+                            "type" => "Image",
+                            "onClick" => "echo 'https://paypal.me/mbstern';",
+                           "image" => "data:image/jpeg;base64,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"
+                        ],
+                        [
+                            "type" => "Label",
+                            "caption" => ""
+                        ]
+                    ]
+                ]
+            ]
+        ]);
+    }
+
+        private function GetVariableDetails(string $unit): ?array
+    {
+        switch ($unit) {
+            case "V":
+                return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
+            case "A":
+                return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
+            case "W":
+                return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
+            case "dur":
+                return ["profile" => "~Duration", "type" => VARIABLETYPE_INTEGER];
+            case "kWh":
+                return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
+            case "kW":
+                return ["profile" => "~Power", "type" => VARIABLETYPE_FLOAT];
+            case "KΩ":
+                return ["profile" => "Goodwe.kOhm", "type" => VARIABLETYPE_INTEGER];
+            case "°C":
+                return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
+            case "%":
+                return ["profile" => "Goodwe.Percent", "type" => VARIABLETYPE_INTEGER];
+            case "ems":
+                return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
+            case "watt_ems":
+                return ["profile" => "Goodwe.WattEMS", "type" => VARIABLETYPE_INTEGER];
+            case "mode":
+                return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_mode":
+                return ["profile" => "Goodwe.WB_Mode", "type" => VARIABLETYPE_INTEGER];
+            case "wb_work":
+                return ["profile" => "Goodwe.WB_Workstate", "type" => VARIABLETYPE_INTEGER];
+            case "wb_state":
+                return ["profile" => "Goodwe.WB_State", "type" => VARIABLETYPE_INTEGER];
+            case "String":
+                return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
+            default:
+                return null;
+        }
+    }
+
+    private function CreateProfile()
+    {
+        if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
+            IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0',  'Stoped',           '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1',  'Auto',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '2',  'Charge-PV',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '3',  'Discharge+PV',     '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '4',  'Import-AC',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '5',  'Export-AC',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '6',  'Conserve',         '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '7',  'Off-Grid',         '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8',  'Battery-Standby',  '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '9',  'Buy-Power',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '10', 'Sell-Power',       '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT',       '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT',    '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_State')){
+            IPS_CreateVariableProfile('Goodwe.WB_State', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt',      '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt',            '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '2', 'gesteckt und lädt',   '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_State', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Mode')){
+            IPS_CreateVariableProfile('Goodwe.WB_Mode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell',        '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität',   '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
+            IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); 
+            IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0);               
+            IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W");          
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.Mode')){
+            IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie',      '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '2', 'entlädt',             '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt',                '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden',    '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Mode', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
+            IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus',                   '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang startet',   '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'Ladevorgang läuft',     '', -1);
+            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang endet',     '', -1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.Watt')){
+            IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.Watt', '', ' W');
+            IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
+            IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.WattEMS')){
+            IPS_CreateVariableProfile('Goodwe.WattEMS', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.WattEMS', '', ' W');
+            IPS_SetVariableProfileDigits('Goodwe.WattEMS', 0);
+            IPS_SetVariableProfileValues('Goodwe.WattEMS', 0, 10000, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WattEMS', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.Percent')){
+            IPS_CreateVariableProfile('Goodwe.Percent', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.Percent', '', ' %');
+            IPS_SetVariableProfileDigits('Goodwe.Percent', 0);
+            IPS_SetVariableProfileValues('Goodwe.Percent', 0, 100, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Percent', 0);
+        }
+        if (!IPS_VariableProfileExists('Goodwe.kOhm')){
+            IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('Goodwe.kOhm', '', ' KΩ');
+            IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
+            IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 0, 1);
+            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
+        }
+    }
+
+    //Wechselrichter-Kommunikation
+    
     public function FetchInverterData()
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -536,422 +796,7 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    public function WallboxTick()
-    {
-        // 1) Ausstehende Änderungen an die API senden (mit Retry-Logik)
-        $this->ProcessWallboxChanges(false);
-
-        // 2) Danach aktuelle Werte von der Wallbox holen
-        $this->FetchWallboxData();
-    }
-
-    private function ProcessWallboxChanges(bool $forceImmediately)
-    {
-        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-        if (!is_array($pending) || empty($pending)) {
-            return;
-        }
-
-        $changed = false;
-        $now     = time();
-
-        foreach ($pending as $ident => &$cmd) {
-            // Bereits 2x versucht → nichts mehr senden, Entscheidung passiert in FetchWallboxData()
-            if ($cmd['retries'] >= 2) {
-                continue;
-            }
-
-            // Abstand zwischen Sendeversuchen (außer bei forceImmediately)
-            if (
-                !$forceImmediately &&
-                $cmd['lastSend'] > 0 &&
-                ($now - (int)$cmd['lastSend']) < 3
-            ) {
-                continue;
-            }
-
-            $this->SendDebug("ProcessWallboxChanges", "Sende Befehl für $ident, Versuch " . ($cmd['retries'] + 1), 0);
-
-            $response = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
-
-            $cmd['lastSend'] = $now;
-            $cmd['retries']++;
-
-            // Bei Charging-Befehlen die Rückmeldesperre verlängern
-            if ($ident === 'WB_Charging') {
-                $this->SetBuffer("ChargingHoldUntil", (string)($now + 15));
-            }
-
-            $changed = true;
-        }
-        unset($cmd);
-
-        if ($changed) {
-            $this->SetBuffer("WallboxChanges", json_encode($pending));
-        }
-    }
-
-    public function FetchWallboxData()
-    {
-        // Pending-Befehle laden
-        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-        if (!is_array($pending)) {
-            $pending = [];
-        }
-
-        $user     = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial   = $this->ReadPropertyString("WallboxSerial");
-
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-            return;
-        }
-
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
-
-        try {
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
-            }
-
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
-
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
-                return;
-            }
-
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varID = @$this->GetIDForIdent($ident);
-            }
-
-
-                // ---------- 1) Normale WB_-Variablen aktualisieren ----------
-                if ($varID !== false) {
-                    if ($key === 'power') {
-                        // Ist-Leistung kommt in kW → W
-                        $value = (int)round(((float)$value) * 1000);
-                    }
-                    $this->SetValueIfChanged($ident, $value);
-                }
-
-                // ---------- 2) WB_Charging / workstate ----------
-                if ($key === "workstate") {
-                    $chargingState = ($value !== 0);
-                    $now           = time();
-                    $holdUntil     = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-                    $hasPending    = isset($pending['WB_Charging']);
-
-                    if ($hasPending) {
-                        $desired = (bool)$pending['WB_Charging']['desired'];
-
-                        if ($desired === $chargingState) {
-                            // Erfolg – Box macht, was wir wollten
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            unset($pending['WB_Charging']);
-                            $this->SetBuffer("ChargingHoldUntil", "0");
-                            $this->SendDebug("FetchWallboxData", "WB_Charging-Befehl von Wallbox bestätigt.", 0);
-                        } elseif ($pending['WB_Charging']['retries'] >= 2) {
-                            // Nach 2 Versuchen immer noch nicht angenommen → REALEN Box-Zustand übernehmen
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            unset($pending['WB_Charging']);
-                            $this->SetBuffer("ChargingHoldUntil", "0");
-                            $this->SendDebug("FetchWallboxData", "WB_Charging konnte nicht umgesetzt werden – Box-Zustand übernommen.", 0);
-                        } else {
-                            // Noch im „Versuchsfenster“ → Variable bleibt beim Wunschwert
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_Charging noch nicht bestätigt (Wallbox: " . ($chargingState ? "true" : "false") . ")",
-                                0
-                            );
-                        }
-                    } else {
-                        // Kein Pending – normales Spiegeln, aber Blockzeit beachten
-                        if ($holdUntil > $now) {
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                                0
-                            );
-                        } else {
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_Charging (nur Box) aktualisiert auf " . ($chargingState ? "true" : "false"),
-                                0
-                            );
-                        }
-                    }
-                }
-
-                // ---------- 3) WB_ChargeMode / chargeMode ----------
-                if ($key === 'chargeMode') {
-                    $remoteMode = (int)$value;
-                    $this->SendDebug(
-                        "FetchWallboxData",
-                        "chargeMode aus SEMS: {$remoteMode}",
-                        0
-                    );
-
-                    if (isset($pending['WB_ChargeMode'])) {
-                        $desired = (int)$pending['WB_ChargeMode']['desired'];
-
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "Pending WB_ChargeMode: desired={$desired}, retries={$pending['WB_ChargeMode']['retries']}",
-                            0
-                        );
-
-                        if ($remoteMode === $desired) {
-                            // Erfolg
-                            $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
-                            unset($pending['WB_ChargeMode']);
-                            $this->SendDebug("FetchWallboxData", "WB_ChargeMode-Befehl von Wallbox bestätigt.", 0);
-                        } elseif ($pending['WB_ChargeMode']['retries'] >= 2) {
-                            // Nach 2 Versuchen → Box-Wert übernehmen
-                            $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
-                            unset($pending['WB_ChargeMode']);
-                            $this->SendDebug("FetchWallboxData", "WB_ChargeMode konnte nicht umgesetzt werden – Box-Zustand übernommen.", 0);
-                        } else {
-                            // Noch im Versuchsfenster → Variable bleibt beim Wunschwert
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_ChargeMode noch nicht bestätigt (Wallbox: {$remoteMode}, Wunsch: {$desired})",
-                                0
-                            );
-                        }
-                    } else {
-                        // Kein Pending – Box-Wert spiegeln
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "Kein Pending – WB_ChargeMode wird direkt von Box übernommen: {$remoteMode}",
-                            0
-                        );
-                        $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
-                    }
-                }
-
-                // ---------- 4) WB_ChargePower / set_charge_power ----------
-                if ($key === 'set_charge_power') {
-                    // SEMS liefert kW → in W
-                    $remoteWatt = (int)round(((float)$value) * 1000);
-
-                    if (isset($pending['WB_ChargePower'])) {
-                        $desired = (int)$pending['WB_ChargePower']['desired'];
-
-                        if (abs($remoteWatt - $desired) <= 100) {
-                            // Erfolg – innerhalb deiner 100 W Rasterung
-                            $this->SetValueIfChanged('WB_ChargePower', $remoteWatt);
-                            unset($pending['WB_ChargePower']);
-                            $this->SendDebug("FetchWallboxData", "WB_ChargePower-Befehl von Wallbox bestätigt ({$remoteWatt} W).", 0);
-                        } elseif ($pending['WB_ChargePower']['retries'] >= 2) {
-                            // Nach 2 Versuchen → Box-Wert übernehmen
-                            $this->SetValueIfChanged('WB_ChargePower', $remoteWatt);
-                            unset($pending['WB_ChargePower']);
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_ChargePower konnte nicht umgesetzt werden – Box-Zustand übernommen ({$remoteWatt} W).",
-                                0
-                            );
-                        } else {
-                            // Noch im „Versuchsfenster“ → Wunschwert behalten
-                            $this->SendDebug(
-                                "FetchWallboxData",
-                                "WB_ChargePower noch nicht bestätigt (Wallbox: {$remoteWatt} W, Wunsch: {$desired} W)",
-                                0
-                            );
-                        }
-                    } else {
-                        // Kein Pending – immer den API-Sollwert als Wahrheit nehmen
-                        $this->SetValueIfChanged('WB_ChargePower', $remoteWatt);
-                        $this->SendDebug("FetchWallboxData", "WB_ChargePower von Box übernommen: {$remoteWatt} W", 0);
-                    }
-                }
-            }
-
-            // ---------- 5) Pending-Befehle zurück in den Buffer ----------
-            $this->SetBuffer("WallboxChanges", json_encode($pending));
-
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
-        }
-    }
-
-    private function GoodweFetchData(string $serial): ?string
-    {
-        $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
-
-        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
-
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-        ];
-
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
-            return null;
-        }
-
-        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen. Antwort: $response", 0);
-        return $response;
-    }
-
-    private function GoodweLogin(string $email, string $password): bool
-    {
-        $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
-
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-        ];
-
-        $body = http_build_query([
-            "account" => $email,
-            "pwd"     => $password,
-            "code"    => "",
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
-            return false;
-        }
-
-        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
-        return true;
-    }
-
-    private function SendWallboxRequest(array $data, string $endpoint): ?array
-    {
-        $email = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-
-        if (empty($email) || empty($password)) {
-            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
-            return null;
-        }
-
-        // Login zur Wallbox
-        if (!$this->LoginToWallbox($email, $password)) {
-            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
-            return null;
-        }
-
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        ];
-
-        $body = json_encode([
-            "str" => json_encode([
-                "api"   => $endpoint,
-                "param" => $data
-            ])
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
-            return null;
-        }
-
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
-            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
-            return null;
-        }
-
-        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decodedResponse), 0);
-        return $decodedResponse;
-    }
-
-    private function LoginToWallbox(string $email, string $password): bool
-    {
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        ];
-
-        $body = http_build_query([
-            "account" => $email,
-            "pwd"     => $password
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
-            return false;
-        }
-
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
-            return false;
-        }
-
-        $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
-        return true;
-    }
-
-    public function CalculateMaxPower()
+        public function CalculateMaxPower()
     {
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
@@ -1007,277 +852,241 @@ class Goodwe extends IPSModule
         return $value * $scale;
     }
 
-    public function GetConfigurationForm()
+    //Wallbox-Kommunikation
+
+    private function GetCookieFile(): string
     {
-        $all = $this->GetRegisters();
-
-        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selected)) {
-            $selected = [];
+        // pro Instanz eigene Cookie-Datei, damit nichts kollidiert
+        $dir = IPS_GetKernelDir() . 'Goodwe';
+        if (!is_dir($dir)) {
+            @mkdir($dir);
         }
-
-        $selectedMap = [];
-        foreach ($selected as $sr) {
-            if (is_string($sr)) {
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp)) {
-                    $sr = $tmp;
-                }
-            }
-            if (is_array($sr)) {
-                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
-                    $tmp = json_decode($sr['address'], true);
-                    if (is_array($tmp) && isset($tmp['address'])) {
-                        $sr['address'] = $tmp['address'];
-                    }
-                }
-
-                if (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
-                } elseif (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                }
-            }
-        }
-
-        $values = array_map(function ($r) use ($selectedMap) {
-            $addr = (string)$r['address'];
-            return [
-                "selected"        => isset($selectedMap[$addr]),
-                "addr"            => $addr,      
-                "address_display" => $addr,     
-                "name"            => $r['name'],
-            ];
-        }, $all);
-
-        return json_encode([
-            "elements" => [
-                [
-                    "type"     => "List",
-                    "name"     => "SelectedRegisters",
-                    "caption"  => "Register auswählen",
-                    "rowCount" => 15,
-                    "add"      => false,
-                    "delete"   => false,
-                    "columns"  => [
-                        [ "caption" => "",          "name" => "addr",             "width" => "0px",  "visible" => false, "edit" => [ "type" => "ValidationTextBox" ] ],
-                        [ "caption" => "Auswählen", "name" => "selected",         "width" => "120px","edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address_display",  "width" => "110px" ],
-                        [ "caption" => "Name",      "name" => "name",             "width" => "auto" ],
-                    ],
-                    "values" => $values
-                ],
-                [
-                    "type"    => "IntervalBox",
-                    "name"    => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix"  => "s"
-                ],
-                [
-                    "type"    => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items"   => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
-                    ]
-                ],
-                [
-                    "type"    => "ExpansionPanel",
-                    "caption" => "Zusätzliche Werte berechnen",
-                    "items"   => [
-                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
-                    ]
-                ],
-            ],
-             "actions" => [
-                [
-                    "type" => "Button",
-                    "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchAll($id);'
-                ],
-                [
-                    "type" => "Label",
-                    "caption" => "Sag danke und unterstütze den Modulentwickler:"
-                ],
-                [
-                    "type" => "RowLayout",
-                    "items" => [
-                        [
-                            "type" => "Image",
-                            "onClick" => "echo 'https://paypal.me/mbstern';",
-                           "image" => "data:image/jpeg;base64,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"
-                        ],
-                        [
-                            "type" => "Label",
-                            "caption" => ""
-                        ]
-                    ]
-                ]
-            ]
-        ]);
+        return $dir . DIRECTORY_SEPARATOR . 'sems_' . $this->InstanceID . '_cookies.txt';
     }
 
-        private function SetValueIfChanged(string $ident, $value): void
+    private function SemsLogin(string $email, string $password): bool
     {
-        $vid = @$this->GetIDForIdent($ident);
-        if ($vid === false) {
+        $this->SendDebug("SemsLogin", "Starte Login-Vorgang...", 0);
+
+        if (empty($email) || empty($password)) {
+            $this->SendDebug("SemsLogin", "E-Mail oder Passwort leer.", 0);
+            return false;
+        }
+
+        $cookieFile = $this->GetCookieFile();
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password,
+            "code"    => "",
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("SemsLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return false;
+        }
+
+        // SEMS liefert JSON, prüfen ob "code" == 0 / "Successful" o.ä.
+        $decoded = @json_decode($response, true);
+        if (is_array($decoded)) {
+            if (isset($decoded['code']) && (string)$decoded['code'] === '0') {
+                $this->SendDebug("SemsLogin", "Login erfolgreich (code=0).", 0);
+                return true;
+            }
+            // Fallback: ältere/andere Antworten
+            if (isset($decoded['msg'])) {
+                $this->SendDebug("SemsLogin", "Login-Antwort msg=" . $decoded['msg'], 0);
+            }
+        }
+
+        $this->SendDebug("SemsLogin", "Login-Antwort unerwartet: " . $response, 0);
+        return true; // im Zweifel weiterarbeiten, weil Cookie oft trotzdem gesetzt ist
+    }
+
+    private function SemsApiRequest(string $api, array $param = [], string $version = '4.0'): ?array
+    {
+        $email    = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+
+        if (empty($email) || empty($password)) {
+            $this->SendDebug("SemsApiRequest", "Benutzername oder Passwort fehlen.", 0);
+            return null;
+        }
+
+        // Login (einmalig, Cookies wiederverwenden)
+        $cookieFile = $this->GetCookieFile();
+        if (!file_exists($cookieFile)) {
+            if (!$this->SemsLogin($email, $password)) {
+                $this->SendDebug("SemsApiRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+                return null;
+            }
+        }
+
+        $payload = [
+            "api"     => $api,
+            "version" => $version,
+            "lang"    => "en",       // wie im HA-Modul: Sprache explizit setzen
+            "param"   => $param
+        ];
+
+        // SEMS erwartet "str" als JSON im Body, oft x-www-form-urlencoded
+        $body = http_build_query([
+            "str" => json_encode($payload)
+        ]);
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($api);
+
+        $this->SendDebug("SemsApiRequest", "POST $url Payload=" . json_encode($payload), 0);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("SemsApiRequest", "HTTP-Fehler: $httpCode, Antwort: $response", 0);
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            $this->SendDebug("SemsApiRequest", "Antwort kein JSON: " . $response, 0);
+            return null;
+        }
+
+        // in neueren Versionen ist "code" == 0 Erfolg, "msg" == "Successful"
+        if (isset($decoded['code']) && (string)$decoded['code'] !== '0') {
+            $this->SendDebug("SemsApiRequest", "API-Fehler: " . json_encode($decoded), 0);
+            return null;
+        }
+
+        $this->SendDebug("SemsApiRequest", "OK: " . json_encode($decoded), 0);
+        return $decoded;
+    }
+    
+    public function FetchWallboxData()
+    {
+        $user    = $this->ReadPropertyString("WallboxUser");
+        $password= $this->ReadPropertyString("WallboxPassword");
+        $serial  = $this->ReadPropertyString("WallboxSerial");
+
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
             return;
         }
 
-        $var = IPS_GetVariable($vid);
-        switch ($var['VariableType']) {
-            case VARIABLETYPE_BOOLEAN:
-                $new = (bool)$value;
-                break;
-            case VARIABLETYPE_INTEGER:
-                $new = (int)$value;
-                break;
-            case VARIABLETYPE_FLOAT:
-                $new = (float)$value;
-                break;
-            case VARIABLETYPE_STRING:
-            default:
-                $new = (string)$value;
-                break;
-        }
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
-        if (GetValue($vid) !== $new) {
-            SetValue($vid, $new);
+        try {
+            // Login macht nun SemsApiRequest implizit
+            $apiData = $this->GoodweFetchData($serial);
+            if ($apiData === null) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
+                return;
+            }
+
+            // $apiData ist in deinem bisherigen Code data['data'] -> also Array
+            foreach ($apiData as $key => $value) {
+                $ident = "WB_" . $key;
+                $varID = @$this->GetIDForIdent($ident);
+
+                if ($varID !== false) {
+                    if ($key === 'power') {
+                        $value = (int)round(((float)$value) * 1000);
+                    }
+
+                    $this->SetValueIfChanged($ident, $value);
+
+                    if ($key === "workstate") {
+                        // dein vorheriger WB_Charging-Logik-Kram kann hier so bleiben
+                        $chargingState = ($value !== 0);
+
+                        $this->SetValueIfChanged('WB_Charging', $chargingState);
+                        $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
+                    }
+                }
+            }
+
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
     }
 
-    private function GetVariableDetails(string $unit): ?array
+    private function GoodweFetchData(string $serial): ?array
     {
-        switch ($unit) {
-            case "V":
-                return ["profile" => "~Volt", "type" => VARIABLETYPE_FLOAT];
-            case "A":
-                return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
-            case "W":
-                return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
-            case "dur":
-                return ["profile" => "~Duration", "type" => VARIABLETYPE_INTEGER];
-            case "kWh":
-                return ["profile" => "~Electricity", "type" => VARIABLETYPE_FLOAT];
-            case "kW":
-                return ["profile" => "~Power", "type" => VARIABLETYPE_FLOAT];
-            case "KΩ":
-                return ["profile" => "Goodwe.kOhm", "type" => VARIABLETYPE_INTEGER];
-            case "°C":
-                return ["profile" => "~Temperature", "type" => VARIABLETYPE_FLOAT];
-            case "%":
-                return ["profile" => "Goodwe.Percent", "type" => VARIABLETYPE_INTEGER];
-            case "ems":
-                return ["profile" => "Goodwe.EMSPowerMode", "type" => VARIABLETYPE_INTEGER];
-            case "watt_ems":
-                return ["profile" => "Goodwe.WattEMS", "type" => VARIABLETYPE_INTEGER];
-            case "mode":
-                return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_mode":
-                return ["profile" => "Goodwe.WB_Mode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_work":
-                return ["profile" => "Goodwe.WB_Workstate", "type" => VARIABLETYPE_INTEGER];
-            case "wb_state":
-                return ["profile" => "Goodwe.WB_State", "type" => VARIABLETYPE_INTEGER];
-            case "String":
-                return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
-            default:
-                return null;
+        $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
+
+        $response = $this->SemsApiRequest(
+            "/v4/EvCharger/GetEvChargerAloneViewBySn",
+            ["sn" => $serial],
+            "4.0"
+        );
+
+        if ($response === null) {
+            $this->SendDebug("GoodweFetchData", "SemsApiRequest lieferte null.", 0);
+            return null;
         }
+
+        if (!isset($response['data'])) {
+            $this->SendDebug("GoodweFetchData", "Keine 'data' im Response: " . json_encode($response), 0);
+            return null;
+        }
+
+        return $response['data']; // das ist typischerweise ein Array mit Key/Value
     }
 
-    private function CreateProfile()
+    private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
-        if (!IPS_VariableProfileExists('Goodwe.EMSPowerMode')){
-            IPS_CreateVariableProfile('Goodwe.EMSPowerMode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '0',  'Stoped',           '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '1',  'Auto',             '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '2',  'Charge-PV',        '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '3',  'Discharge+PV',     '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '4',  'Import-AC',        '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '5',  'Export-AC',        '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '6',  'Conserve',         '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '7',  'Off-Grid',         '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '8',  'Battery-Standby',  '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '9',  'Buy-Power',        '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '10', 'Sell-Power',       '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '11', 'Charge-BAT',       '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.EMSPowerMode', '12', 'Discharge-BAT',    '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.EMSPowerMode', 0);
+        $serial = $this->ReadPropertyString("WallboxSerial");
+        if (!empty($serial) && !isset($data['sn'])) {
+            $data['sn'] = $serial;
         }
-        if (!IPS_VariableProfileExists('Goodwe.WB_State')){
-            IPS_CreateVariableProfile('Goodwe.WB_State', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '0', 'nicht gesteckt',      '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '1', 'gesteckt',            '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_State', '2', 'gesteckt und lädt',   '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_State', 0);
+
+        $this->SendDebug("SendWallboxRequest", "Endpoint=$endpoint Data=" . json_encode($data), 0);
+
+        $response = $this->SemsApiRequest($endpoint, $data, "4.0");
+
+        if ($response === null) {
+            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen (null).", 0);
+            return null;
         }
-        if (!IPS_VariableProfileExists('Goodwe.WB_Mode')){
-            IPS_CreateVariableProfile('Goodwe.WB_Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '0', 'Schnell',        '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '1', 'PV-Priorität',   '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Mode', '2', 'PV  & Batterie', '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Mode', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.WB_Power_W')){
-            IPS_CreateVariableProfile('Goodwe.WB_Power_W', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('Goodwe.WB_Power_W', 4200, 9700, 100); 
-            IPS_SetVariableProfileDigits('Goodwe.WB_Power_W', 0);               
-            IPS_SetVariableProfileText('Goodwe.WB_Power_W', "", " W");          
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Power_W', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.Mode')){
-            IPS_CreateVariableProfile('Goodwe.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '0', 'keine Batterie',      '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '1', 'Standby',             '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '2', 'entlädt',             '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '3', 'lädt',                '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '4', 'warten auf Laden',    '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.Mode', '5', 'warten auf Entladen', '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Mode', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.WB_Workstate')){
-            IPS_CreateVariableProfile('Goodwe.WB_Workstate', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '0', 'Aus',                   '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '1', 'Ladevorgang startet',   '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '2', 'Ladevorgang läuft',     '', -1);
-            IPS_SetVariableProfileAssociation('Goodwe.WB_Workstate', '3', 'Ladevorgang endet',     '', -1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WB_Workstate', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.Watt')){
-            IPS_CreateVariableProfile('Goodwe.Watt', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('Goodwe.Watt', '', ' W');
-            IPS_SetVariableProfileDigits('Goodwe.Watt', 0);
-            IPS_SetVariableProfileValues('Goodwe.Watt', 0, 0, 1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Watt', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.WattEMS')){
-            IPS_CreateVariableProfile('Goodwe.WattEMS', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('Goodwe.WattEMS', '', ' W');
-            IPS_SetVariableProfileDigits('Goodwe.WattEMS', 0);
-            IPS_SetVariableProfileValues('Goodwe.WattEMS', 0, 10000, 1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.WattEMS', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.Percent')){
-            IPS_CreateVariableProfile('Goodwe.Percent', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('Goodwe.Percent', '', ' %');
-            IPS_SetVariableProfileDigits('Goodwe.Percent', 0);
-            IPS_SetVariableProfileValues('Goodwe.Percent', 0, 100, 1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.Percent', 0);
-        }
-        if (!IPS_VariableProfileExists('Goodwe.kOhm')){
-            IPS_CreateVariableProfile('Goodwe.kOhm', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('Goodwe.kOhm', '', ' KΩ');
-            IPS_SetVariableProfileDigits('Goodwe.kOhm', 0);
-            IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 0, 1);
-            $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
-        }
+
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($response), 0);
+        return $response;
     }
 
+    //Verwaltung der Register (WR) und Keys (WB)
+    
     private function GetWbVariables(): array
     {
         $defaultMapping = [
