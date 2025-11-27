@@ -23,6 +23,7 @@ class Goodwe extends IPSModule
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('TimerWBQueue', 0, 'Goodwe_ProcessWallboxQueue($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges()
