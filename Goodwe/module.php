@@ -1067,22 +1067,80 @@ class Goodwe extends IPSModule
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
+        $email    = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+
+        if (empty($email) || empty($password)) {
+            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
+            return null;
+        }
+
+        // Seriennummer hinzufügen, falls noch nicht enthalten
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (!empty($serial) && !isset($data['sn'])) {
             $data['sn'] = $serial;
         }
 
+        // Login + Cookie-Handling wie bei SemsApiRequest
+        $cookieFile = $this->GetCookieFile();
+        if (!file_exists($cookieFile)) {
+            if (!$this->SemsLogin($email, $password)) {
+                $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+                return null;
+            }
+        }
+
         $this->SendDebug("SendWallboxRequest", "Endpoint=$endpoint Data=" . json_encode($data), 0);
 
-        $response = $this->SemsApiRequest($endpoint, $data, "4.0");
+        // Payload wie in deiner alten Version: JSON in JSON
+        $payload = [
+            "api"   => $endpoint,
+            "param" => $data
+        ];
 
-        if ($response === null) {
-            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen (null).", 0);
+        $body = json_encode([
+            "str" => json_encode($payload)
+        ]);
+
+        $headers = [
+            "Content-Type: application/json",
+            "User-Agent: " .
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " .
+                "(KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
+
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("SendWallboxRequest", "HTTP-Fehler: $httpCode, Antwort: $response", 0);
             return null;
         }
 
-        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($response), 0);
-        return $response;
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            $this->SendDebug("SendWallboxRequest", "Antwort kein JSON: " . $response, 0);
+            return null;
+        }
+
+        if (isset($decoded['code']) && (string)$decoded['code'] !== '0') {
+            $this->SendDebug("SendWallboxRequest", "API-Fehler: " . json_encode($decoded), 0);
+            return null;
+        }
+
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
+        return $decoded;
     }
 
     //Verwaltung der Register (WR) und Keys (WB)
