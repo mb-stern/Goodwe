@@ -629,23 +629,11 @@ class Goodwe extends IPSModule
                 return;
             }
 
-            // Komplette Daten einmal kurz loggen (gekürzt)
-            $this->SendDebug(
-                "FetchWallboxData",
-                "Rohdaten aus SEMS: " . substr(json_encode($data['data']), 0, 300) . "...",
-                0
-            );
-
             foreach ($data['data'] as $key => $value) {
-                // *** Neue Debug-Zeile pro Key ***
-                $this->SendDebug(
-                    "FetchWallboxData",
-                    "API-Wert: {$key} = " . json_encode($value),
-                    0
-                );
-
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
+            }
+
 
                 // ---------- 1) Normale WB_-Variablen aktualisieren ----------
                 if ($varID !== false) {
