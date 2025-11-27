@@ -699,17 +699,17 @@ class Goodwe extends IPSModule
                         $desired = (int)$pending['WB_ChargeMode']['desired'];
 
                         if ($remoteMode === $desired) {
-                            // Erfolg
+                            // Erfolg – Box übernimmt unseren Sollwert
                             $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                             unset($pending['WB_ChargeMode']);
                             $this->SendDebug("FetchWallboxData", "WB_ChargeMode-Befehl von Wallbox bestätigt.", 0);
                         } elseif ($pending['WB_ChargeMode']['retries'] >= 2) {
-                            // Nach 2 Versuchen → Box-Wert übernehmen
+                            // Nach 2 Versuchen → Box-Wert übernehmen, SEMS ist Wahrheit
                             $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                             unset($pending['WB_ChargeMode']);
                             $this->SendDebug("FetchWallboxData", "WB_ChargeMode konnte nicht umgesetzt werden – Box-Zustand übernommen.", 0);
                         } else {
-                            // Noch im Versuchsfenster → Variable bleibt beim Wunschwert
+                            // Noch im „Versuchsfenster“ → UI bleibt beim Wunschwert
                             $this->SendDebug(
                                 "FetchWallboxData",
                                 "WB_ChargeMode noch nicht bestätigt (Wallbox: {$remoteMode}, Wunsch: {$desired})",
@@ -717,22 +717,21 @@ class Goodwe extends IPSModule
                             );
                         }
                     } else {
-                        // Kein Pending – Box-Wert spiegeln
+                        // Kein Pending → immer API übernehmen
                         $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                     }
                 }
 
                 // ---------- 4) WB_ChargePower / set_charge_power ----------
                 if ($key === 'set_charge_power') {
-                    // Annahme: API liefert kW → in W umrechnen
+                    // SEMS liefert kW → in W
                     $remoteWatt = (int)round(((float)$value) * 1000);
 
                     if (isset($pending['WB_ChargePower'])) {
                         $desired = (int)$pending['WB_ChargePower']['desired'];
 
-                        // Toleranz 100 W, da du in 100-W-Schritten arbeitest
                         if (abs($remoteWatt - $desired) <= 100) {
-                            // Erfolg
+                            // Erfolg – innerhalb deiner 100 W Rasterung
                             $this->SetValueIfChanged('WB_ChargePower', $remoteWatt);
                             unset($pending['WB_ChargePower']);
                             $this->SendDebug("FetchWallboxData", "WB_ChargePower-Befehl von Wallbox bestätigt ({$remoteWatt} W).", 0);
@@ -746,7 +745,7 @@ class Goodwe extends IPSModule
                                 0
                             );
                         } else {
-                            // Noch im Versuchsfenster – Variable bleibt beim Wunschwert
+                            // Noch im „Versuchsfenster“ → Wunschwert behalten
                             $this->SendDebug(
                                 "FetchWallboxData",
                                 "WB_ChargePower noch nicht bestätigt (Wallbox: {$remoteWatt} W, Wunsch: {$desired} W)",
@@ -754,12 +753,11 @@ class Goodwe extends IPSModule
                             );
                         }
                     } else {
-                        // Kein Pending – Box-Wert direkt als Sollleistung übernehmen
+                        // Kein Pending – immer den API-Sollwert als Wahrheit nehmen
                         $this->SetValueIfChanged('WB_ChargePower', $remoteWatt);
                         $this->SendDebug("FetchWallboxData", "WB_ChargePower von Box übernommen: {$remoteWatt} W", 0);
                     }
                 }
-            }
 
             // ---------- 5) Pending-Befehle zurück in den Buffer ----------
             $this->SetBuffer("WallboxChanges", json_encode($pending));
