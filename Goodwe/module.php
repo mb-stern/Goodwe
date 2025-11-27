@@ -1075,38 +1075,32 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        // Seriennummer hinzufügen, falls noch nicht enthalten
+        // Login zur Wallbox (genau wie früher)
+        if (!$this->LoginToWallbox($email, $password)) {
+            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+            return null;
+        }
+
+        // Seriennummer ergänzen, falls noch nicht drin
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (!empty($serial) && !isset($data['sn'])) {
             $data['sn'] = $serial;
         }
 
-        // Login + Cookie-Handling wie bei SemsApiRequest
-        $cookieFile = $this->GetCookieFile();
-        if (!file_exists($cookieFile)) {
-            if (!$this->SemsLogin($email, $password)) {
-                $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
-                return null;
-            }
-        }
-
         $this->SendDebug("SendWallboxRequest", "Endpoint=$endpoint Data=" . json_encode($data), 0);
 
-        // Payload wie in deiner alten Version: JSON in JSON
-        $payload = [
-            "api"   => $endpoint,
-            "param" => $data
-        ];
-
+        // Alte SEMS-JSON-Struktur
         $body = json_encode([
-            "str" => json_encode($payload)
+            "str" => json_encode([
+                "api"   => $endpoint,
+                "param" => $data
+            ])
         ]);
 
         $headers = [
             "Content-Type: application/json",
             "User-Agent: " .
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " .
-                "(KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         ];
 
         $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
@@ -1116,7 +1110,7 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');   // wie vorher
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
@@ -1134,6 +1128,7 @@ class Goodwe extends IPSModule
             return null;
         }
 
+        // Wie früher: code == 0 ist Erfolg, aber nicht überstreng sein
         if (isset($decoded['code']) && (string)$decoded['code'] !== '0') {
             $this->SendDebug("SendWallboxRequest", "API-Fehler: " . json_encode($decoded), 0);
             return null;
@@ -1141,6 +1136,48 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
         return $decoded;
+    }
+
+    private function LoginToWallbox(string $email, string $password): bool
+    {
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');   // wie vorher, gleiche Datei wie in SendWallboxRequest
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return false;
+        }
+
+        $decodedResponse = json_decode($response, true);
+
+        // Alte Logik: code == 0 = ok, sonst Debugmeldung
+        if (is_array($decodedResponse) && isset($decodedResponse['code']) && $decodedResponse['code'] === 0) {
+            $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
+            return true;
+        }
+
+        $this->SendDebug("LoginToWallbox", "Login-Antwort: " . $response, 0);
+        // Wie früher: im Zweifel true, da Cookie meist trotzdem gesetzt ist
+        return true;
     }
 
     //Verwaltung der Register (WR) und Keys (WB)
