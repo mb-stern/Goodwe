@@ -21,7 +21,6 @@ class Goodwe extends IPSModule
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_WallboxTick($_IPS[\'TARGET\']);');
 
     }
@@ -838,94 +837,6 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
         return true;
-    }
-
-    public function StartCharging()
-    {
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
-            $this->SendDebug("StartCharging", "Keine Seriennummer angegeben.", 0);
-            return;
-        }
-
-        $mode = @GetValue($this->GetIDForIdent("ChargingMode"));
-        $requestData = [
-            "sn"   => $serial,
-            "mode" => $mode
-        ];
-
-        $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StartCharging");
-        if ($response) {
-            $this->SendDebug("StartCharging", "Ladevorgang gestartet mit Modus $mode.", 0);
-            $this->SetValueIfChanged("ChargingState", true);
-        } else {
-            $this->SendDebug("StartCharging", "Fehler beim Starten des Ladevorgangs.", 0);
-        }
-    }
-
-    public function StopCharging()
-    {
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
-            $this->SendDebug("StopCharging", "Keine Seriennummer angegeben.", 0);
-            return;
-        }
-
-        $requestData = [ "sn" => $serial ];
-
-        $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StopCharging");
-        if ($response) {
-            $this->SendDebug("StopCharging", "Ladevorgang gestoppt.", 0);
-            $this->SetValueIfChanged("ChargingState", false);
-        } else {
-            $this->SendDebug("StopCharging", "Fehler beim Stoppen des Ladevorgangs.", 0);
-        }
-    }
-
-    public function SetChargingPower(float $power)
-    {
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
-            $this->SendDebug("SetChargingPower", "Keine Seriennummer angegeben.", 0);
-            return;
-        }
-
-        $chargePowerKW = round($power / 1000, 1);
-
-        $requestData = [
-            "sn"           => $serial,
-            "charge_power" => $chargePowerKW
-        ];
-
-        $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
-        if ($response) {
-            $this->SendDebug("SetChargingPower", "Ladeleistung auf {$chargePowerKW} kW gesetzt.", 0);
-            $this->SetValueIfChanged("ChargingPower", (int)$power);
-        } else {
-            $this->SendDebug("SetChargingPower", "Fehler beim Setzen der Ladeleistung.", 0);
-        }
-    }
-
-    public function SetChargingMode(int $mode)
-    {
-        $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
-            $this->SendDebug("SetChargingMode", "Keine Seriennummer angegeben.", 0);
-            return;
-        }
-
-        $requestData = [
-            "sn"   => $serial,
-            "mode" => $mode
-        ];
-
-        $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
-        if ($response) {
-            $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
-            $this->SetValueIfChanged("ChargingMode", (int)$mode);
-        } else {
-            $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
-        }
     }
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array

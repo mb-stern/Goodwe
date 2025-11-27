@@ -112,6 +112,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 2.8 (27.11.2025)
+- Die Wallbox-Steuerung wurde überarbietet.
+
 Version 2.7 (15.09.2025)
 - Das Konfigurationsformular wurde überarbeiten, alle gewünschten Register sind nun gleichzeitig über Checkboxen auswählbar, statt wie vorher jedes einzeln über ein Dropdownfeld. Achtung: Ein Downgrade auf eine Vorgängerversion führt zu einem fehlerhaften Verhalten des Moduls.
 - Variablen werden nur noch aktualisiert wenn sich der Wert ändert.
