@@ -758,6 +758,7 @@ class Goodwe extends IPSModule
                         $this->SendDebug("FetchWallboxData", "WB_ChargePower von Box übernommen: {$remoteWatt} W", 0);
                     }
                 }
+            }
 
             // ---------- 5) Pending-Befehle zurück in den Buffer ----------
             $this->SetBuffer("WallboxChanges", json_encode($pending));
