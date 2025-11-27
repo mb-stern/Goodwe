@@ -920,7 +920,7 @@ class Goodwe extends IPSModule
         return true; // im Zweifel weiterarbeiten, weil Cookie oft trotzdem gesetzt ist
     }
 
-    private function SemsApiRequest(string $api, array $param = [], string $version = '4.0'): ?array
+    private function SemsApiRequest(string $api, array $param = [], string $version = '4.0', bool $isRetry = false): ?array
     {
         $email    = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
@@ -930,8 +930,9 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        // Login (einmalig, Cookies wiederverwenden)
         $cookieFile = $this->GetCookieFile();
+
+        // Wenn Cookie fehlt, vorher einloggen
         if (!file_exists($cookieFile)) {
             if (!$this->SemsLogin($email, $password)) {
                 $this->SendDebug("SemsApiRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
@@ -942,18 +943,17 @@ class Goodwe extends IPSModule
         $payload = [
             "api"     => $api,
             "version" => $version,
-            "lang"    => "en",       // wie im HA-Modul: Sprache explizit setzen
+            "lang"    => "en",
             "param"   => $param
         ];
 
-        // SEMS erwartet "str" als JSON im Body, oft x-www-form-urlencoded
         $body = http_build_query([
             "str" => json_encode($payload)
         ]);
 
         $headers = [
             "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            "User-Agent: " . (defined('GOODWE_USER_AGENT') ? GOODWE_USER_AGENT : "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         ];
 
         $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($api);
@@ -983,8 +983,24 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        // in neueren Versionen ist "code" == 0 Erfolg, "msg" == "Successful"
+        // Fehlercodes behandeln
         if (isset($decoded['code']) && (string)$decoded['code'] !== '0') {
+            $code = (string)$decoded['code'];
+
+            // Auth abgelaufen / kein Zugriff -> Cookie löschen + einmal neu einloggen + retry
+            if (!$isRetry && ($code === '100001' || $code === '100002')) {
+                $this->SendDebug("SemsApiRequest", "Auth-Problem (code=$code). Versuche Re-Login und Retry...", 0);
+                @unlink($cookieFile);
+
+                if ($this->SemsLogin($email, $password)) {
+                    // einmaliger Retry
+                    return $this->SemsApiRequest($api, $param, $version, true);
+                }
+
+                $this->SendDebug("SemsApiRequest", "Re-Login fehlgeschlagen.", 0);
+                return null;
+            }
+
             $this->SendDebug("SemsApiRequest", "API-Fehler: " . json_encode($decoded), 0);
             return null;
         }
