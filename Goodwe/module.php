@@ -629,7 +629,21 @@ class Goodwe extends IPSModule
                 return;
             }
 
+            // Komplette Daten einmal kurz loggen (gekürzt)
+            $this->SendDebug(
+                "FetchWallboxData",
+                "Rohdaten aus SEMS: " . substr(json_encode($data['data']), 0, 300) . "...",
+                0
+            );
+
             foreach ($data['data'] as $key => $value) {
+                // *** Neue Debug-Zeile pro Key ***
+                $this->SendDebug(
+                    "FetchWallboxData",
+                    "API-Wert: {$key} = " . json_encode($value),
+                    0
+                );
+
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
@@ -694,22 +708,33 @@ class Goodwe extends IPSModule
                 // ---------- 3) WB_ChargeMode / chargeMode ----------
                 if ($key === 'chargeMode') {
                     $remoteMode = (int)$value;
+                    $this->SendDebug(
+                        "FetchWallboxData",
+                        "chargeMode aus SEMS: {$remoteMode}",
+                        0
+                    );
 
                     if (isset($pending['WB_ChargeMode'])) {
                         $desired = (int)$pending['WB_ChargeMode']['desired'];
 
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "Pending WB_ChargeMode: desired={$desired}, retries={$pending['WB_ChargeMode']['retries']}",
+                            0
+                        );
+
                         if ($remoteMode === $desired) {
-                            // Erfolg – Box übernimmt unseren Sollwert
+                            // Erfolg
                             $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                             unset($pending['WB_ChargeMode']);
                             $this->SendDebug("FetchWallboxData", "WB_ChargeMode-Befehl von Wallbox bestätigt.", 0);
                         } elseif ($pending['WB_ChargeMode']['retries'] >= 2) {
-                            // Nach 2 Versuchen → Box-Wert übernehmen, SEMS ist Wahrheit
+                            // Nach 2 Versuchen → Box-Wert übernehmen
                             $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                             unset($pending['WB_ChargeMode']);
                             $this->SendDebug("FetchWallboxData", "WB_ChargeMode konnte nicht umgesetzt werden – Box-Zustand übernommen.", 0);
                         } else {
-                            // Noch im „Versuchsfenster“ → UI bleibt beim Wunschwert
+                            // Noch im Versuchsfenster → Variable bleibt beim Wunschwert
                             $this->SendDebug(
                                 "FetchWallboxData",
                                 "WB_ChargeMode noch nicht bestätigt (Wallbox: {$remoteMode}, Wunsch: {$desired})",
@@ -717,7 +742,12 @@ class Goodwe extends IPSModule
                             );
                         }
                     } else {
-                        // Kein Pending → immer API übernehmen
+                        // Kein Pending – Box-Wert spiegeln
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "Kein Pending – WB_ChargeMode wird direkt von Box übernommen: {$remoteMode}",
+                            0
+                        );
                         $this->SetValueIfChanged('WB_ChargeMode', $remoteMode);
                     }
                 }
