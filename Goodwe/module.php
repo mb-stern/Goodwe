@@ -834,9 +834,6 @@ class Goodwe extends IPSModule
 
         $this->WriteAttributeString('WallboxQueue', json_encode($queue));
 
-        // zur Sicherheit: Timer existiert / Scriptstring stimmt
-        $this->RegisterTimer('TimerWBQueue', 0, 'Goodwe_ProcessWallboxQueue($_IPS[\'TARGET\']);');
-
         // Timer nur starten, wenn er gerade aus ist
         if ($this->GetTimerInterval('TimerWBQueue') === 0) {
             // z.B. 2000 ms Abstand (2 Sekunden) – kannst du anpassen
