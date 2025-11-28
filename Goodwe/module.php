@@ -19,11 +19,9 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
-        $this->RegisterAttributeString("WallboxQueue", "[]");
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('TimerWBQueue', 0, 'Goodwe_ProcessWallboxQueue($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges()
@@ -264,38 +262,32 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                // IPS-Wert direkt aktualisieren
                 $this->SetValueIfChanged($ident, (bool)$value);
-
+                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
+                $data = ['sn' => $serial];
                 if ($value) {
-                    // Starten zeitversetzt
-                    $this->QueueWallboxCommand('StartCharging');
-                } else {
-                    // Stoppen zeitversetzt
-                    $this->QueueWallboxCommand('StopCharging');
+                    $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
+                $this->SendWallboxRequest($data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
-                $mode = (int)$value;
-                $this->SetValueIfChanged($ident, $mode);
-
-                // Modus zeitversetzt setzen
-                $this->QueueWallboxCommand('SetChargingMode', $mode);
+                $this->SetValueIfChanged($ident, (int)$value);
+                $data = ['sn' => $serial, 'mode' => (int)$value];
+                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
                 break;
 
             case 'WB_ChargePower':
-                // Deine bestehende Rundung & Offset-Logik bleibt erhalten
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700); // Begrenzung
 
-                // Lokale Variablen sofort setzen
                 $this->SetValueIfChanged($ident, $val);
-                $this->SetValueIfChanged('WB_ChargeMode', 0); // Schnellmodus
+                $this->SetValueIfChanged('WB_ChargeMode', 0);
 
-                // API-Aufruf zeitversetzt (Watt-Wert an Queue)
-                $this->QueueWallboxCommand('SetChargingPower', $val);
+                $kw = round($val / 1000, 1);
+                $data = ['sn' => $serial, 'charge_power' => $kw];
+                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
                 break;
 
             default:
@@ -642,18 +634,16 @@ class Goodwe extends IPSModule
             return;
         }
 
-        $modeID = @$this->GetIDForIdent("WB_ChargeMode");
-        $mode   = $modeID !== false ? @GetValue($modeID) : 0;
-
+        $mode = @GetValue($this->GetIDForIdent("ChargingMode"));
         $requestData = [
             "sn"   => $serial,
-            "mode" => (int)$mode
+            "mode" => $mode
         ];
 
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StartCharging");
         if ($response) {
             $this->SendDebug("StartCharging", "Ladevorgang gestartet mit Modus $mode.", 0);
-            $this->SetValueIfChanged("WB_Charging", true);
+            $this->SetValueIfChanged("ChargingState", true);
         } else {
             $this->SendDebug("StartCharging", "Fehler beim Starten des Ladevorgangs.", 0);
         }
@@ -672,7 +662,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v4/EvCharger/StopCharging");
         if ($response) {
             $this->SendDebug("StopCharging", "Ladevorgang gestoppt.", 0);
-            $this->SetValueIfChanged("WB_Charging", false);
+            $this->SetValueIfChanged("ChargingState", false);
         } else {
             $this->SendDebug("StopCharging", "Fehler beim Stoppen des Ladevorgangs.", 0);
         }
@@ -686,7 +676,6 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // power kommt aus der Queue in Watt
         $chargePowerKW = round($power / 1000, 1);
 
         $requestData = [
@@ -697,7 +686,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingPower", "Ladeleistung auf {$chargePowerKW} kW gesetzt.", 0);
-            $this->SetValueIfChanged("WB_ChargePower", (int)$power);
+            $this->SetValueIfChanged("ChargingPower", (int)$power);
         } else {
             $this->SendDebug("SetChargingPower", "Fehler beim Setzen der Ladeleistung.", 0);
         }
@@ -719,7 +708,7 @@ class Goodwe extends IPSModule
         $response = $this->SendWallboxRequest($requestData, "/v3/EvCharger/SetChargeMode");
         if ($response) {
             $this->SendDebug("SetChargingMode", "Lademodus auf {$mode} gesetzt.", 0);
-            $this->SetValueIfChanged("WB_ChargeMode", (int)$mode);
+            $this->SetValueIfChanged("ChargingMode", (int)$mode);
         } else {
             $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
         }
@@ -818,82 +807,6 @@ class Goodwe extends IPSModule
 
         $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
         return true;
-    }
-
-    private function QueueWallboxCommand(string $cmd, $value = null): void
-    {
-        $queue = json_decode($this->ReadAttributeString('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
-        }
-
-        $queue[] = [
-            'cmd'   => $cmd,
-            'value' => $value
-        ];
-
-        $this->WriteAttributeString('WallboxQueue', json_encode($queue));
-
-        // Timer nur starten, wenn er gerade aus ist
-        if ($this->GetTimerInterval('TimerWBQueue') === 0) {
-            // z.B. 2000 ms Abstand (2 Sekunden) – kannst du anpassen
-            $this->SetTimerInterval('TimerWBQueue', 2000);
-        }
-
-        $this->SendDebug('QueueWallboxCommand', 'Kommando in Queue: ' . $cmd . ' / ' . json_encode($value), 0);
-    }
-
-    public function ProcessWallboxQueue(): void
-    {
-        $queue = json_decode($this->ReadAttributeString('WallboxQueue'), true);
-        if (!is_array($queue) || count($queue) === 0) {
-            // Nichts mehr zu tun → Timer aus
-            $this->SetTimerInterval('TimerWBQueue', 0);
-            return;
-        }
-
-        // Erstes Element holen und aus der Queue entfernen
-        $item = array_shift($queue);
-        $this->WriteAttributeString('WallboxQueue', json_encode($queue));
-
-        $cmd   = $item['cmd']   ?? '';
-        $value = $item['value'] ?? null;
-
-        $this->SendDebug('ProcessWallboxQueue', 'Verarbeite Kommando: ' . $cmd . ' / ' . json_encode($value), 0);
-
-        try {
-            switch ($cmd) {
-                case 'StartCharging':
-                    $this->StartCharging();
-                    break;
-
-                case 'StopCharging':
-                    $this->StopCharging();
-                    break;
-
-                case 'SetChargingMode':
-                    $this->SetChargingMode((int)$value);
-                    break;
-
-                case 'SetChargingPower':
-                    $this->SetChargingPower((int)$value);
-                    break;
-
-                default:
-                    $this->SendDebug('ProcessWallboxQueue', 'Unbekanntes Kommando: ' . $cmd, 0);
-                    break;
-            }
-        } catch (Exception $e) {
-            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Kommando: ' . $e->getMessage(), 0);
-        }
-
-        // Wenn noch etwas in der Queue ist, Timer anlassen, sonst stoppen
-        if (count($queue) === 0) {
-            $this->SetTimerInterval('TimerWBQueue', 0);
-        } else {
-            // Abstand zwischen den Befehlen – hier wieder 2000 ms
-            $this->SetTimerInterval('TimerWBQueue', 2000);
-        }
     }
 
     public function CalculateMaxPower()
