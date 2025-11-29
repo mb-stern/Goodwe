@@ -264,7 +264,7 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                // Sofort den Wert setzen (optimistic)
+                // Optimistic Update
                 $this->SetValueIfChanged($ident, (bool)$value);
 
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
@@ -273,16 +273,27 @@ class Goodwe extends IPSModule
                     $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
 
-                // NEU: in Queue legen
                 $this->QueueWallboxChange($ident, $data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
                 $this->SetValueIfChanged($ident, (int)$value);
 
-                $data = ['sn' => $serial, 'mode' => (int)$value];
+                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
+                $chargePowerKW = null;
+                $powerID = @$this->GetIDForIdent('WB_ChargePower');
+                if ($powerID !== false) {
+                    $w = (int)GetValue($powerID);
+                    if ($w > 0) {
+                        $chargePowerKW = round($w / 1000, 1);
+                    }
+                }
 
-                // NEU: in Queue legen
+                $data = ['sn' => $serial, 'mode' => (int)$value];
+                if ($chargePowerKW !== null) {
+                    $data['charge_power'] = $chargePowerKW;
+                }
+
                 $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
                 break;
 
@@ -298,7 +309,6 @@ class Goodwe extends IPSModule
                 $kw = round($val / 1000, 1);
                 $data = ['sn' => $serial, 'charge_power' => $kw];
 
-                // NEU: in Queue legen
                 $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
                 break;
 
@@ -816,15 +826,25 @@ class Goodwe extends IPSModule
             $queue = [];
         }
 
-        $queue[] = [
+        // Coalescing: alle alten Einträge mit demselben Ident entfernen
+        $newQueue = [];
+        foreach ($queue as $cmd) {
+            if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
+                $newQueue[] = $cmd;
+            }
+        }
+
+        $cmd = [
             'ident'    => $ident,
             'data'     => $data,
             'endpoint' => $endpoint,
             'time'     => time()
         ];
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        $newQueue[] = $cmd;
 
-        // Merken, dass für dieses Ident eine eigene Änderung ansteht
+        $this->SetBuffer('WallboxQueue', json_encode($newQueue));
+
+        // Pending-Map aktualisieren
         $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
         if (!is_array($changes)) {
             $changes = [];
@@ -832,16 +852,12 @@ class Goodwe extends IPSModule
         $changes[$ident] = true;
         $this->SetBuffer('WallboxChanges', json_encode($changes));
 
-        // Sperre für API-Updates schon mal setzen (wird nach Abarbeitung noch verlängert)
-        $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
-        $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-        // Queue-Timer aktivieren (1s Intervall)
+        // Queue-Timer auf 1s setzen, wenn er nicht läuft
         if ($this->GetTimerInterval('TimerWBQueue') == 0) {
             $this->SetTimerInterval('TimerWBQueue', 1000);
         }
 
-        $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt: ' . json_encode(end($queue)), 0);
+        $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt (coalesced): ' . json_encode($cmd), 0);
     }
 
     public function ProcessWallboxQueue()
@@ -852,19 +868,18 @@ class Goodwe extends IPSModule
         }
 
         if (count($queue) === 0) {
-            // Nichts mehr zu tun → Timer aus, Sperre noch für einen Poll-Zyklus aktiv lassen
+            // Nichts mehr zu tun → Timer aus, Sperre für einen Poll-Zyklus aktiv lassen
             $this->SetTimerInterval('TimerWBQueue', 0);
 
             $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
-            // Pending-Flags löschen
             $this->SetBuffer('WallboxChanges', json_encode([]));
             $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
             return;
         }
 
-        // Nächsten Eintrag holen
+        // Nächsten Command holen
         $cmd = array_shift($queue);
         $this->SetBuffer('WallboxQueue', json_encode($queue));
 
@@ -873,24 +888,22 @@ class Goodwe extends IPSModule
         $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
         if ($result === null) {
             $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
+        } else {
+            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
         }
 
-        // Wenn Queue jetzt leer ist: Pending-Flags löschen und Sperre für einen Poll-Zyklus verlängern
+        // Wenn nach diesem Command die Queue leer ist:
         if (count($queue) === 0) {
-            $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
-            if (is_array($changes) && isset($changes[$cmd['ident']])) {
-                unset($changes[$cmd['ident']]);
-            }
-            $this->SetBuffer('WallboxChanges', json_encode($changes ?: []));
+            // Pending-Map leeren
+            $this->SetBuffer('WallboxChanges', json_encode([]));
 
+            // API-Updates für einen Poll-Zyklus blockieren
             $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
-            // Timer darf ruhig laufen bleiben – oder du setzt ihn auf 0 und oben wird er neu gestartet
-            if (count($queue) === 0) {
-                $this->SetTimerInterval('TimerWBQueue', 0);
-                $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
-            }
+            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
+            $this->SetTimerInterval('TimerWBQueue', 0);
+            $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
         }
     }
 
