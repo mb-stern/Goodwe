@@ -540,12 +540,13 @@ class Goodwe extends IPSModule
                 return;
             }
 
-            $data = $this->GoodweFetchData($serial);
-            if (!$data) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen oder ungültig.", 0);
+            $apiResponse = $this->GoodweFetchData($serial);
+            if (!$apiResponse) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
                 return;
             }
 
+            $data = json_decode($apiResponse, true);
             if (!isset($data['data']) || !is_array($data['data'])) {
                 $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response oder ungültiges Format.", 0);
                 return;
@@ -568,14 +569,14 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
             }
 
-            // Status-JSON für alle WB_* Variablen
+            // Status-JSON für alle WB_* Variablen (immer eine Zeile pro Lauf)
             $statusJson = [];
 
             foreach ($data['data'] as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // Generelle WB_* Variablen
+                // Generelle WB_* Variablen nur, wenn ein gültiger (nicht null) Wert kommt
                 if ($varID !== false && $value !== null) {
                     // Spezialfall: Ist-Leistung (kW → W)
                     if ($key === 'power') {
@@ -646,9 +647,13 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Eine kompakte JSON-Zeile mit den wichtigsten WB-Werten
+            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten
             ksort($statusJson);
-            $this->SendDebug("WB_StatusJSON", json_encode($statusJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug(
+                "WB_StatusJSON",
+                json_encode($statusJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
@@ -656,7 +661,7 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function GoodweFetchData(string $serial): ?array
+    private function GoodweFetchData(string $serial): ?string
     {
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
 
@@ -680,18 +685,20 @@ class Goodwe extends IPSModule
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        // Versuch zu dekodieren für schönes Logging
         $decoded = null;
         if ($response !== false && $response !== '') {
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliche Debug-Struktur
+        // Einheitliches WB_API-Log für Status-Endpoint
         $log = [
             'type'     => 'status',
             'endpoint' => $apiEndpoint,
             'request'  => ['sn' => $serial],
             'httpCode' => $httpCode,
         ];
+
         if ($decoded !== null) {
             $log['response'] = $decoded;
         } else {
@@ -706,13 +713,9 @@ class Goodwe extends IPSModule
         }
 
         $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen.", 0);
 
-        if (!is_array($decoded)) {
-            $this->SendDebug("GoodweFetchData", "Antwort konnte nicht dekodiert werden.", 0);
-            return null;
-        }
-
-        return $decoded;
+        return $response;
     }
 
     private function GoodweLogin(string $email, string $password): bool
@@ -982,7 +985,7 @@ class Goodwe extends IPSModule
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliche Debug-Struktur
+        // Einheitliches WB_API-Log für Steuer-Endpunkte
         $log = [
             'type'     => 'control',
             'endpoint' => $endpoint,
