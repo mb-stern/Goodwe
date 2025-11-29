@@ -549,14 +549,14 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
         try {
-            // 1) Login
+            // 1) Login bei SEMS
             $loginOk = $this->GoodweLogin($user, $password);
             if (!$loginOk) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
                 return;
             }
 
-            // 2) Rohdaten holen
+            // 2) Rohdaten holen (immer derselbe Endpoint: /v4/EvCharger/GetEvChargerAloneViewBySn)
             $apiResponse = $this->GoodweFetchData($serial);
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
@@ -571,27 +571,30 @@ class Goodwe extends IPSModule
 
             $apiData = $json['data'];
 
-            // --- 2a) Kompletten data-Block einmal als String ausgeben ---
-            // Das sind genau die Rohdaten, aus denen später die WB_-Variablen beschrieben werden.
+            // --- A) Kompletter data-Block der API (genau das, was aus dem Endpoint kommt) ---
             $this->SendDebug(
                 "FetchWallboxData",
                 "Wallbox-API-Daten (data): " . json_encode($apiData),
                 0
             );
 
-            // --- 2b) Nur die Steuer-Werte aus der API (roh, ohne Logik) ---
-            $ctrlSnapshot = [
-                'workstate'       => $apiData['workstate']       ?? null,
-                'chargeMode'      => $apiData['chargeMode']      ?? null,
-                'set_charge_power'=> $apiData['set_charge_power']?? null
+            // --- B) Nur die "7 Wallbox-Werte", wie du sie im Objektbaum siehst ---
+            $wb7 = [
+                'state'        => $apiData['state']        ?? null,
+                'workstate'    => $apiData['workstate']    ?? null,
+                'chargeEnergy' => $apiData['chargeEnergy'] ?? null,
+                'power'        => $apiData['power']        ?? null,
+                'current'      => $apiData['current']      ?? null,
+                'time'         => $apiData['time']         ?? null,
+                'chargeMode'   => $apiData['chargeMode']   ?? null
             ];
             $this->SendDebug(
                 "FetchWallboxData",
-                "WB-Steuervariablen (API): " . json_encode($ctrlSnapshot),
+                "Wallbox-API-Steuer-/Statuswerte: " . json_encode($wb7),
                 0
             );
 
-            // 3) Pending-/Block-Logik für die eigenen Befehle
+            // 3) Pending-/Block-Logik für eigene Befehle (Charging/Mode/Power)
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
                 $pending = [];
@@ -601,33 +604,33 @@ class Goodwe extends IPSModule
             $now       = time();
             $isBlocked = ($holdUntil > $now);
 
-            // Für Debug: was wurde in DIESEM Lauf aus der API in WB_-Variablen geschrieben?
+            // Für Debug: welche WB_-Variablen wurden in DIESEM Lauf aus der API geschrieben?
             $apiToVarMap = [];
 
             foreach ($apiData as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // Nur Keys verarbeiten, zu denen es auch wirklich eine WB_-Variable gibt
+                // Nur verarbeiten, wenn es eine passende WB_-Variable gibt
                 if ($varID === false) {
                     continue;
                 }
 
                 $internalValue = $value;
 
-                // Leistung 'power' kommt in kW → intern in W
+                // Leistung 'power' kommt in kW → intern W
                 if ($key === 'power' && $value !== null) {
                     $internalValue = (int)round(((float)$value) * 1000);
                 }
 
-                // Normale WB_-Variable direkt setzen (Typkonvertierung macht SetValueIfChanged)
+                // Normale WB_-Variable direkt setzen
                 if ($internalValue !== null) {
                     if ($this->SetValueIfChanged($ident, $internalValue)) {
                         $apiToVarMap[$ident] = $internalValue;
                     }
                 }
 
-                // --- Speziallogik: workstate → WB_Charging (nur, wenn nicht pending/blockiert) ---
+                // workstate der API → WB_Charging (nur, wenn keine eigene Änderung pending/blockiert)
                 if ($key === "workstate") {
                     $chargingState     = ($value !== 0);
                     $isPendingCharging = array_key_exists('WB_Charging', $pending);
@@ -640,7 +643,7 @@ class Goodwe extends IPSModule
                     }
                 }
 
-                // --- Optional: chargeMode aus API → WB_ChargeMode (Soll), wenn nicht pending/blockiert ---
+                // chargeMode der API → WB_ChargeMode (Soll), solange nichts pending/blockiert
                 if ($key === "chargeMode" && $value !== null) {
                     $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
                     $isBlockedMode = $isBlocked;
@@ -654,20 +657,14 @@ class Goodwe extends IPSModule
 
                 // WICHTIG:
                 // WB_ChargePower wird NICHT aus der API aktualisiert,
-                // weil set_charge_power in ctrlSnapshot (siehe oben) immer null ist.
+                // weil set_charge_power in der API immer null ist.
             }
 
-            // --- 4) Zusammenfassung: was hat die API in diesem Zyklus in WB_-Variablen geschrieben? ---
+            // 4) Kompakte Zeile: welche WB_-Variablen wurden in diesem Zyklus aus der API gesetzt?
             if (!empty($apiToVarMap)) {
                 $this->SendDebug(
                     "FetchWallboxData",
-                    "WB-API→Variablen (dieser Zyklus): " . json_encode($apiToVarMap),
-                    0
-                );
-            } else {
-                $this->SendDebug(
-                    "FetchWallboxData",
-                    "WB-API→Variablen (dieser Zyklus): keine passenden WB_-Variablen aktualisiert.",
+                    "WB-Variablen aus API gesetzt: " . json_encode($apiToVarMap),
                     0
                 );
             }
