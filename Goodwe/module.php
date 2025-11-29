@@ -633,16 +633,14 @@ class Goodwe extends IPSModule
 
     private function GoodweFetchData(string $serial): ?string
     {
-        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-        $this->SendDebug("GoodweFetchData", "Hole Wallbox-Daten von {$apiEndpoint} für SN={$serial}", 0);
+        $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
 
-        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) .
-            "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" .
-            urlencode($serial) . "%22%7D%7D";
+        $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
+        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
 
         $headers = [
             "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/99.0.4844.51 Safari/537.36",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
         ];
 
         $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
@@ -658,21 +656,48 @@ class Goodwe extends IPSModule
         curl_close($ch);
 
         if ($httpCode !== 200 || !$response) {
-            $this->SendDebug(
-                "GoodweFetchData",
-                "Fehler beim Abruf: HTTP-Code={$httpCode}, RawResponse=" . substr((string)$response, 0, 300),
-                0
-            );
+            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
             return null;
         }
 
-        $this->SendDebug(
-            "GoodweFetchData",
-            "Wallbox-Rohantwort: " . substr($response, 0, 500),
-            0
-        );
-
+        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen. Antwort: $response", 0);
         return $response;
+    }
+
+    private function GoodweLogin(string $email, string $password): bool
+    {
+        $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password,
+            "code"    => "",
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return false;
+        }
+
+        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
+        return true;
     }
 
     public function StartCharging()
@@ -867,7 +892,7 @@ class Goodwe extends IPSModule
         $password = $this->ReadPropertyString("WallboxPassword");
 
         if (empty($email) || empty($password)) {
-            $this->SendDebug("SendWallboxRequest", "Abbruch: Benutzername oder Passwort fehlen.", 0);
+            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
             return null;
         }
 
@@ -881,13 +906,6 @@ class Goodwe extends IPSModule
             "Content-Type: application/json",
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         ];
-
-        // Für Debug: Kompakter, aber gut lesbarer Command
-        $this->SendDebug(
-            "SendWallboxRequest",
-            "Sende Command an {$endpoint}: " . json_encode($data),
-            0
-        );
 
         $body = json_encode([
             "str" => json_encode([
@@ -909,34 +927,58 @@ class Goodwe extends IPSModule
         curl_close($ch);
 
         if ($httpCode !== 200 || !$response) {
-            $this->SendDebug(
-                "SendWallboxRequest",
-                "API-Fehler: HTTP-Code={$httpCode}, RawResponse=" . substr((string)$response, 0, 500),
-                0
-            );
+            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return null;
         }
 
         $decodedResponse = json_decode($response, true);
 
         if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
-            $this->SendDebug(
-                "SendWallboxRequest",
-                "API-Antwort Fehler: " . json_encode($decodedResponse),
-                0
-            );
+            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
             return null;
         }
 
-        $this->SendDebug(
-            "SendWallboxRequest",
-            "API-Antwort OK: " . json_encode([
-                'code' => $decodedResponse['code'],
-                'msg'  => $decodedResponse['msg'] ?? '',
-            ]),
-            0
-        );
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decodedResponse), 0);
         return $decodedResponse;
+    }
+
+    private function LoginToWallbox(string $email, string $password): bool
+    {
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
+            return false;
+        }
+
+        $decodedResponse = json_decode($response, true);
+
+        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
+            return false;
+        }
+
+        $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
+        return true;
     }
 
     public function CalculateMaxPower()
