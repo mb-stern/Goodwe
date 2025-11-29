@@ -350,6 +350,9 @@ class Goodwe extends IPSModule
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
+        // NEU: Hier sammeln wir alle geänderten Werte
+        $changed = [];
+
         foreach ($selectedRegisters as &$r) {
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
@@ -397,7 +400,7 @@ class Goodwe extends IPSModule
             }
 
             $ident    = "Addr" . $addrKey;
-            $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
+            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
             try {
                 $response = $this->SendDataToParent(json_encode([
@@ -474,13 +477,22 @@ class Goodwe extends IPSModule
                 $current = GetValue($varID);
                 if ($current !== $scaledValue) {
                     SetValue($varID, $scaledValue);
-                    $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
-                } else {
+
+                    // NEU: Änderung in Sammel-Array merken
+                    // Key = Ident, Value = neuer Wert
+                    $changed[$ident] = $scaledValue;
                 }
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
                 $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
+        }
+
+        // NEU: alle Änderungen in einer JSON-Zeile ausgeben
+        if (!empty($changed)) {
+            // Optional sortieren für stabile Reihenfolge
+            ksort($changed);
+            $this->SendDebug("WR_Update", json_encode($changed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
         }
 
         $this->CalculateMaxPower();
