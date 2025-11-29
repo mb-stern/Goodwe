@@ -869,8 +869,8 @@ class Goodwe extends IPSModule
             // Jetzt wirklich leer → Pending-Map leeren
             $this->SetBuffer('WallboxChanges', json_encode([]));
 
-            // API-Updates der drei Steuer-Variablen für 60sec blockieren
-            $holdSeconds = 60;
+            // API-Updates der drei Steuer-Variablen für 180sec blockieren
+            $holdSeconds = 180;
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
             // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
