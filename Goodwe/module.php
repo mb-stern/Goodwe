@@ -539,7 +539,7 @@ class Goodwe extends IPSModule
     {
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
+        $serial   = $this->ReadPropertyString("WallboxSerial");
 
         if (empty($user) || empty($password) || empty($serial)) {
             $this->SendDebug("FetchWallboxData", "Übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
@@ -549,14 +549,14 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
         try {
-            // Login
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
+            // 1) Login über SEMS
+            $loginOk = $this->GoodweLogin($user, $password);
+            if (!$loginOk) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
                 return;
             }
 
-            // Rohdaten von der API holen
+            // 2) Rohdaten holen
             $apiResponse = $this->GoodweFetchData($serial);
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
@@ -571,56 +571,56 @@ class Goodwe extends IPSModule
 
             $apiData = $json['data'];
 
-            // Pending-/Block-Logik für die drei Steuer-Variablen
+            // 3) Pending-/Block-Logik für die drei Steuer-Variablen
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
                 $pending = [];
             }
 
             $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-            $now = time();
+            $now       = time();
             $isBlocked = ($holdUntil > $now);
 
-            // Hier sammeln wir, was AUS DER API in WB_-Variablen umgesetzt wird
-            $apiToVarMap = [];
+            // Für Debug: was wurde in diesem Zyklus aus der API in WB_-Variablen geschrieben?
+            $apiToVarMap            = [];
+            $chargingChangedFromApi = false;
+            $modeChangedFromApi     = false;
 
             foreach ($apiData as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // Wir interessieren uns nur für Keys, zu denen es auch eine WB_-Variable gibt
+                // Nur Keys mit vorhandenen WB_-Variablen interessieren uns
                 if ($varID === false) {
                     continue;
                 }
 
                 $internalValue = $value;
 
-                // Spezialfall: Ist-Leistung 'power' kommt in kW → wir benutzen W
+                // Spezialfall: Leistung 'power' (API liefert kW → wir wollen W)
                 if ($key === 'power' && $value !== null) {
                     $internalValue = (int)round(((float)$value) * 1000);
                 }
 
-                // Mapping für Debug merken (nur wenn kein null)
+                // Mapping für Debug (nur nicht-null)
                 if ($internalValue !== null) {
                     $apiToVarMap[$ident] = $internalValue;
                 }
 
-                // --- Variablen setzen ---
-
-                // Normale WB_-Variablen direkt schreiben (Typumwandlung macht SetValueIfChanged)
+                // --- Normale WB_-Variable aktualisieren (z.B. WB_power, WB_current, WB_chargeMode (Ist) ...) ---
                 if ($internalValue !== null) {
                     $this->SetValueIfChanged($ident, $internalValue);
                 }
 
-                // Speziallogik: workstate → WB_Charging mit Pending-/Block-Handling
+                // --- Speziallogik: workstate → WB_Charging ---
                 if ($key === "workstate") {
-                    $chargingState = ($value !== 0);
-
-                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
-                    $isBlockedCharging = $isBlocked;
+                    $chargingState      = ($value !== 0);
+                    $isPendingCharging  = array_key_exists('WB_Charging', $pending);
+                    $isBlockedCharging  = $isBlocked;
 
                     if (!$isPendingCharging && !$isBlockedCharging) {
                         if ($this->SetValueIfChanged('WB_Charging', $chargingState)) {
+                            $chargingChangedFromApi      = true;
                             $apiToVarMap['WB_Charging'] = $chargingState;
                         }
                         $this->SendDebug(
@@ -643,23 +643,67 @@ class Goodwe extends IPSModule
                     }
                 }
 
-                // HINWEIS: WB_ChargePower lesen wir bewusst NICHT aus der API,
-                // weil set_charge_power immer null ist. Sollwert kommt nur aus Symcon.
+                // --- NEU: Speziallogik chargeMode → WB_ChargeMode (Soll mit Aktion) ---
+                if ($key === "chargeMode" && $value !== null) {
+                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
+                    $isBlockedMode = $isBlocked;
+
+                    if (!$isPendingMode && !$isBlockedMode) {
+                        // Wir übernehmen den Ist-Modus auch in die Soll-Variable,
+                        // solange keine eigene Änderung queued/blockiert ist.
+                        if ($this->SetValueIfChanged('WB_ChargeMode', (int)$value)) {
+                            $modeChangedFromApi           = true;
+                            $apiToVarMap['WB_ChargeMode'] = (int)$value;
+                        }
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode (Soll) aus API aktualisiert: " . (int)$value,
+                            0
+                        );
+                    } elseif ($isBlockedMode) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
+                            0
+                        );
+                    } elseif ($isPendingMode) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode nicht aktualisiert – eigene Änderung steht noch aus.",
+                            0
+                        );
+                    }
+                }
+
+                // HINWEIS:
+                // WB_ChargePower (Soll-Leistung) wird NICHT aus der API aktualisiert,
+                // weil die API den Sollwert nicht liefert (set_charge_power ist immer null).
             }
 
+            // 4) Kompakte Zeile: alle API → WB_-Zuweisungen in diesem Zyklus
             if (!empty($apiToVarMap)) {
                 $this->SendDebug(
                     "FetchWallboxData",
-                    "WB-API→Variablen-Mapping: " . json_encode($apiToVarMap),
+                    "WB-API→Variablen (dieser Zyklus): " . json_encode($apiToVarMap),
                     0
                 );
             } else {
                 $this->SendDebug(
                     "FetchWallboxData",
-                    "WB-API→Variablen-Mapping: keine passenden WB_-Variablen aktualisiert.",
+                    "WB-API→Variablen: keine passenden WB_-Variablen aktualisiert.",
                     0
                 );
             }
+
+            // 5) Extra-Zeile nur für die drei Steuer-Variablen mit Aktion
+            $this->SendDebug(
+                "FetchWallboxData",
+                "WB-Steuervariablen (API-Sicht): " .
+                    "WB_Charging=" . ($chargingChangedFromApi ? "aus API geändert" : "unverändert / blockiert") . ", " .
+                    "WB_ChargeMode=" . ($modeChangedFromApi ? "aus API geändert" : "unverändert / blockiert") . ", " .
+                    "WB_ChargePower=unverändert (keine API-Sollleistung).",
+                0
+            );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
