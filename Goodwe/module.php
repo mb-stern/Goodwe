@@ -556,7 +556,7 @@ class Goodwe extends IPSModule
                 return;
             }
 
-            // 2) Rohdaten holen (immer derselbe Endpoint: /v4/EvCharger/GetEvChargerAloneViewBySn)
+            // 2) Rohdaten holen (immer derselbe Endpoint)
             $apiResponse = $this->GoodweFetchData($serial);
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
@@ -571,15 +571,15 @@ class Goodwe extends IPSModule
 
             $apiData = $json['data'];
 
-            // --- A) Kompletter data-Block der API (genau das, was aus dem Endpoint kommt) ---
+            // --- A) Kompletter data-Block der API ---
             $this->SendDebug(
                 "FetchWallboxData",
                 "Wallbox-API-Daten (data): " . json_encode($apiData),
                 0
             );
 
-            // --- B) Nur die "7 Wallbox-Werte", wie du sie im Objektbaum siehst ---
-            $wb7 = [
+            // --- B1) Statuswerte, wie du sie im Objektbaum siehst ---
+            $wbStatus = [
                 'state'        => $apiData['state']        ?? null,
                 'workstate'    => $apiData['workstate']    ?? null,
                 'chargeEnergy' => $apiData['chargeEnergy'] ?? null,
@@ -590,7 +590,19 @@ class Goodwe extends IPSModule
             ];
             $this->SendDebug(
                 "FetchWallboxData",
-                "Wallbox-API-Steuer-/Statuswerte: " . json_encode($wb7),
+                "Wallbox-API-Statuswerte: " . json_encode($wbStatus),
+                0
+            );
+
+            // --- B2) die drei Steuer-Felder aus der API ---
+            $wbControl = [
+                'set_charge_power' => $apiData['set_charge_power']  ?? null,
+                'max_charge_power' => $apiData['max_charge_power']  ?? null,
+                'min_charge_power' => $apiData['min_charge_power']  ?? null
+            ];
+            $this->SendDebug(
+                "FetchWallboxData",
+                "Wallbox-API-Steuerwerte: " . json_encode($wbControl),
                 0
             );
 
@@ -623,9 +635,11 @@ class Goodwe extends IPSModule
                     $internalValue = (int)round(((float)$value) * 1000);
                 }
 
-                // Normale WB_-Variable direkt setzen
+                // Normale WB_-Variable direkt setzen (nur wenn sich der Wert ändert)
                 if ($internalValue !== null) {
-                    if ($this->SetValueIfChanged($ident, $internalValue)) {
+                    $old = GetValue($varID);
+                    if ($old !== $internalValue) {
+                        $this->SetValueIfChanged($ident, $internalValue);
                         $apiToVarMap[$ident] = $internalValue;
                     }
                 }
@@ -637,8 +651,13 @@ class Goodwe extends IPSModule
                     $isBlockedCharging = $isBlocked;
 
                     if (!$isPendingCharging && !$isBlockedCharging) {
-                        if ($this->SetValueIfChanged('WB_Charging', $chargingState)) {
-                            $apiToVarMap['WB_Charging'] = $chargingState;
+                        $chargingID = @$this->GetIDForIdent('WB_Charging');
+                        if ($chargingID !== false) {
+                            $oldCharging = GetValue($chargingID);
+                            if ($oldCharging !== $chargingState) {
+                                $this->SetValueIfChanged('WB_Charging', $chargingState);
+                                $apiToVarMap['WB_Charging'] = $chargingState;
+                            }
                         }
                     }
                 }
@@ -649,18 +668,23 @@ class Goodwe extends IPSModule
                     $isBlockedMode = $isBlocked;
 
                     if (!$isPendingMode && !$isBlockedMode) {
-                        if ($this->SetValueIfChanged('WB_ChargeMode', (int)$value)) {
-                            $apiToVarMap['WB_ChargeMode'] = (int)$value;
+                        $modeID = @$this->GetIDForIdent('WB_ChargeMode');
+                        if ($modeID !== false) {
+                            $oldMode = GetValue($modeID);
+                            $newMode = (int)$value;
+                            if ($oldMode !== $newMode) {
+                                $this->SetValueIfChanged('WB_ChargeMode', $newMode);
+                                $apiToVarMap['WB_ChargeMode'] = $newMode;
+                            }
                         }
                     }
                 }
 
-                // WICHTIG:
-                // WB_ChargePower wird NICHT aus der API aktualisiert,
-                // weil set_charge_power in der API immer null ist.
+                // WB_ChargePower bleibt write-only aus Symcon:
+                // API liefert hier immer null (siehe wbControl['set_charge_power']).
             }
 
-            // 4) Kompakte Zeile: welche WB_-Variablen wurden in diesem Zyklus aus der API gesetzt?
+            // 4) Zusammenfassung: welche WB_-Variablen wurden in diesem Zyklus aus der API gesetzt?
             if (!empty($apiToVarMap)) {
                 $this->SendDebug(
                     "FetchWallboxData",
