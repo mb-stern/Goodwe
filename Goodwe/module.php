@@ -525,21 +525,26 @@ class Goodwe extends IPSModule
             }
 
             $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+            if (!isset($data['data']) || !is_array($data['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response oder ungültiges Format.", 0);
                 return;
             }
 
+            // Rohdaten einmal ins Debug
+            $this->SendDebug("FetchWallboxData", "Rohdaten: " . json_encode($data['data']), 0);
+
             // --- Status für Pending-Änderungen und Blockierung aus Buffern lesen ---
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-            $hasPending = is_array($pending) && count($pending) > 0;
+            if (!is_array($pending)) {
+                $pending = [];
+            }
 
             $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-            $now = time();
+            $now       = time();
             $isBlocked = ($holdUntil > $now);
 
-            if ($hasPending) {
-                $this->SendDebug("FetchWallboxData", "Es liegen noch eigene Änderungen in der Queue (WallboxChanges).", 0);
+            if (!empty($pending)) {
+                $this->SendDebug("FetchWallboxData", "Eigene Änderungen pending: " . implode(', ', array_keys($pending)), 0);
             }
             if ($isBlocked) {
                 $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
@@ -549,9 +554,9 @@ class Goodwe extends IPSModule
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // Normale WB_* Variablen aus dem API-JSON aktualisieren
-                if ($varID !== false) {
-                    // Spezialbehandlung: Leistung Ist (kW → W)
+                // --- Generelle WB_* Variablen nur setzen, wenn ein gültiger (nicht null) Wert kommt ---
+                if ($varID !== false && $value !== null) {
+                    // Spezialfall: Ist-Leistung (kW → W)
                     if ($key === 'power') {
                         $value = (int)round(((float)$value) * 1000);
                     }
@@ -560,11 +565,14 @@ class Goodwe extends IPSModule
                 }
 
                 // ----------------- SPEZIAL: Steuer-Variablen -----------------
+
                 // 1) WB_Charging anhand von workstate
-                if ($key === "workstate") {
+                if ($key === "workstate" && $value !== null) {
                     $chargingState = ($value !== 0);
 
-                    if (!$hasPending && !$isBlocked) {
+                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+
+                    if (!$isPendingCharging && !$isBlocked) {
                         $this->SetValueIfChanged('WB_Charging', $chargingState);
                         $this->SendDebug(
                             "FetchWallboxData",
@@ -577,7 +585,7 @@ class Goodwe extends IPSModule
                             "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
                             0
                         );
-                    } elseif ($hasPending) {
+                    } elseif ($isPendingCharging) {
                         $this->SendDebug(
                             "FetchWallboxData",
                             "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
@@ -587,9 +595,10 @@ class Goodwe extends IPSModule
                 }
 
                 // 2) WB_ChargeMode anhand von chargeMode
-                //    (Info-Variable WB_chargeMode wird oben bereits normal geschrieben)
-                if ($key === "chargeMode") {
-                    if (!$hasPending && !$isBlocked) {
+                if ($key === "chargeMode" && $value !== null) {
+                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
+
+                    if (!$isPendingMode && !$isBlocked) {
                         $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
                         $this->SendDebug(
                             "FetchWallboxData",
@@ -606,30 +615,36 @@ class Goodwe extends IPSModule
                 }
 
                 // 3) WB_ChargePower anhand von set_charge_power (kW → W)
-                //    Falls der Key bei dir anders heißt (z.B. setChargePower), hier anpassen.
+                //    Nur setzen, wenn Wert nicht null ist – sonst bleibt der Slider wie er ist.
                 if ($key === "set_charge_power") {
-                    $powerW = (int)round(((float)$value) * 1000);
-
-                    if (!$hasPending && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_ChargePower', $powerW);
+                    if ($value === null) {
                         $this->SendDebug(
                             "FetchWallboxData",
-                            "WB_ChargePower aus API aktualisiert: {$powerW} W",
+                            "set_charge_power ist null – WB_ChargePower bleibt unverändert.",
                             0
                         );
                     } else {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargePower nicht aktualisiert (pending oder blockiert).",
-                            0
-                        );
+                        $isPendingPower = array_key_exists('WB_ChargePower', $pending);
+                        $powerW = (int)round(((float)$value) * 1000);
+
+                        if (!$isPendingPower && !$isBlocked) {
+                            $this->SetValueIfChanged('WB_ChargePower', $powerW);
+                            $this->SendDebug(
+                                "FetchWallboxData",
+                                "WB_ChargePower aus API aktualisiert: {$powerW} W",
+                                0
+                            );
+                        } else {
+                            $this->SendDebug(
+                                "FetchWallboxData",
+                                "WB_ChargePower nicht aktualisiert (pending oder blockiert).",
+                                0
+                            );
+                        }
                     }
                 }
                 // -----------------------------------------------------------
             }
-
-            $this->SendDebug("FetchWallboxData", "Rohdaten: " . json_encode($data['data']), 0);
-
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
