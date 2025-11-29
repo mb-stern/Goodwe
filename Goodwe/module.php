@@ -22,6 +22,8 @@ class Goodwe extends IPSModule
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('TimerWBQueue', 0, 'Goodwe_ProcessWallboxQueue($_IPS[\'TARGET\']);');
+
     }
 
     public function ApplyChanges()
@@ -262,19 +264,26 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
+                // Sofort den Wert setzen (optimistic)
                 $this->SetValueIfChanged($ident, (bool)$value);
+
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
                 if ($value) {
                     $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
                 }
-                $this->SendWallboxRequest($data, $endpoint);
+
+                // NEU: in Queue legen
+                $this->QueueWallboxChange($ident, $data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
                 $this->SetValueIfChanged($ident, (int)$value);
+
                 $data = ['sn' => $serial, 'mode' => (int)$value];
-                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+
+                // NEU: in Queue legen
+                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
                 break;
 
             case 'WB_ChargePower':
@@ -282,12 +291,15 @@ class Goodwe extends IPSModule
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700); // Begrenzung
 
+                // Lokale Variablen sofort anpassen
                 $this->SetValueIfChanged($ident, $val);
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
                 $kw = round($val / 1000, 1);
                 $data = ['sn' => $serial, 'charge_power' => $kw];
-                $this->SendWallboxRequest($data, '/v3/EvCharger/SetChargeMode');
+
+                // NEU: in Queue legen
+                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
                 break;
 
             default:
@@ -518,37 +530,102 @@ class Goodwe extends IPSModule
                 return;
             }
 
+            // --- Status für Pending-Änderungen und Blockierung aus Buffern lesen ---
+            $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
+            $hasPending = is_array($pending) && count($pending) > 0;
+
+            $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
+            $now = time();
+            $isBlocked = ($holdUntil > $now);
+
+            if ($hasPending) {
+                $this->SendDebug("FetchWallboxData", "Es liegen noch eigene Änderungen in der Queue (WallboxChanges).", 0);
+            }
+            if ($isBlocked) {
+                $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
+            }
+
             foreach ($data['data'] as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
+                // Normale WB_* Variablen aus dem API-JSON aktualisieren
                 if ($varID !== false) {
+                    // Spezialbehandlung: Leistung Ist (kW → W)
                     if ($key === 'power') {
                         $value = (int)round(((float)$value) * 1000);
                     }
 
                     $this->SetValueIfChanged($ident, $value);
+                }
 
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0);
+                // ----------------- SPEZIAL: Steuer-Variablen -----------------
+                // 1) WB_Charging anhand von workstate
+                if ($key === "workstate") {
+                    $chargingState = ($value !== 0);
 
-                        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-                        $isPending = is_array($pending) && array_key_exists('WB_Charging', $pending);
-
-                        $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-                        $now = time();
-                        $isBlocked = ($holdUntil > $now);
-
-                        if (!$isPending && !$isBlocked) {
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            $this->SendDebug("FetchWallboxData", "WB_Charging aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
-                        } elseif ($isBlocked) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                        } elseif ($isPending) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
-                        }
+                    if (!$hasPending && !$isBlocked) {
+                        $this->SetValueIfChanged('WB_Charging', $chargingState);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"),
+                            0
+                        );
+                    } elseif ($isBlocked) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
+                            0
+                        );
+                    } elseif ($hasPending) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
+                            0
+                        );
                     }
                 }
+
+                // 2) WB_ChargeMode anhand von chargeMode
+                //    (Info-Variable WB_chargeMode wird oben bereits normal geschrieben)
+                if ($key === "chargeMode") {
+                    if (!$hasPending && !$isBlocked) {
+                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
+                            0
+                        );
+                    } else {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
+                            0
+                        );
+                    }
+                }
+
+                // 3) WB_ChargePower anhand von set_charge_power (kW → W)
+                //    Falls der Key bei dir anders heißt (z.B. setChargePower), hier anpassen.
+                if ($key === "set_charge_power") {
+                    $powerW = (int)round(((float)$value) * 1000);
+
+                    if (!$hasPending && !$isBlocked) {
+                        $this->SetValueIfChanged('WB_ChargePower', $powerW);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargePower aus API aktualisiert: {$powerW} W",
+                            0
+                        );
+                    } else {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargePower nicht aktualisiert (pending oder blockiert).",
+                            0
+                        );
+                    }
+                }
+                // -----------------------------------------------------------
             }
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
@@ -711,6 +788,91 @@ class Goodwe extends IPSModule
             $this->SetValueIfChanged("ChargingMode", (int)$mode);
         } else {
             $this->SendDebug("SetChargingMode", "Fehler beim Setzen des Lademodus.", 0);
+        }
+    }
+
+    private function QueueWallboxChange(string $ident, array $data, string $endpoint): void
+    {
+        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+        if (!is_array($queue)) {
+            $queue = [];
+        }
+
+        $queue[] = [
+            'ident'    => $ident,
+            'data'     => $data,
+            'endpoint' => $endpoint,
+            'time'     => time()
+        ];
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+        // Merken, dass für dieses Ident eine eigene Änderung ansteht
+        $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
+        if (!is_array($changes)) {
+            $changes = [];
+        }
+        $changes[$ident] = true;
+        $this->SetBuffer('WallboxChanges', json_encode($changes));
+
+        // Sperre für API-Updates schon mal setzen (wird nach Abarbeitung noch verlängert)
+        $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
+        $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+
+        // Queue-Timer aktivieren (1s Intervall)
+        if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+            $this->SetTimerInterval('TimerWBQueue', 1000);
+        }
+
+        $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt: ' . json_encode(end($queue)), 0);
+    }
+
+    public function ProcessWallboxQueue()
+    {
+        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+        if (!is_array($queue)) {
+            $queue = [];
+        }
+
+        if (count($queue) === 0) {
+            // Nichts mehr zu tun → Timer aus, Sperre noch für einen Poll-Zyklus aktiv lassen
+            $this->SetTimerInterval('TimerWBQueue', 0);
+
+            $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
+            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+
+            // Pending-Flags löschen
+            $this->SetBuffer('WallboxChanges', json_encode([]));
+            $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
+            return;
+        }
+
+        // Nächsten Eintrag holen
+        $cmd = array_shift($queue);
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
+
+        $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
+        if ($result === null) {
+            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
+        }
+
+        // Wenn Queue jetzt leer ist: Pending-Flags löschen und Sperre für einen Poll-Zyklus verlängern
+        if (count($queue) === 0) {
+            $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
+            if (is_array($changes) && isset($changes[$cmd['ident']])) {
+                unset($changes[$cmd['ident']]);
+            }
+            $this->SetBuffer('WallboxChanges', json_encode($changes ?: []));
+
+            $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
+            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+
+            // Timer darf ruhig laufen bleiben – oder du setzt ihn auf 0 und oben wird er neu gestartet
+            if (count($queue) === 0) {
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
+            }
         }
     }
 
