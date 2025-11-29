@@ -537,7 +537,7 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $user = $this->ReadPropertyString("WallboxUser");
+        $user     = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
         $serial   = $this->ReadPropertyString("WallboxSerial");
 
@@ -549,7 +549,7 @@ class Goodwe extends IPSModule
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
         try {
-            // 1) Login über SEMS
+            // 1) Login
             $loginOk = $this->GoodweLogin($user, $password);
             if (!$loginOk) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
@@ -571,7 +571,27 @@ class Goodwe extends IPSModule
 
             $apiData = $json['data'];
 
-            // 3) Pending-/Block-Logik für die drei Steuer-Variablen
+            // --- 2a) Kompletten data-Block einmal als String ausgeben ---
+            // Das sind genau die Rohdaten, aus denen später die WB_-Variablen beschrieben werden.
+            $this->SendDebug(
+                "FetchWallboxData",
+                "Wallbox-API-Daten (data): " . json_encode($apiData),
+                0
+            );
+
+            // --- 2b) Nur die Steuer-Werte aus der API (roh, ohne Logik) ---
+            $ctrlSnapshot = [
+                'workstate'       => $apiData['workstate']       ?? null,
+                'chargeMode'      => $apiData['chargeMode']      ?? null,
+                'set_charge_power'=> $apiData['set_charge_power']?? null
+            ];
+            $this->SendDebug(
+                "FetchWallboxData",
+                "WB-Steuervariablen (API): " . json_encode($ctrlSnapshot),
+                0
+            );
+
+            // 3) Pending-/Block-Logik für die eigenen Befehle
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
                 $pending = [];
@@ -581,106 +601,63 @@ class Goodwe extends IPSModule
             $now       = time();
             $isBlocked = ($holdUntil > $now);
 
-            // Für Debug: was wurde in diesem Zyklus aus der API in WB_-Variablen geschrieben?
-            $apiToVarMap            = [];
-            $chargingChangedFromApi = false;
-            $modeChangedFromApi     = false;
+            // Für Debug: was wurde in DIESEM Lauf aus der API in WB_-Variablen geschrieben?
+            $apiToVarMap = [];
 
             foreach ($apiData as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // Nur Keys mit vorhandenen WB_-Variablen interessieren uns
+                // Nur Keys verarbeiten, zu denen es auch wirklich eine WB_-Variable gibt
                 if ($varID === false) {
                     continue;
                 }
 
                 $internalValue = $value;
 
-                // Spezialfall: Leistung 'power' (API liefert kW → wir wollen W)
+                // Leistung 'power' kommt in kW → intern in W
                 if ($key === 'power' && $value !== null) {
                     $internalValue = (int)round(((float)$value) * 1000);
                 }
 
-                // Mapping für Debug (nur nicht-null)
+                // Normale WB_-Variable direkt setzen (Typkonvertierung macht SetValueIfChanged)
                 if ($internalValue !== null) {
-                    $apiToVarMap[$ident] = $internalValue;
-                }
-
-                // --- Normale WB_-Variable aktualisieren (z.B. WB_power, WB_current, WB_chargeMode (Ist) ...) ---
-                if ($internalValue !== null) {
-                    $this->SetValueIfChanged($ident, $internalValue);
-                }
-
-                // --- Speziallogik: workstate → WB_Charging ---
-                if ($key === "workstate") {
-                    $chargingState      = ($value !== 0);
-                    $isPendingCharging  = array_key_exists('WB_Charging', $pending);
-                    $isBlockedCharging  = $isBlocked;
-
-                    if (!$isPendingCharging && !$isBlockedCharging) {
-                        if ($this->SetValueIfChanged('WB_Charging', $chargingState)) {
-                            $chargingChangedFromApi      = true;
-                            $apiToVarMap['WB_Charging'] = $chargingState;
-                        }
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging aus API aktualisiert: " . ($chargingState ? "true" : "false"),
-                            0
-                        );
-                    } elseif ($isBlockedCharging) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                            0
-                        );
-                    } elseif ($isPendingCharging) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
-                            0
-                        );
+                    if ($this->SetValueIfChanged($ident, $internalValue)) {
+                        $apiToVarMap[$ident] = $internalValue;
                     }
                 }
 
-                // --- NEU: Speziallogik chargeMode → WB_ChargeMode (Soll mit Aktion) ---
+                // --- Speziallogik: workstate → WB_Charging (nur, wenn nicht pending/blockiert) ---
+                if ($key === "workstate") {
+                    $chargingState     = ($value !== 0);
+                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+                    $isBlockedCharging = $isBlocked;
+
+                    if (!$isPendingCharging && !$isBlockedCharging) {
+                        if ($this->SetValueIfChanged('WB_Charging', $chargingState)) {
+                            $apiToVarMap['WB_Charging'] = $chargingState;
+                        }
+                    }
+                }
+
+                // --- Optional: chargeMode aus API → WB_ChargeMode (Soll), wenn nicht pending/blockiert ---
                 if ($key === "chargeMode" && $value !== null) {
                     $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
                     $isBlockedMode = $isBlocked;
 
                     if (!$isPendingMode && !$isBlockedMode) {
-                        // Wir übernehmen den Ist-Modus auch in die Soll-Variable,
-                        // solange keine eigene Änderung queued/blockiert ist.
                         if ($this->SetValueIfChanged('WB_ChargeMode', (int)$value)) {
-                            $modeChangedFromApi           = true;
                             $apiToVarMap['WB_ChargeMode'] = (int)$value;
                         }
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode (Soll) aus API aktualisiert: " . (int)$value,
-                            0
-                        );
-                    } elseif ($isBlockedMode) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                            0
-                        );
-                    } elseif ($isPendingMode) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert – eigene Änderung steht noch aus.",
-                            0
-                        );
                     }
                 }
 
-                // HINWEIS:
-                // WB_ChargePower (Soll-Leistung) wird NICHT aus der API aktualisiert,
-                // weil die API den Sollwert nicht liefert (set_charge_power ist immer null).
+                // WICHTIG:
+                // WB_ChargePower wird NICHT aus der API aktualisiert,
+                // weil set_charge_power in ctrlSnapshot (siehe oben) immer null ist.
             }
 
-            // 4) Kompakte Zeile: alle API → WB_-Zuweisungen in diesem Zyklus
+            // --- 4) Zusammenfassung: was hat die API in diesem Zyklus in WB_-Variablen geschrieben? ---
             if (!empty($apiToVarMap)) {
                 $this->SendDebug(
                     "FetchWallboxData",
@@ -690,20 +667,10 @@ class Goodwe extends IPSModule
             } else {
                 $this->SendDebug(
                     "FetchWallboxData",
-                    "WB-API→Variablen: keine passenden WB_-Variablen aktualisiert.",
+                    "WB-API→Variablen (dieser Zyklus): keine passenden WB_-Variablen aktualisiert.",
                     0
                 );
             }
-
-            // 5) Extra-Zeile nur für die drei Steuer-Variablen mit Aktion
-            $this->SendDebug(
-                "FetchWallboxData",
-                "WB-Steuervariablen (API-Sicht): " .
-                    "WB_Charging=" . ($chargingChangedFromApi ? "aus API geändert" : "unverändert / blockiert") . ", " .
-                    "WB_ChargeMode=" . ($modeChangedFromApi ? "aus API geändert" : "unverändert / blockiert") . ", " .
-                    "WB_ChargePower=unverändert (keine API-Sollleistung).",
-                0
-            );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
