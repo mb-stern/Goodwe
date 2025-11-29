@@ -350,6 +350,9 @@ class Goodwe extends IPSModule
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
+        // Sammel-Array für alle gelesenen/gesetzten Werte (immer!)
+        $values = [];
+
         foreach ($selectedRegisters as &$r) {
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
@@ -397,7 +400,7 @@ class Goodwe extends IPSModule
             }
 
             $ident    = "Addr" . $addrKey;
-            $quantity = (in_array($r['type'], ["U32","S32"], true)) ? 2 : 1;
+            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
             try {
                 $response = $this->SendDataToParent(json_encode([
@@ -449,39 +452,48 @@ class Goodwe extends IPSModule
                     continue;
                 }
 
+                // Typgerecht runden/konvertieren
                 $var = IPS_GetVariable($varID);
                 switch ($var['VariableType']) {
                     case VARIABLETYPE_INTEGER:
-                        $scaledValue = (int)round($scaledValue);
+                        $finalValue = (int)round($scaledValue);
                         break;
 
                     case VARIABLETYPE_FLOAT:
                         $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
                         $dotPos   = strpos($scaleStr, '.');
                         $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
-                        $scaledValue = round((float)$scaledValue, $decimals);
+                        $finalValue = round((float)$scaledValue, $decimals);
                         break;
 
                     case VARIABLETYPE_STRING:
-                        $scaledValue = (string)$scaledValue;
+                        $finalValue = (string)$scaledValue;
                         break;
 
                     case VARIABLETYPE_BOOLEAN:
-                        $scaledValue = ((int)round($scaledValue)) !== 0;
+                        $finalValue = ((int)round($scaledValue)) !== 0;
+                        break;
+
+                    default:
+                        $finalValue = $scaledValue;
                         break;
                 }
 
-                $current = GetValue($varID);
-                if ($current !== $scaledValue) {
-                    SetValue($varID, $scaledValue);
-                    $this->SendDebug("RequestRead", "Wert für {$r['address']} ({$r['name']}) aktualisiert: $current -> $scaledValue", 0);
-                } else {
-                }
+                // In IPS nur setzen, wenn geändert
+                $this->SetValueIfChanged($ident, $finalValue);
+
+                // Für das JSON immer merken (auch wenn unverändert)
+                $values[$ident] = $finalValue;
+
             } catch (Exception $e) {
                 $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
                 $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
+
+        // Immer eine Zeile Debug mit JSON der aktuellen Werte
+        ksort($values);
+        $this->SendDebug("WR_JSON", json_encode($values, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
         $this->CalculateMaxPower();
     }
@@ -510,9 +522,9 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $user = $this->ReadPropertyString("WallboxUser");
+        $user     = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
-        $serial = $this->ReadPropertyString("WallboxSerial");
+        $serial   = $this->ReadPropertyString("WallboxSerial");
 
         if (empty($user) || empty($password) || empty($serial)) {
             $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
@@ -540,9 +552,6 @@ class Goodwe extends IPSModule
                 return;
             }
 
-            // Rohdaten einmal ins Debug
-            $this->SendDebug("FetchWallboxData", "Rohdaten: " . json_encode($data['data']), 0);
-
             // --- Status für Pending-Änderungen und Blockierung aus Buffern lesen ---
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
@@ -560,11 +569,14 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
             }
 
+            // Status-JSON für alle WB_* Variablen (immer eine Zeile pro Lauf)
+            $statusJson = [];
+
             foreach ($data['data'] as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                // --- Generelle WB_* Variablen nur setzen, wenn ein gültiger (nicht null) Wert kommt ---
+                // Generelle WB_* Variablen nur, wenn ein gültiger (nicht null) Wert kommt
                 if ($varID !== false && $value !== null) {
                     // Spezialfall: Ist-Leistung (kW → W)
                     if ($key === 'power') {
@@ -572,14 +584,14 @@ class Goodwe extends IPSModule
                     }
 
                     $this->SetValueIfChanged($ident, $value);
+                    $statusJson[$ident] = GetValue($varID);
                 }
 
                 // ----------------- SPEZIAL: Steuer-Variablen -----------------
 
                 // 1) WB_Charging anhand von workstate
                 if ($key === "workstate" && $value !== null) {
-                    $chargingState = ($value !== 0);
-
+                    $chargingState     = ($value !== 0);
                     $isPendingCharging = array_key_exists('WB_Charging', $pending);
 
                     if (!$isPendingCharging && !$isBlocked) {
@@ -602,6 +614,11 @@ class Goodwe extends IPSModule
                             0
                         );
                     }
+
+                    $cid = @$this->GetIDForIdent('WB_Charging');
+                    if ($cid !== false) {
+                        $statusJson['WB_Charging'] = GetValue($cid);
+                    }
                 }
 
                 // 2) WB_ChargeMode anhand von chargeMode
@@ -622,8 +639,21 @@ class Goodwe extends IPSModule
                             0
                         );
                     }
+
+                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
+                    if ($mid !== false) {
+                        $statusJson['WB_ChargeMode'] = GetValue($mid);
+                    }
                 }
             }
+
+            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten
+            ksort($statusJson);
+            $this->SendDebug(
+                "WB_StatusJSON",
+                json_encode($statusJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
@@ -655,12 +685,36 @@ class Goodwe extends IPSModule
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        // Versuch zu dekodieren für schönes Logging
+        $decoded = null;
+        if ($response !== false && $response !== '') {
+            $decoded = json_decode($response, true);
+        }
+
+        // Einheitliches WB_API-Log für Status-Endpoint
+        $log = [
+            'type'     => 'status',
+            'endpoint' => $apiEndpoint,
+            'request'  => ['sn' => $serial],
+            'httpCode' => $httpCode,
+        ];
+
+        if ($decoded !== null) {
+            $log['response'] = $decoded;
+        } else {
+            $log['responseRaw'] = $response;
+        }
+
         if ($httpCode !== 200 || !$response) {
+            $log['error'] = 'HTTP-Fehler oder leere Antwort';
+            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
             return null;
         }
 
-        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen. Antwort: $response", 0);
+        $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen.", 0);
+
         return $response;
     }
 
@@ -888,7 +942,7 @@ class Goodwe extends IPSModule
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
-        $email = $this->ReadPropertyString("WallboxUser");
+        $email    = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
 
         if (empty($email) || empty($password)) {
@@ -926,20 +980,42 @@ class Goodwe extends IPSModule
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        $decoded = null;
+        if ($response !== false && $response !== '') {
+            $decoded = json_decode($response, true);
+        }
+
+        // Einheitliches WB_API-Log für Steuer-Endpunkte
+        $log = [
+            'type'     => 'control',
+            'endpoint' => $endpoint,
+            'request'  => $data,
+            'httpCode' => $httpCode,
+        ];
+        if ($decoded !== null) {
+            $log['response'] = $decoded;
+        } else {
+            $log['responseRaw'] = $response;
+        }
+
         if ($httpCode !== 200 || !$response) {
+            $log['error'] = 'HTTP-Fehler oder leere Antwort';
+            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return null;
         }
 
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== "0") {
-            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decodedResponse), 0);
+        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
+            $log['error'] = 'API-Fehlercode';
+            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
             return null;
         }
 
-        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decodedResponse), 0);
-        return $decodedResponse;
+        $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
+
+        return $decoded;
     }
 
     private function LoginToWallbox(string $email, string $password): bool
