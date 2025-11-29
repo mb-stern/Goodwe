@@ -626,7 +626,7 @@ class Goodwe extends IPSModule
 
                 // 3) WB_ChargePower anhand von set_charge_power (kW → W)
                 //    Nur setzen, wenn Wert nicht null ist – sonst bleibt der Slider wie er ist.
-                if ($key === "set_charge_power") {
+                if ($key === "charge_power") {
                     if ($value === null) {
                         $this->SendDebug(
                             "FetchWallboxData",
