@@ -862,20 +862,16 @@ class Goodwe extends IPSModule
 
     public function ProcessWallboxQueue()
     {
+        // Aktuelle Queue aus dem Buffer laden
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
         }
 
+        // Wenn nichts zu tun: Timer aus, aber Buffer/Changes NICHT anfassen
         if (count($queue) === 0) {
-            // Nichts mehr zu tun → Timer aus, Sperre für einen Poll-Zyklus aktiv lassen
+            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
             $this->SetTimerInterval('TimerWBQueue', 0);
-
-            $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-            $this->SetBuffer('WallboxChanges', json_encode([]));
-            $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
             return;
         }
 
@@ -885,6 +881,7 @@ class Goodwe extends IPSModule
 
         $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
 
+        // API-Aufruf (kann mehrere Sekunden dauern)
         $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
         if ($result === null) {
             $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
@@ -892,18 +889,31 @@ class Goodwe extends IPSModule
             $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
         }
 
-        // Wenn nach diesem Command die Queue leer ist:
+        // WICHTIG: Queue NACH dem Request NOCHMAL aus dem Buffer lesen,
+        // denn in der Zwischenzeit könnte ein neuer Befehl enqueued worden sein.
+        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+        if (!is_array($queue)) {
+            $queue = [];
+        }
+
         if (count($queue) === 0) {
-            // Pending-Map leeren
+            // Jetzt wirklich leer → Pending-Map leeren
             $this->SetBuffer('WallboxChanges', json_encode([]));
 
-            // API-Updates für einen Poll-Zyklus blockieren
+            // API-Updates der drei Steuer-Variablen für einen Poll-Zyklus blockieren
             $holdSeconds = max((int)$this->ReadPropertyInteger('PollIntervalWB'), 1);
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
             // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
             $this->SetTimerInterval('TimerWBQueue', 0);
             $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
+        } else {
+            // Es sind noch Befehle in der Queue → Timer weiterlaufen lassen
+            $this->SendDebug(
+                'ProcessWallboxQueue',
+                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
+                0
+            );
         }
     }
 
