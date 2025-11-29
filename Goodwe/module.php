@@ -535,153 +535,187 @@ class Goodwe extends IPSModule
         return true;
     }
 
-public function FetchWallboxData()
-{
-    $user     = $this->ReadPropertyString("WallboxUser");
-    $password = $this->ReadPropertyString("WallboxPassword");
-    $serial   = $this->ReadPropertyString("WallboxSerial");
+    public function FetchWallboxData()
+    {
+        $user     = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        $serial   = $this->ReadPropertyString("WallboxSerial");
 
-    if (empty($user) || empty($password) || empty($serial)) {
-        $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
-        return;
+        if (empty($user) || empty($password) || empty($serial)) {
+            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            return;
+        }
+
+        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+
+        try {
+            // 1) Login
+            $loginResponse = $this->GoodweLogin($user, $password);
+            if (!$loginResponse) {
+                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
+                return;
+            }
+
+            $apiResponseV4 = $this->GoodweFetchData($serial);
+            if (!$apiResponseV4) {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf (v4) fehlgeschlagen.", 0);
+                return;
+            }
+
+            $dataV4 = json_decode($apiResponseV4, true);
+            if (!isset($dataV4['data']) || !is_array($dataV4['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine gültigen 'data'-Daten im API-Response (v4).", 0);
+                return;
+            }
+
+            $apiDataV4 = $dataV4['data'];
+
+            // **Das ist der Debug, den du vorher hattest: kompletter data-Block**
+            $this->SendDebug(
+                "FetchWallboxData",
+                "Rohdaten (v4 GetEvChargerAloneViewBySn): " . json_encode($apiDataV4),
+                0
+            );
+
+            $apiResponseV3 = $this->GoodweFetchChargeInfo($serial);
+            if ($apiResponseV3) {
+                $dataV3 = json_decode($apiResponseV3, true);
+                if (isset($dataV3['data']) && is_array($dataV3['data'])) {
+                    $apiDataV3 = $dataV3['data'];
+
+                    // Einheitlicher Debug-Stil für den zweiten Endpunkt
+                    $this->SendDebug(
+                        "FetchWallboxData",
+                        "Rohdaten (v3 GetCurrentChargeinfo): " . json_encode($apiDataV3),
+                        0
+                    );
+
+                } else {
+                    $this->SendDebug("FetchWallboxData", "v3-Response enthält keinen gültigen 'data'-Block.", 0);
+                }
+            } else {
+                $this->SendDebug("FetchWallboxData", "API-Datenabruf (v3) fehlgeschlagen – v3-Rohdaten nicht verfügbar.", 0);
+            }
+
+            $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
+            if (!is_array($pending)) {
+                $pending = [];
+            }
+
+            $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
+            $now       = time();
+            $isBlocked = ($holdUntil > $now);
+
+            foreach ($apiDataV4 as $key => $value) {
+                $ident = "WB_" . $key;
+                $varID = @$this->GetIDForIdent($ident);
+
+                if ($varID === false) {
+                    continue;
+                }
+
+                // Nur gültige Werte schreiben
+                if ($value === null) {
+                    continue;
+                }
+
+                $internalValue = $value;
+
+                // Ist-Leistung: API liefert kW → intern W
+                if ($key === 'power') {
+                    $internalValue = (int)round(((float)$value) * 1000);
+                }
+
+                // Normale WB_-Variablen setzen
+                $this->SetValueIfChanged($ident, $internalValue);
+
+                // workstate → WB_Charging (mit Pending-/Block-Logik)
+                if ($key === "workstate") {
+                    $chargingState     = ($value !== 0);
+                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+                    $isBlockedCharging = $isBlocked;
+
+                    if (!$isPendingCharging && !$isBlockedCharging) {
+                        $this->SetValueIfChanged('WB_Charging', $chargingState);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging aus API (v4) gesetzt: " . ($chargingState ? "true" : "false"),
+                            0
+                        );
+                    } elseif ($isBlockedCharging) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – blockiert bis " . date('H:i:s', $holdUntil),
+                            0
+                        );
+                    } elseif ($isPendingCharging) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
+                            0
+                        );
+                    }
+                }
+
+                // chargeMode (v4) → WB_ChargeMode (Soll), wenn nicht pending/blockiert
+                if ($key === "chargeMode") {
+                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
+                    $isBlockedMode = $isBlocked;
+
+                    if (!$isPendingMode && !$isBlockedMode) {
+                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode aus API (v4) gesetzt: " . (int)$value,
+                            0
+                        );
+                    }
+                }
+
+                // WB_ChargePower bleibt write-only (API liefert keinen gesetzten Sollwert)
+            }
+
+            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
+
+        } catch (Exception $e) {
+            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        }
     }
 
-    $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
+    private function GoodweFetchChargeInfo(string $serial): ?string
+    {
+        $this->SendDebug("GoodweFetchChargeInfo", "Starte API-Datenabruf (v3 GetCurrentChargeinfo) für Seriennummer: $serial", 0);
 
-    try {
-        // 1) Login bei SEMS
-        $loginResponse = $this->GoodweLogin($user, $password);
-        if (!$loginResponse) {
-            $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-            return;
-        }
+        $apiEndpoint = "/v3/EvCharger/GetCurrentChargeinfo";
 
-        // 2) Daten von der Wallbox holen (GetEvChargerAloneViewBySn)
-        $apiResponse = $this->GoodweFetchData($serial);
-        if (!$apiResponse) {
-            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-            return;
-        }
+        // Body analog zu GoodweFetchData, nur mit anderem api-Endpunkt
+        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
 
-        $data = json_decode($apiResponse, true);
-        if (!isset($data['data']) || !is_array($data['data'])) {
-            $this->SendDebug("FetchWallboxData", "Keine gültigen 'data'-Daten im API-Response.", 0);
-            return;
-        }
-
-        $apiData = $data['data'];
-
-        // === DEBUG WIE FRÜHER: kompletter data-Block ===
-        // Das ist genau das, was du in deinem Log als "Rohdaten: {...}" gesehen hast.
-        $this->SendDebug(
-            "FetchWallboxData",
-            "Rohdaten: " . json_encode($apiData),
-            0
-        );
-
-        // === NEU: API-Steuerwerte DIREKT aus der API (nicht aus Symcon!) ===
-        // Hier nimmst du genau die Felder, die dich interessieren.
-        $apiControl = [
-            'workstate'        => $apiData['workstate']        ?? null,
-            'chargeMode'       => $apiData['chargeMode']       ?? null,
-            'max_charge_power' => $apiData['max_charge_power'] ?? null,
-            'min_charge_power' => $apiData['min_charge_power'] ?? null,
-            'set_charge_power' => $apiData['set_charge_power'] ?? null,
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
         ];
-        $this->SendDebug(
-            "FetchWallboxData",
-            "API-Steuerwerte (roh): " . json_encode($apiControl),
-            0
-        );
 
-        // 3) Pending-/Block-Logik für die eigenen Befehle (Charging / Mode / Power)
-        $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-        if (!is_array($pending)) {
-            $pending = [];
+        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("GoodweFetchChargeInfo", "API-Datenabruf (v3) fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            return null;
         }
 
-        $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-        $now       = time();
-        $isBlocked = ($holdUntil > $now);
-
-        // 4) API-Werte in WB_-Variablen schreiben (Logik unverändert, nur Null-Werte werden übersprungen)
-        foreach ($apiData as $key => $value) {
-            $ident = "WB_" . $key;
-            $varID = @$this->GetIDForIdent($ident);
-
-            if ($varID === false) {
-                continue; // es gibt keine passende WB_-Variable
-            }
-
-            // null-Werte aus der API nicht in Variablen schreiben
-            if ($value === null) {
-                continue;
-            }
-
-            $internalValue = $value;
-
-            // Ist-Leistung: API liefert kW → intern W
-            if ($key === 'power') {
-                $internalValue = (int)round(((float)$value) * 1000);
-            }
-
-            // normale WB_-Variable setzen (Typkonvertierung macht SetValueIfChanged)
-            $this->SetValueIfChanged($ident, $internalValue);
-
-            // --- Speziallogik: workstate -> WB_Charging ---
-            if ($key === "workstate") {
-                $chargingState     = ($value !== 0);
-                $isPendingCharging = array_key_exists('WB_Charging', $pending);
-                $isBlockedCharging = $isBlocked;
-
-                if (!$isPendingCharging && !$isBlockedCharging) {
-                    $this->SetValueIfChanged('WB_Charging', $chargingState);
-                    $this->SendDebug(
-                        "FetchWallboxData",
-                        "WB_Charging aus API gesetzt: " . ($chargingState ? "true" : "false"),
-                        0
-                    );
-                } elseif ($isBlockedCharging) {
-                    $this->SendDebug(
-                        "FetchWallboxData",
-                        "WB_Charging nicht aktualisiert – blockiert bis " . date('H:i:s', $holdUntil),
-                        0
-                    );
-                } elseif ($isPendingCharging) {
-                    $this->SendDebug(
-                        "FetchWallboxData",
-                        "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
-                        0
-                    );
-                }
-            }
-
-            // --- Optional: chargeMode aus der API -> WB_ChargeMode (Soll) spiegeln ---
-            if ($key === "chargeMode") {
-                $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
-                $isBlockedMode = $isBlocked;
-
-                if (!$isPendingMode && !$isBlockedMode) {
-                    $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
-                    $this->SendDebug(
-                        "FetchWallboxData",
-                        "WB_ChargeMode aus API gesetzt: " . (int)$value,
-                        0
-                    );
-                }
-            }
-
-            // WICHTIG:
-            // WB_ChargePower wird NICHT aus der API aktualisiert,
-            // weil set_charge_power laut API-Steuerwerte (oben) immer null ist.
-        }
-
-        $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-    } catch (Exception $e) {
-        $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        $this->SendDebug("GoodweFetchChargeInfo", "API-Daten (v3) erfolgreich abgerufen. Antwort: $response", 0);
+        return $response;
     }
-}
-
 
     private function GoodweFetchData(string $serial): ?string
     {
