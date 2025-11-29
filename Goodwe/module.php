@@ -542,42 +542,36 @@ class Goodwe extends IPSModule
         $serial = $this->ReadPropertyString("WallboxSerial");
 
         if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+            $this->SendDebug("FetchWallboxData", "Übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
             return;
         }
 
         $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
 
         try {
-            // Login über die SEMS-API
+            // Login
             $loginResponse = $this->GoodweLogin($user, $password);
             if (!$loginResponse) {
                 $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
                 return;
             }
 
-            // Rohdaten von der Wallbox-API holen
+            // Rohdaten von der API holen
             $apiResponse = $this->GoodweFetchData($serial);
             if (!$apiResponse) {
                 $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
                 return;
             }
 
-            // JSON dekodieren
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response.", 0);
+            $json = json_decode($apiResponse, true);
+            if (!isset($json['data']) || !is_array($json['data'])) {
+                $this->SendDebug("FetchWallboxData", "Keine gültigen 'data'-Daten im API-Response.", 0);
                 return;
             }
 
-            // Zur Info einmal der "data"-Block aus der API (ohne den Drumherum-Kopf)
-            $this->SendDebug(
-                "FetchWallboxData",
-                "Wallbox-API-Daten (data-Block): " . json_encode($data['data']),
-                0
-            );
+            $apiData = $json['data'];
 
-            // Puffer/Blocking für die drei Steuer-Variablen (wie bisher)
+            // Pending-/Block-Logik für die drei Steuer-Variablen
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
                 $pending = [];
@@ -587,56 +581,85 @@ class Goodwe extends IPSModule
             $now = time();
             $isBlocked = ($holdUntil > $now);
 
-            foreach ($data['data'] as $key => $value) {
+            // Hier sammeln wir, was AUS DER API in WB_-Variablen umgesetzt wird
+            $apiToVarMap = [];
+
+            foreach ($apiData as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
-                if ($varID !== false) {
-                    // Spezialfall: Ist-Leistung power (kW → W)
-                    if ($key === 'power') {
-                        $value = (int)round(((float)$value) * 1000);
-                    }
+                // Wir interessieren uns nur für Keys, zu denen es auch eine WB_-Variable gibt
+                if ($varID === false) {
+                    continue;
+                }
 
-                    // "normale" Wallbox-Variablen direkt setzen (mit Type-Anpassung in SetValueIfChanged)
-                    $this->SetValueIfChanged($ident, $value);
+                $internalValue = $value;
 
-                    // Speziallogik für WB_Charging basierend auf workstate (wie gehabt)
-                    if ($key === "workstate") {
-                        $chargingState = ($value !== 0);
+                // Spezialfall: Ist-Leistung 'power' kommt in kW → wir benutzen W
+                if ($key === 'power' && $value !== null) {
+                    $internalValue = (int)round(((float)$value) * 1000);
+                }
 
-                        $isPendingCharging = is_array($pending) && array_key_exists('WB_Charging', $pending);
-                        $isBlockedCharging = $isBlocked;
+                // Mapping für Debug merken (nur wenn kein null)
+                if ($internalValue !== null) {
+                    $apiToVarMap[$ident] = $internalValue;
+                }
 
-                        if (!$isPendingCharging && !$isBlockedCharging) {
-                            // nur aktualisieren, wenn keine eigenen Änderungen ausstehen und nicht blockiert
-                            $this->SetValueIfChanged('WB_Charging', $chargingState);
-                            $this->SendDebug("FetchWallboxData", "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"), 0);
-                        } elseif ($isBlockedCharging) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil), 0);
-                        } elseif ($isPendingCharging) {
-                            $this->SendDebug("FetchWallboxData", "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.", 0);
+                // --- Variablen setzen ---
+
+                // Normale WB_-Variablen direkt schreiben (Typumwandlung macht SetValueIfChanged)
+                if ($internalValue !== null) {
+                    $this->SetValueIfChanged($ident, $internalValue);
+                }
+
+                // Speziallogik: workstate → WB_Charging mit Pending-/Block-Handling
+                if ($key === "workstate") {
+                    $chargingState = ($value !== 0);
+
+                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+                    $isBlockedCharging = $isBlocked;
+
+                    if (!$isPendingCharging && !$isBlockedCharging) {
+                        if ($this->SetValueIfChanged('WB_Charging', $chargingState)) {
+                            $apiToVarMap['WB_Charging'] = $chargingState;
                         }
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging aus API aktualisiert: " . ($chargingState ? "true" : "false"),
+                            0
+                        );
+                    } elseif ($isBlockedCharging) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
+                            0
+                        );
+                    } elseif ($isPendingCharging) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
+                            0
+                        );
                     }
-
-                    // Hinweis: WB_ChargeMode wird an anderer Stelle schon passend behandelt,
-                    // hier reicht die normale SetValueIfChanged-Logik für WB_chargeMode (Ist-Modus).
                 }
+
+                // HINWEIS: WB_ChargePower lesen wir bewusst NICHT aus der API,
+                // weil set_charge_power immer null ist. Sollwert kommt nur aus Symcon.
             }
 
-            // *** NEU: eine kompakte Debug-Zeile mit ALLEN WB_-Variablenwerten ***
-            $wbValues = [];
-            foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-                $obj = IPS_GetObject($childID);
-                if (strpos($obj['ObjectIdent'], 'WB_') === 0) {
-                    $wbValues[$obj['ObjectIdent']] = GetValue($childID);
-                }
+            if (!empty($apiToVarMap)) {
+                $this->SendDebug(
+                    "FetchWallboxData",
+                    "WB-API→Variablen-Mapping: " . json_encode($apiToVarMap),
+                    0
+                );
+            } else {
+                $this->SendDebug(
+                    "FetchWallboxData",
+                    "WB-API→Variablen-Mapping: keine passenden WB_-Variablen aktualisiert.",
+                    0
+                );
             }
-
-            $this->SendDebug(
-                "FetchWallboxData",
-                "WB-Variablen (aktueller Stand): " . json_encode($wbValues),
-                0
-            );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
         } catch (Exception $e) {
