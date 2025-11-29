@@ -607,7 +607,7 @@ class Goodwe extends IPSModule
 
                 // 3) WB_ChargePower anhand von set_charge_power (kW → W)
                 //    Falls der Key bei dir anders heißt (z.B. setChargePower), hier anpassen.
-                if ($key === "set_charge_power") {
+                if ($key === "setChargePower") {
                     $powerW = (int)round(((float)$value) * 1000);
 
                     if (!$hasPending && !$isBlocked) {
