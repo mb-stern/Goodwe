@@ -697,13 +697,11 @@ class Goodwe extends IPSModule
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        // Versuch zu dekodieren für schönes Logging
         $decoded = null;
         if ($response !== false && $response !== '') {
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliches WB_API-Log für Status-Endpoint (mit Quelle)
         $log = [
             'source'   => 'SEMS_API',
             'endpoint' => $apiEndpoint,
@@ -719,12 +717,12 @@ class Goodwe extends IPSModule
 
         if ($httpCode !== 200 || !$response) {
             $log['error'] = 'HTTP-Fehler oder leere Antwort';
-            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("GoodweFetchData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
             return null;
         }
 
-        $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("GoodweFetchData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
         $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen.", 0);
 
         return $response;
@@ -997,7 +995,6 @@ class Goodwe extends IPSModule
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliches WB_API-Log für Steuer-Endpunkte
         $log = [
             'type'     => 'control',
             'endpoint' => $endpoint,
@@ -1012,19 +1009,19 @@ class Goodwe extends IPSModule
 
         if ($httpCode !== 200 || !$response) {
             $log['error'] = 'HTTP-Fehler oder leere Antwort';
-            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return null;
         }
 
         if (!isset($decoded['code']) || $decoded['code'] !== "0") {
             $log['error'] = 'API-Fehlercode';
-            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
             return null;
         }
 
-        $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
         $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
 
         return $decoded;
