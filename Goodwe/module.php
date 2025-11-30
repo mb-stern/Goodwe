@@ -328,20 +328,20 @@ class Goodwe extends IPSModule
     {
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($selectedRegisters)) {
-            $this->SendDebug("RequestRead", "SelectedRegisters ist keine gültige Liste", 0);
+            $this->SendDebug("FetchInverterData", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
 
         $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
         if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
-            $this->SendDebug("RequestRead", "Keine gültige Parent-Instanz verbunden.", 0);
-            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. RequestRead abgebrochen.");
+            $this->SendDebug("FetchInverterData", "Keine gültige Parent-Instanz verbunden.", 0);
+            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. FetchInverterData abgebrochen.");
             return;
         }
         $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
         if ($parentStatus !== IS_ACTIVE) {
-            $this->SendDebug("RequestRead", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
-            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. RequestRead abgebrochen.");
+            $this->SendDebug("FetchInverterData", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. FetchInverterData abgebrochen.");
             return;
         }
 
@@ -359,7 +359,7 @@ class Goodwe extends IPSModule
                 if (is_array($tmp)) {
                     $r = $tmp;
                 } else {
-                    $this->SendDebug("RequestRead", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+                    $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                     continue;
                 }
             }
@@ -380,7 +380,7 @@ class Goodwe extends IPSModule
             }
 
             if (!isset($r['address'])) {
-                $this->SendDebug("RequestRead", "Kein 'address' im Eintrag: " . json_encode($r), 0);
+                $this->SendDebug("FetchInverterData", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                 continue;
             }
 
@@ -388,13 +388,13 @@ class Goodwe extends IPSModule
             if (isset($masterIndex[$addrKey])) {
                 $r = array_merge($masterIndex[$addrKey], $r);
             } else {
-                $this->SendDebug("RequestRead", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
+                $this->SendDebug("FetchInverterData", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                 continue;
             }
 
             foreach (['address', 'type', 'scale'] as $need) {
                 if (!array_key_exists($need, $r)) {
-                    $this->SendDebug("RequestRead", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
                     continue 2;
                 }
             }
@@ -412,7 +412,7 @@ class Goodwe extends IPSModule
                 ]));
 
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("RequestRead", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
                     continue;
                 }
 
@@ -434,13 +434,13 @@ class Goodwe extends IPSModule
                         $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
                     default:
-                        $this->SendDebug("RequestRead", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
                         continue 2;
                 }
 
                 $scale = (float)$r['scale'];
                 if ($scale == 0.0) {
-                    $this->SendDebug("RequestRead", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
@@ -448,7 +448,7 @@ class Goodwe extends IPSModule
 
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
-                    $this->SendDebug("RequestRead", "Variable mit Ident $ident nicht gefunden.", 0);
+                    $this->SendDebug("FetchInverterData", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
 
@@ -486,14 +486,22 @@ class Goodwe extends IPSModule
                 $values[$ident] = $finalValue;
 
             } catch (Exception $e) {
-                $this->SendDebug("RequestRead", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
+                $this->SendDebug("FetchInverterData", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
                 $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
 
-        // Immer eine Zeile Debug mit JSON der aktuellen Werte
+        // Immer eine Zeile Debug mit JSON der aktuellen Werte (inkl. Quelle)
         ksort($values);
-        $this->SendDebug("WR_JSON", json_encode($values, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $log = [
+            'source' => 'WR_Modbus',
+            'values' => $values
+        ];
+        $this->SendDebug(
+            "FetchInverterData",
+            json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
 
         $this->CalculateMaxPower();
     }
@@ -569,7 +577,7 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
             }
 
-            // Status-JSON für alle WB_* Variablen (immer eine Zeile pro Lauf)
+            // Status-JSON für alle WB_* Variablen (eine Zeile pro Lauf)
             $statusJson = [];
 
             foreach ($data['data'] as $key => $value) {
@@ -647,11 +655,15 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten
+            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
             ksort($statusJson);
+            $log = [
+                'source' => 'SEMS_API',
+                'values' => $statusJson
+            ];
             $this->SendDebug(
-                "WB_StatusJSON",
-                json_encode($statusJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                "FetchWallboxData",
+                json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                 0
             );
 
@@ -691,9 +703,9 @@ class Goodwe extends IPSModule
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliches WB_API-Log für Status-Endpoint
+        // Einheitliches WB_API-Log für Status-Endpoint (mit Quelle)
         $log = [
-            'type'     => 'status',
+            'source'   => 'SEMS_API',
             'endpoint' => $apiEndpoint,
             'request'  => ['sn' => $serial],
             'httpCode' => $httpCode,
@@ -913,7 +925,7 @@ class Goodwe extends IPSModule
         }
 
         // WICHTIG: Queue NACH dem Request NOCHMAL aus dem Buffer lesen,
-        // denn in der Zwischenzeit könnte ein neuer Befehl enqueued worden sein.
+        // denn in der Zwischenzeit könnte ein neuer Befehl eingetroffen sein.
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
@@ -923,8 +935,8 @@ class Goodwe extends IPSModule
             // Jetzt wirklich leer → Pending-Map leeren
             $this->SetBuffer('WallboxChanges', json_encode([]));
 
-            // API-Updates der drei Steuer-Variablen für 180sec blockieren
-            $holdSeconds = 180;
+            // API-Updates der drei Steuer-Variablen für 300sec blockiern nach setzen neuer Sollwerte (Langsames ausführen der Befehle durch die SEMS_API)
+            $holdSeconds = 300;
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
             // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
