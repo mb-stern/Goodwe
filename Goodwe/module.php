@@ -15,7 +15,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxPassword", "");
         $this->RegisterPropertyString("WallboxSerial", "");
         $this->RegisterPropertyInteger("PollIntervalWB", 10);
-        $this->RegisterPropertyInteger("PollIntervalWR", 5);
+        $this->RegisterPropertyInteger("PollIntervalWR", 10);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
