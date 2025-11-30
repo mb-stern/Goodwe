@@ -350,7 +350,7 @@ class Goodwe extends IPSModule
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
-        // Sammel-Array für alle Werte (immer!)
+        // Sammel-Array für alle gelesenen/gesetzten Werte (immer!)
         $values = [];
 
         foreach ($selectedRegisters as &$r) {
@@ -452,29 +452,37 @@ class Goodwe extends IPSModule
                     continue;
                 }
 
+                // Typgerecht runden/konvertieren
                 $var = IPS_GetVariable($varID);
                 switch ($var['VariableType']) {
                     case VARIABLETYPE_INTEGER:
                         $finalValue = (int)round($scaledValue);
                         break;
+
                     case VARIABLETYPE_FLOAT:
                         $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
                         $dotPos   = strpos($scaleStr, '.');
                         $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
                         $finalValue = round((float)$scaledValue, $decimals);
                         break;
+
                     case VARIABLETYPE_STRING:
                         $finalValue = (string)$scaledValue;
                         break;
+
                     case VARIABLETYPE_BOOLEAN:
                         $finalValue = ((int)round($scaledValue)) !== 0;
                         break;
+
                     default:
                         $finalValue = $scaledValue;
                         break;
                 }
 
+                // In IPS nur setzen, wenn geändert
                 $this->SetValueIfChanged($ident, $finalValue);
+
+                // Für das JSON immer merken (auch wenn unverändert)
                 $values[$ident] = $finalValue;
 
             } catch (Exception $e) {
@@ -483,13 +491,11 @@ class Goodwe extends IPSModule
             }
         }
 
-        // Immer eine Zeile Debug mit JSON der aktuellen Werte
+        // Immer eine Zeile Debug mit JSON der aktuellen Werte (inkl. Quelle)
         ksort($values);
         $log = [
-            'function' => 'FetchInverterData',
-            'kind'     => 'variables',
-            'scope'    => 'WR',
-            'values'   => $values
+            'source' => 'WR_Modbus',
+            'values' => $values
         ];
         $this->SendDebug(
             "FetchInverterData",
@@ -554,7 +560,7 @@ class Goodwe extends IPSModule
                 return;
             }
 
-            // Pending-Änderungen + Blockierung
+            // --- Status für Pending-Änderungen und Blockierung aus Buffern lesen ---
             $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
             if (!is_array($pending)) {
                 $pending = [];
@@ -571,22 +577,27 @@ class Goodwe extends IPSModule
                 $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
             }
 
-            // Status-JSON für alle WB_* Variablen
+            // Status-JSON für alle WB_* Variablen (eine Zeile pro Lauf)
             $statusJson = [];
 
             foreach ($data['data'] as $key => $value) {
                 $ident = "WB_" . $key;
                 $varID = @$this->GetIDForIdent($ident);
 
+                // Generelle WB_* Variablen nur, wenn ein gültiger (nicht null) Wert kommt
                 if ($varID !== false && $value !== null) {
+                    // Spezialfall: Ist-Leistung (kW → W)
                     if ($key === 'power') {
                         $value = (int)round(((float)$value) * 1000);
                     }
+
                     $this->SetValueIfChanged($ident, $value);
                     $statusJson[$ident] = GetValue($varID);
                 }
 
-                // WB_Charging aus workstate
+                // ----------------- SPEZIAL: Steuer-Variablen -----------------
+
+                // 1) WB_Charging anhand von workstate
                 if ($key === "workstate" && $value !== null) {
                     $chargingState     = ($value !== 0);
                     $isPendingCharging = array_key_exists('WB_Charging', $pending);
@@ -598,6 +609,18 @@ class Goodwe extends IPSModule
                             "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"),
                             0
                         );
+                    } elseif ($isBlocked) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
+                            0
+                        );
+                    } elseif ($isPendingCharging) {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
+                            0
+                        );
                     }
 
                     $cid = @$this->GetIDForIdent('WB_Charging');
@@ -606,7 +629,7 @@ class Goodwe extends IPSModule
                     }
                 }
 
-                // WB_ChargeMode aus chargeMode
+                // 2) WB_ChargeMode anhand von chargeMode
                 if ($key === "chargeMode" && $value !== null) {
                     $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
 
@@ -615,6 +638,12 @@ class Goodwe extends IPSModule
                         $this->SendDebug(
                             "FetchWallboxData",
                             "WB_ChargeMode aus API aktualisiert: " . (int)$value,
+                            0
+                        );
+                    } else {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
                             0
                         );
                     }
@@ -626,26 +655,12 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // Steuervariable WB_ChargePower mit ins JSON aufnehmen (kommt nicht aus API)
-            $cpId = @$this->GetIDForIdent('WB_ChargePower');
-            if ($cpId !== false) {
-                $statusJson['WB_ChargePower'] = GetValue($cpId);
-            }
-
+            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
             ksort($statusJson);
-
-            // Einheitliche JSON-Debug-Zeile für Statuswerte + Blockierung
             $log = [
-                'function'              => 'FetchWallboxData',
-                'kind'                  => 'variables',
-                'scope'                 => 'WB_Status',
-                'values'                => $statusJson,
-                'blocked'               => $isBlocked,
-                'holdUntil'             => $isBlocked ? date(DATE_ATOM, $holdUntil) : null,
-                'holdSecondsRemaining'  => $isBlocked ? max(0, $holdUntil - $now) : 0,
-                'pendingChanges'        => array_keys($pending)
+                'source' => 'SEMS_API',
+                'values' => $statusJson
             ];
-
             $this->SendDebug(
                 "FetchWallboxData",
                 json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -653,7 +668,6 @@ class Goodwe extends IPSModule
             );
 
             $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-
         } catch (Exception $e) {
             $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
         }
@@ -661,7 +675,7 @@ class Goodwe extends IPSModule
 
     private function GoodweFetchData(string $serial): ?string
     {
-        $this->SendDebug("FetchWallboxData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
+        $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
 
         $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
         $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
@@ -683,16 +697,15 @@ class Goodwe extends IPSModule
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        // Versuch zu dekodieren für schönes Logging
         $decoded = null;
         if ($response !== false && $response !== '') {
             $decoded = json_decode($response, true);
         }
 
-        // Einheitliches API-Log für Status-Endpoint
+        // Einheitliches WB_API-Log für Status-Endpoint (mit Quelle)
         $log = [
-            'function' => 'FetchWallboxData',
-            'kind'     => 'api',
-            'scope'    => 'WB_Status_API',
+            'source'   => 'SEMS_API',
             'endpoint' => $apiEndpoint,
             'request'  => ['sn' => $serial],
             'httpCode' => $httpCode,
@@ -706,13 +719,13 @@ class Goodwe extends IPSModule
 
         if ($httpCode !== 200 || !$response) {
             $log['error'] = 'HTTP-Fehler oder leere Antwort';
-            $this->SendDebug("FetchWallboxData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
             return null;
         }
 
-        $this->SendDebug("FetchWallboxData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        $this->SendDebug("FetchWallboxData", "API-Daten erfolgreich abgerufen.", 0);
+        $this->SendDebug("WB_API", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen.", 0);
 
         return $response;
     }
