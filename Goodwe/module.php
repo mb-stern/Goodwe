@@ -1036,6 +1036,47 @@ class Goodwe extends IPSModule
         }
     }
 
+    private function PlanRetryForFrontCommand(array $queue, array $cmd, int $now): void
+    {
+        $MAX_ATTEMPTS = 30;
+        $MAX_BACKOFF  = 300;   // 5 Minuten
+        $BASE_BACKOFF = 5;     // 5s
+
+        $attempt = (int)($cmd['attempt'] ?? 1);
+
+        if ($attempt >= $MAX_ATTEMPTS) {
+            $this->SendDebug('ProcessWallboxQueue', 'Endgültig fehlgeschlagen nach ' . $attempt . ' Versuchen -> verwerfe Command.', 0);
+            array_shift($queue);
+            $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+            if (count($queue) === 0) {
+                $this->SetBuffer('WallboxChanges', json_encode([]));
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Queue leer -> Timer gestoppt.', 0);
+            } else {
+                $this->SetTimerInterval('TimerWBQueue', 250);
+                $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle vorhanden -> Timer 250ms.', 0);
+            }
+            return;
+        }
+
+        // Exponentiell: 5,10,20,40... gedeckelt
+        $backoff = min($MAX_BACKOFF, (int)($BASE_BACKOFF * (2 ** max(0, $attempt - 1))));
+        $cmd['nextTry'] = $now + $backoff;
+
+        $queue[0] = $cmd;
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+        $ms = max(250, min(60000, $backoff * 1000));
+        $this->SetTimerInterval('TimerWBQueue', $ms);
+
+        $this->SendDebug(
+            'ProcessWallboxQueue',
+            'Retry geplant: in ' . $backoff . 's (Attempt ' . $attempt . '/' . $MAX_ATTEMPTS . ') -> Timer=' . $ms . 'ms',
+            0
+        );
+    }
+
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
         $email    = $this->ReadPropertyString("WallboxUser");
