@@ -895,58 +895,60 @@ class Goodwe extends IPSModule
 
     public function ProcessWallboxQueue()
     {
-        // Aktuelle Queue aus dem Buffer laden
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
         }
 
-        // Wenn nichts zu tun: Timer aus, aber Buffer/Changes NICHT anfassen
         if (count($queue) === 0) {
             $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
             $this->SetTimerInterval('TimerWBQueue', 0);
             return;
         }
 
-        // Nächsten Command holen
-        $cmd = array_shift($queue);
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        // NICHT array_shift() -> wir "peeken" nur!
+        $cmd = $queue[0];
+        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command (peek): ' . json_encode($cmd), 0);
 
-        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
-
-        // API-Aufruf (kann mehrere Sekunden dauern)
+        // Pro Tick nur wenige Versuche (damit IPS nicht ewig blockiert)
         $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
+
         if ($result === null) {
-            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
-        } else {
-            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
+            // Fehler -> Command bleibt in Queue, Timer läuft weiter
+            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command – bleibt in Queue und wird erneut versucht.', 0);
+
+            // Timer sicherstellen
+            if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                $this->SetTimerInterval('TimerWBQueue', 1000);
+            }
+            return;
         }
 
-        // WICHTIG: Queue NACH dem Request NOCHMAL aus dem Buffer lesen,
-        // denn in der Zwischenzeit könnte ein neuer Befehl eingetroffen sein.
+        // Erfolg -> jetzt erst aus der Queue entfernen
+        array_shift($queue);
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich – aus Queue entfernt.', 0);
+
+        // Queue nach Erfolg nochmal aus Buffer lesen (weil währenddessen neue Commands kommen können)
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
         }
 
         if (count($queue) === 0) {
-            // Jetzt wirklich leer → Pending-Map leeren
             $this->SetBuffer('WallboxChanges', json_encode([]));
 
-            // API-Updates der drei Steuer-Variablen für 300sec blockiern nach setzen neuer Sollwerte (Langsames ausführen der Befehle durch die SEMS_API)
+            // hold wie bei dir
             $holdSeconds = 300;
             $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
 
-            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
             $this->SetTimerInterval('TimerWBQueue', 0);
             $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
         } else {
-            // Es sind noch Befehle in der Queue → Timer weiterlaufen lassen
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
-                0
-            );
+            $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.', 0);
+            if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                $this->SetTimerInterval('TimerWBQueue', 1000);
+            }
         }
     }
 
@@ -960,12 +962,7 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        // Login zur Wallbox
-        if (!$this->LoginToWallbox($email, $password)) {
-            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
-            return null;
-        }
-
+        // Dein Request-Format beibehalten (das ist bei dir der funktionierende Teil) :contentReference[oaicite:3]{index=3}
         $headers = [
             "Content-Type: application/json",
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
@@ -975,56 +972,88 @@ class Goodwe extends IPSModule
             "str" => json_encode([
                 "api"   => $endpoint,
                 "param" => $data
-            ])
-        ]);
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // Pro Aufruf nur kurz retryen, den Rest macht die Queue/Timer-Logik
+        $maxAttempts = 2;
+        $sleepMs     = 300;
 
-        $decoded = null;
-        if ($response !== false && $response !== '') {
-            $decoded = json_decode($response, true);
-        }
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
 
-        $log = [
-            'type'     => 'control',
-            'endpoint' => $endpoint,
-            'request'  => $data,
-            'httpCode' => $httpCode,
-        ];
-        if ($decoded !== null) {
-            $log['response'] = $decoded;
-        } else {
-            $log['responseRaw'] = $response;
-        }
+            // Login vor jedem Versuch (so wie bisher)
+            if (!$this->LoginToWallbox($email, $password)) {
+                $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+                return null;
+            }
 
-        if ($httpCode !== 200 || !$response) {
-            $log['error'] = 'HTTP-Fehler oder leere Antwort';
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 20); // etwas höher als deine 10s
+
+            $response = curl_exec($ch);
+            $errno    = curl_errno($ch);
+            $err      = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $decoded = null;
+            if ($response !== false && $response !== '') {
+                $decoded = json_decode($response, true);
+            }
+
+            $log = [
+                'type'       => 'control',
+                'endpoint'   => $endpoint,
+                'request'    => $data,
+                'attempt'    => $attempt,
+                'httpCode'   => $httpCode,
+                'curl_errno' => $errno,
+                'curl_error' => $err
+            ];
+
+            if (is_array($decoded)) {
+                $log['response'] = $decoded;
+            } else {
+                $log['responseRaw'] = $response;
+            }
+
+            // Erfolg: HTTP ok + code==0 (oder kein code Feld, je nach Endpoint)
+            $apiCode = is_array($decoded) ? ($decoded['code'] ?? null) : null;
+            $ok = ($httpCode === 200 && $response !== false && $response !== '' && ($apiCode === 0 || $apiCode === "0" || $apiCode === null));
+
+            if ($ok) {
+                $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+                return $decoded ?? ['raw' => $response];
+            }
+
+            // Fehler loggen
+            $log['error'] = ($httpCode !== 200 || $response === false || $response === '')
+                ? 'HTTP-Fehler oder leere Antwort'
+                : 'API-Fehlercode';
             $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
-            return null;
+
+            // Retry nur bei Transportfehlern (Timeout/0/leere Antwort)
+            $retryable = ($httpCode === 0 || $response === false || $response === '' || $errno === 28 || $httpCode >= 500);
+
+            if (!$retryable) {
+                // z.B. code_100000 -> das wird durch Wiederholen oft nicht besser
+                return null;
+            }
+
+            if ($attempt < $maxAttempts) {
+                IPS_Sleep($sleepMs);
+                $sleepMs = min(2000, (int)round($sleepMs * 1.7));
+            }
         }
 
-        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
-            $log['error'] = 'API-Fehlercode';
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
-            return null;
-        }
-
-        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
-
-        return $decoded;
+        return null;
     }
 
     private function LoginToWallbox(string $email, string $password): bool
