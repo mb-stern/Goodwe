@@ -885,9 +885,9 @@ class Goodwe extends IPSModule
         $changes[$ident] = true;
         $this->SetBuffer('WallboxChanges', json_encode($changes));
 
-        // Queue-Timer auf 1s setzen, wenn er nicht läuft
+        // Queue-Timer auf 10s setzen, wenn er nicht läuft
         if ($this->GetTimerInterval('TimerWBQueue') == 0) {
-            $this->SetTimerInterval('TimerWBQueue', 1000);
+            $this->SetTimerInterval('TimerWBQueue', 10000);
         }
 
         $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt (coalesced): ' . json_encode($cmd), 0);
@@ -919,7 +919,7 @@ class Goodwe extends IPSModule
 
             // Timer sicherstellen
             if ($this->GetTimerInterval('TimerWBQueue') == 0) {
-                $this->SetTimerInterval('TimerWBQueue', 1000);
+                $this->SetTimerInterval('TimerWBQueue', 10000);
             }
             return;
         }
@@ -947,7 +947,7 @@ class Goodwe extends IPSModule
         } else {
             $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.', 0);
             if ($this->GetTimerInterval('TimerWBQueue') == 0) {
-                $this->SetTimerInterval('TimerWBQueue', 1000);
+                $this->SetTimerInterval('TimerWBQueue', 10000);
             }
         }
     }
