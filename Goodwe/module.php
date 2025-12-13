@@ -901,139 +901,129 @@ class Goodwe extends IPSModule
         }
 
         if (count($queue) === 0) {
-            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer wird gestoppt.', 0);
+            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
             $this->SetTimerInterval('TimerWBQueue', 0);
             return;
         }
 
         $now = time();
 
-        // Wir bearbeiten nur den ersten Eintrag (peek)
+        // Wir bearbeiten IMMER nur den ersten Eintrag (peek)
         $cmd = $queue[0];
 
+        // Defaults
         if (!isset($cmd['attempt'])) $cmd['attempt'] = 0;
         if (!isset($cmd['nextTry'])) $cmd['nextTry'] = 0;
 
-        // BACKOFF: nicht pollen, sondern Timer auf Restzeit setzen
+        // --- BACKOFF ---
         if ((int)$cmd['nextTry'] > $now) {
             $wait = (int)$cmd['nextTry'] - $now;
             $ms   = max(250, min(60000, $wait * 1000));
 
-            // Einmal-Log pro nextTry
-            $lastUntil = (int)@intval($this->GetBuffer('WB_BackoffLogUntil'));
-            if ($lastUntil !== (int)$cmd['nextTry']) {
-                $msg = 'Command im Backoff bis ' . date('H:i:s', (int)$cmd['nextTry']) . ' (noch ' . $wait . 's). Timer=' . $ms . 'ms';
+            // Nur einmal pro nextTry loggen
+            $lastLogged = (int)@intval($this->GetBuffer('WB_BackoffLogUntil'));
+            if ($lastLogged !== (int)$cmd['nextTry']) {
                 $this->SetBuffer('WB_BackoffLogUntil', (string)$cmd['nextTry']);
-                $this->SendDebug('ProcessWallboxQueue', $msg, 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Command im Backoff bis ' . date('H:i:s', (int)$cmd['nextTry']) . ' (Timer=' . $ms . 'ms)', 0);
             }
 
             $this->SetTimerInterval('TimerWBQueue', $ms);
             return;
         }
 
-        // Backoff-Log reset
+        // Reset: ab jetzt darf bei einem neuen Backoff wieder geloggt werden
         $this->SetBuffer('WB_BackoffLogUntil', '0');
 
-        // Attempt erhöhen und speichern
+        // --- SEND ---
         $cmd['attempt'] = (int)$cmd['attempt'] + 1;
+
+        $this->SendDebug(
+            'ProcessWallboxQueue',
+            'Sende Command (Attempt ' . $cmd['attempt'] . '): ' . json_encode([
+                'ident'    => $cmd['ident'] ?? null,
+                'endpoint' => $cmd['endpoint'] ?? null,
+                'data'     => $cmd['data'] ?? null,
+                'attempt'  => $cmd['attempt']
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        // Attempt persistieren bevor der Request läuft
+        $queue[0] = $cmd;
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+        $res = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
+
+        // Entscheidung aus SendWallboxRequest
+        $status   = $res['status']   ?? 'UNKNOWN';
+        $decision = $res['decision'] ?? 'RETRY';
+
+        // ---- SUCCESS / ACCEPT_AS_SUCCESS ----
+        if ($decision === 'SUCCESS' || $decision === 'ACCEPT_AS_SUCCESS') {
+
+            // Command als erledigt behandeln (auch bei PENDING)
+            array_shift($queue);
+            $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+            if ($status === 'PENDING') {
+                $this->SendDebug('ProcessWallboxQueue', 'Command als PENDING akzeptiert (wird nicht erneut gesendet).', 0);
+            } else {
+                $this->SendDebug('ProcessWallboxQueue', 'Command bestätigt (CONFIRMED).', 0);
+            }
+
+            // Wenn Queue leer -> Pending-Map leeren + Hold setzen + Timer stoppen
+            if (count($queue) === 0) {
+                $this->SetBuffer('WallboxChanges', json_encode([]));
+
+                // Optional: API-Updates blockieren (dein Mechanismus)
+                $holdSeconds = 300;
+                $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
+            } else {
+                $this->SetTimerInterval('TimerWBQueue', 250);
+                $this->SendDebug('ProcessWallboxQueue', 'Weitere Commands vorhanden, Timer bleibt aktiv.', 0);
+            }
+
+            return;
+        }
+
+        // ---- RETRY ----
+        $MAX_ATTEMPTS = 30;
+        $MAX_BACKOFF  = 300;
+        $BASE_BACKOFF = 5;
+
+        if ($cmd['attempt'] >= $MAX_ATTEMPTS) {
+            $this->SendDebug('ProcessWallboxQueue', 'Command endgültig fehlgeschlagen nach ' . $cmd['attempt'] . ' Versuchen – wird verworfen. (status=' . $status . ')', 0);
+
+            array_shift($queue);
+            $this->SetBuffer('WallboxQueue', json_encode($queue));
+
+            if (count($queue) === 0) {
+                $this->SetBuffer('WallboxChanges', json_encode([]));
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Queue leer nach Verwerfen, Timer gestoppt.', 0);
+            } else {
+                $this->SetTimerInterval('TimerWBQueue', 250);
+            }
+            return;
+        }
+
+        // Exponentieller Backoff: 5,10,20,40,... capped
+        $backoff = min($MAX_BACKOFF, (int)($BASE_BACKOFF * (2 ** max(0, $cmd['attempt'] - 1))));
+        $cmd['nextTry'] = $now + $backoff;
+
         $queue[0] = $cmd;
         $this->SetBuffer('WallboxQueue', json_encode($queue));
 
         $this->SendDebug(
             'ProcessWallboxQueue',
-            'Sende Command (Attempt ' . $cmd['attempt'] . '): ' . json_encode(['ident'=>$cmd['ident'] ?? null, 'endpoint'=>$cmd['endpoint'] ?? null, 'data'=>$cmd['data'] ?? null]),
+            'Retry geplant: in ' . $backoff . 's (Attempt ' . $cmd['attempt'] . '/' . $MAX_ATTEMPTS . ', status=' . $status . ') -> Timer=' . max(250, min(60000, $backoff * 1000)) . 'ms',
             0
         );
 
-        // Request
-        $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
-
-        // TRANSPORTFEHLER: SendWallboxRequest gibt null
-        if ($result === null) {
-            $this->SendDebug('ProcessWallboxQueue', 'Transport/Auth/Decode-Fehler -> Retry mit Backoff.', 0);
-            $this->PlanRetryForFrontCommand($queue, $cmd, $now);
-            return;
-        }
-
-        $status   = $result['status']   ?? 'UNKNOWN';
-        $decision = $result['decision'] ?? 'UNKNOWN';
-        $code     = $result['code']     ?? '';
-        $msg      = $result['msg']      ?? '';
-        $resStr   = $result['result']   ?? '';
-
-        // SUCCESS: bestätigt
-        if ($status === 'SUCCESS') {
-            array_shift($queue);
-            $this->SetBuffer('WallboxQueue', json_encode($queue));
-
-            $this->SendDebug('ProcessWallboxQueue', 'Command BESTÄTIGT (code=0). Entferne aus Queue.', 0);
-
-            // Queue leer -> Pending leeren + Hold setzen + Timer stoppen
-            if (count($queue) === 0) {
-                $this->SetBuffer('WallboxChanges', json_encode([]));
-
-                $holdSeconds = 300;
-                $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-                $this->SetTimerInterval('TimerWBQueue', 0);
-                $this->SendDebug('ProcessWallboxQueue', 'Queue leer -> Timer gestoppt.', 0);
-            } else {
-                $this->SetTimerInterval('TimerWBQueue', 250);
-                $this->SendDebug('ProcessWallboxQueue', 'Nächster Queue-Eintrag vorhanden -> Timer 250ms.', 0);
-            }
-            return;
-        }
-
-        // PENDING: angenommen, aber noch nicht bestätigt -> NICHT retryen, Command rausnehmen
-        if ($status === 'PENDING') {
-            array_shift($queue);
-            $this->SetBuffer('WallboxQueue', json_encode($queue));
-
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'Command ANGENOMMEN aber PENDING (code=' . $code . ', result=' . $resStr . ', msg=' . $msg . ') -> Entferne aus Queue, KEIN Retry.',
-                0
-            );
-
-            // Kurzer Hold reicht meist – sonst überschreibst du dir UI wieder weg
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + 60));
-
-            if (count($queue) === 0) {
-                $this->SetBuffer('WallboxChanges', json_encode([]));
-                $this->SetTimerInterval('TimerWBQueue', 0);
-                $this->SendDebug('ProcessWallboxQueue', 'Queue leer nach PENDING -> Timer gestoppt.', 0);
-            } else {
-                $this->SetTimerInterval('TimerWBQueue', 250);
-                $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle in Queue -> Timer 250ms.', 0);
-            }
-            return;
-        }
-
-        // API_ERROR: retrybar?
-        $retry = (bool)($result['retry'] ?? true);
-        if ($retry) {
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'API_ERROR (code=' . $code . ', msg=' . $msg . ') -> Retry mit Backoff.',
-                0
-            );
-            $this->PlanRetryForFrontCommand($queue, $cmd, $now);
-            return;
-        }
-
-        // Nicht retrybar: verwerfen
-        $this->SendDebug('ProcessWallboxQueue', 'API_ERROR nicht retrybar -> Command wird verworfen.', 0);
-        array_shift($queue);
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
-
-        if (count($queue) === 0) {
-            $this->SetBuffer('WallboxChanges', json_encode([]));
-            $this->SetTimerInterval('TimerWBQueue', 0);
-            $this->SendDebug('ProcessWallboxQueue', 'Queue leer -> Timer gestoppt.', 0);
-        } else {
-            $this->SetTimerInterval('TimerWBQueue', 250);
-            $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle vorhanden -> Timer 250ms.', 0);
-        }
+        $this->SetTimerInterval('TimerWBQueue', max(250, min(60000, $backoff * 1000)));
     }
 
     private function PlanRetryForFrontCommand(array $queue, array $cmd, int $now): void
@@ -1077,39 +1067,51 @@ class Goodwe extends IPSModule
         );
     }
 
-    private function SendWallboxRequest(array $data, string $endpoint): ?array
+    private function SendWallboxRequest(array $data, string $endpoint): array
     {
         $email    = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
 
-        // Default-Log Objekt
-        $log = [
+        $result = [
             'type'     => 'control',
             'endpoint' => $endpoint,
             'request'  => $data,
+
+            // Transport
             'httpCode' => null,
             'curlErr'  => null,
             'curlMsg'  => null,
-            'status'   => null,   // SUCCESS | PENDING | API_ERROR | TRANSPORT_ERROR | AUTH_ERROR | DECODE_ERROR
-            'decision' => null,   // CONFIRMED | ACCEPTED_PENDING | RETRY | FAIL
+
+            // API
             'code'     => null,
             'msg'      => null,
-            'result'   => null
+            'hasError' => null,
+
+            // Our evaluation
+            'status'   => null,   // CONFIRMED | PENDING | TRANSPORT_ERROR | AUTH_ERROR | API_ERROR | DECODE_ERROR
+            'decision' => null,   // SUCCESS | ACCEPT_AS_SUCCESS | RETRY | FAIL
+            'result'   => null,   // confirmed | pending | retry | fail
+
+            // Raw/decoded
+            'response'    => null,
+            'responseRaw' => null
         ];
 
         if (empty($email) || empty($password)) {
-            $log['status']   = 'AUTH_ERROR';
-            $log['decision'] = 'FAIL';
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return null;
+            $result['status']   = 'AUTH_ERROR';
+            $result['decision'] = 'FAIL';
+            $result['result']   = 'fail';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
         // Login
         if (!$this->LoginToWallbox($email, $password)) {
-            $log['status']   = 'AUTH_ERROR';
-            $log['decision'] = 'RETRY'; // je nach Geschmack auch FAIL; ich lasse Retry zu, weil Login/SEMS gern zickt
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return null;
+            $result['status']   = 'AUTH_ERROR';
+            $result['decision'] = 'RETRY';  // Login kann sporadisch sein
+            $result['result']   = 'retry';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
         $headers = [
@@ -1117,13 +1119,12 @@ class Goodwe extends IPSModule
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         ];
 
-        // SEMS erwartet str als JSON-String im JSON
         $body = json_encode([
             "str" => json_encode([
                 "api"   => $endpoint,
                 "param" => $data
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            ])
+        ]);
 
         $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1131,106 +1132,79 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+        // WICHTIG: Timeout realistisch, aber nicht zu kurz
+        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
 
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr  = curl_errno($ch);
-        $curlMsg  = $curlErr ? curl_error($ch) : null;
+        $result['curlErr'] = curl_errno($ch);
+        $result['curlMsg'] = curl_error($ch);
+        $result['httpCode'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $log['httpCode'] = $httpCode;
-        $log['curlErr']  = $curlErr;
-        $log['curlMsg']  = $curlMsg;
+        $result['responseRaw'] = ($response === false) ? '' : (string)$response;
 
-        // Transportfehler
-        if ($curlErr !== 0 || $httpCode !== 200 || $response === false || $response === '') {
-            $log['status']   = 'TRANSPORT_ERROR';
-            $log['decision'] = 'RETRY';
-            $log['responseRaw'] = is_string($response) ? $response : '';
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return null;
+        // --- Transportfehler / Timeout ---
+        if ($response === false || $result['httpCode'] !== 200) {
+            $result['status']   = 'TRANSPORT_ERROR';
+            $result['decision'] = 'RETRY';
+            $result['result']   = 'retry';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
+        // --- JSON decode ---
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
-            $log['status']   = 'DECODE_ERROR';
-            $log['decision'] = 'RETRY';
-            $log['responseRaw'] = $response;
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return null;
+            $result['status']   = 'DECODE_ERROR';
+            $result['decision'] = 'RETRY';
+            $result['result']   = 'retry';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
-        // Grundfelder aus Antwort übernehmen
-        $code   = isset($decoded['code']) ? (string)$decoded['code'] : '';
-        $msg    = isset($decoded['msg']) ? (string)$decoded['msg'] : '';
-        $result = isset($decoded['result']) ? (string)$decoded['result'] : '';
-        $hasErr = isset($decoded['hasError']) ? (bool)$decoded['hasError'] : null;
+        $result['response'] = $decoded;
 
-        $log['code']   = $code !== '' ? $code : null;
-        $log['msg']    = $msg !== '' ? $msg : null;
-        $log['result'] = $result !== '' ? $result : null;
-        $log['hasError'] = $hasErr;
+        // --- SEMS Code Interpretation ---
+        // SEMS liefert teils "0" als string
+        $code     = $decoded['code']     ?? null;
+        $msg      = $decoded['msg']      ?? null;
+        $hasError = $decoded['hasError'] ?? null;
 
-        // --- Klassifizierung ---
-        // 1) Erfolg
-        if ($code === '0') {
-            $log['status']   = 'SUCCESS';
-            $log['decision'] = 'CONFIRMED';
-            $log['response'] = $decoded;
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return [
-                'status'   => 'SUCCESS',
-                'decision' => 'CONFIRMED',
-                'retry'    => false,
-                'pending'  => false,
-                'code'     => $code,
-                'msg'      => $msg,
-                'result'   => $result,
-                'httpCode' => $httpCode,
-                'response' => $decoded
-            ];
+        $result['code']     = $code;
+        $result['msg']      = $msg;
+        $result['hasError'] = $hasError;
+
+        // 1) Klarer Erfolg
+        if ($code === 0 || $code === "0") {
+            $result['status']   = 'CONFIRMED';
+            $result['decision'] = 'SUCCESS';
+            $result['result']   = 'confirmed';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
-        // 2) Pending / Accepted (SEMS asynchron)
-        // Bei dir: code="100000", hasError=true, msg="code_100000", result="pending"
-        if ($code === '100000' || strtolower($result) === 'pending' || $msg === 'code_100000') {
-            $log['status']   = 'PENDING';
-            $log['decision'] = 'ACCEPTED_PENDING';
-            $log['response'] = $decoded;
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return [
-                'status'   => 'PENDING',
-                'decision' => 'ACCEPTED_PENDING',
-                'retry'    => false,     // WICHTIG: kein Retry!
-                'pending'  => true,
-                'code'     => $code,
-                'msg'      => $msg,
-                'result'   => $result,
-                'httpCode' => $httpCode,
-                'response' => $decoded
-            ];
+        // 2) „pending“ / „accepted but not confirmed“
+        // Dein Beispiel: msg="code_100000", code="100000", hasError=true, aber es kann trotzdem wirken.
+        // -> Wir behandeln es als PENDING und lassen ProcessWallboxQueue entscheiden.
+        if ($code === "100000" || $msg === "code_100000") {
+            $result['status']   = 'PENDING';
+            // wichtig: NICHT immer retryen, sonst spammt es.
+            $result['decision'] = 'ACCEPT_AS_SUCCESS';   // aus Queue nehmen, später per Status-Poll sehen
+            $result['result']   = 'pending';
+            $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return $result;
         }
 
-        // 3) Sonstige API-Fehler (hier: retrybar oder nicht -> ich markiere erstmal retrybar = true)
-        $log['status']   = 'API_ERROR';
-        $log['decision'] = 'RETRY';
-        $log['response'] = $decoded;
+        // 3) Sonstige API-Fehler
+        $result['status']   = 'API_ERROR';
+        // Manche API-Fehler sind transient -> RETRY, sonst FAIL. Hier konservativ RETRY.
+        $result['decision'] = 'RETRY';
+        $result['result']   = 'retry';
 
-        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-
-        // Rückgabe als strukturierte Info (damit ProcessWallboxQueue entscheiden kann)
-        return [
-            'status'   => 'API_ERROR',
-            'decision' => 'RETRY',
-            'retry'    => true,
-            'pending'  => false,
-            'code'     => $code,
-            'msg'      => $msg,
-            'result'   => $result,
-            'httpCode' => $httpCode,
-            'response' => $decoded
-        ];
+        $this->SendDebug("SendWallboxRequest", json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return $result;
     }
 
     private function LoginToWallbox(string $email, string $password): bool
