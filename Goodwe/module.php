@@ -14,7 +14,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxUser", "");
         $this->RegisterPropertyString("WallboxPassword", "");
         $this->RegisterPropertyString("WallboxSerial", "");
-        $this->RegisterPropertyInteger("PollIntervalWB", 20);
+        $this->RegisterPropertyInteger("PollIntervalWB", 10);
         $this->RegisterPropertyInteger("PollIntervalWR", 10);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
@@ -952,122 +952,79 @@ class Goodwe extends IPSModule
 
     private function SendWallboxRequest(array $data, string $endpoint): ?array
     {
-        // ===== Retry-Parameter (bei Bedarf hier anpassen) =====
-        $maxAttempts   = 12;   // wie oft maximal versuchen
-        $baseSleepMs   = 400;  // Start-Backoff in ms
-        $maxSleepMs    = 5000; // Max-Backoff in ms
-        $timeoutSec    = 20;   // cURL Timeout je Versuch
-        $reloginEvery  = 2;    // alle n Versuche neu einloggen (falls Session/Gateway zickt)
-
-        $user     = $this->ReadPropertyString("WallboxUser");
+        $email    = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
 
-        // Endpoint für die URL (SEMS erwartet /GopsApi/Post?s=<endpoint>)
-        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
+        if (empty($email) || empty($password)) {
+            $this->SendDebug("SendWallboxRequest", "Benutzername oder Passwort fehlen.", 0);
+            return null;
+        }
 
-        // Payload im selben Stil wie GoodweFetchData: str=<urlencoded json>
-        $payloadArr = [
-            "api"     => $endpoint,
-            "version" => "4.0",
-            "param"   => $data
-        ];
-
-        $payloadJson = json_encode($payloadArr, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $body        = "str=" . urlencode($payloadJson);
+        // Login zur Wallbox
+        if (!$this->LoginToWallbox($email, $password)) {
+            $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
+            return null;
+        }
 
         $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "Content-Type: application/json",
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         ];
 
-        $attempt = 0;
-        $sleepMs = $baseSleepMs;
+        $body = json_encode([
+            "str" => json_encode([
+                "api"   => $endpoint,
+                "param" => $data
+            ])
+        ]);
 
-        while (true) {
-            $attempt++;
+        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
-            // optional: regelmäßig neu einloggen (hilft oft bei httpCode=0 / Gateway-Disconnects)
-            if ($attempt === 1 || ($reloginEvery > 0 && ($attempt % $reloginEvery) === 1)) {
-                if (!empty($user) && !empty($password)) {
-                    $this->LoginToWallbox($user, $password);
-                }
-            }
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-            curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSec);
-
-            $response = curl_exec($ch);
-            $errno    = curl_errno($ch);
-            $err      = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            $decoded = null;
-            if ($response !== false && $response !== '') {
-                $decoded = json_decode($response, true);
-            }
-
-            $log = [
-                'type'       => 'control',
-                'endpoint'   => $endpoint,
-                'request'    => $data,
-                'attempt'    => $attempt,
-                'httpCode'   => $httpCode,
-                'curl_errno' => $errno,
-                'curl_error' => $err
-            ];
-
-            if (is_array($decoded)) {
-                $log['response'] = $decoded;
-            } else {
-                $log['responseRaw'] = $response;
-            }
-
-            // ===== Erfolgskriterien =====
-            $transportOk = ($httpCode === 200 && $response !== false && $response !== '');
-            $apiOk       = (is_array($decoded) && (($decoded['code'] ?? null) === 0 || ($decoded['code'] ?? null) === "0"));
-
-            if ($transportOk && $apiOk) {
-                $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-                $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort (Attempt $attempt).", 0);
-                return $decoded;
-            }
-
-            // ===== Fehlerlog =====
-            if (!$transportOk) {
-                $log['error'] = 'HTTP-Fehler oder leere Antwort';
-                $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-                $this->SendDebug("SendWallboxRequest", "Transport-Fehler (Attempt $attempt). HTTP-Code: $httpCode cURL: $errno $err", 0);
-            } else {
-                $log['error'] = 'API-Fehlercode';
-                $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-                $this->SendDebug("SendWallboxRequest", "API-Fehler (Attempt $attempt): " . json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            }
-
-            // ===== Retry-Entscheidung =====
-            // Wir wiederholen NUR bei Transportfehlern zuverlässig (httpCode==0 / keine Antwort / >=500).
-            // Bei API-Fehlercode (z.B. falsche Parameter) bringt Endlos-Retry meist nichts.
-            $retryable = (!$transportOk) && ($httpCode === 0 || $httpCode >= 500 || $response === false || $response === '');
-
-            if (!$retryable) {
-                $this->SendDebug("SendWallboxRequest", "Nicht-retrybarer Fehler, breche ab (Attempt $attempt).", 0);
-                return null;
-            }
-
-            if ($attempt >= $maxAttempts) {
-                $this->SendDebug("SendWallboxRequest", "MaxAttempts erreicht ($maxAttempts). Abbruch.", 0);
-                return null;
-            }
-
-            // Backoff + Sleep
-            IPS_Sleep($sleepMs);
-            $sleepMs = min($maxSleepMs, (int)round($sleepMs * 1.7));
+        $decoded = null;
+        if ($response !== false && $response !== '') {
+            $decoded = json_decode($response, true);
         }
+
+        $log = [
+            'type'     => 'control',
+            'endpoint' => $endpoint,
+            'request'  => $data,
+            'httpCode' => $httpCode,
+        ];
+        if ($decoded !== null) {
+            $log['response'] = $decoded;
+        } else {
+            $log['responseRaw'] = $response;
+        }
+
+        if ($httpCode !== 200 || !$response) {
+            $log['error'] = 'HTTP-Fehler oder leere Antwort';
+            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
+            return null;
+        }
+
+        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
+            $log['error'] = 'API-Fehlercode';
+            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
+            return null;
+        }
+
+        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
+
+        return $decoded;
     }
 
     private function LoginToWallbox(string $email, string $password): bool
@@ -1088,31 +1045,20 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $response = curl_exec($ch);
-        $errno    = curl_errno($ch);
-        $err      = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($response === false || $response === '' || $httpCode !== 200) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode cURL: $errno $err", 0);
-            $this->SendDebug("LoginToWallbox", "ResponseRaw: " . json_encode($response), 0);
+        if ($httpCode !== 200 || !$response) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return false;
         }
 
         $decodedResponse = json_decode($response, true);
-        if (!is_array($decodedResponse)) {
-            $this->SendDebug("LoginToWallbox", "Login: Ungültige JSON-Antwort. HTTP-Code: $httpCode", 0);
-            $this->SendDebug("LoginToWallbox", "ResponseRaw: " . $response, 0);
-            return false;
-        }
 
-        // In deinem bisherigen Code wird teils int (0) und teils string ("0") verwendet.
-        $code = $decodedResponse['code'] ?? null;
-        if (!($code === 0 || $code === "0")) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
+            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
             return false;
         }
 
