@@ -549,30 +549,36 @@ class Goodwe extends IPSModule
             $this->SendDebug("FetchWallboxData", "Ungültige Antwort / keine data.", 0);
             return;
         }
-        $data = ["data" => $view]; // damit dein vorhandenes foreach weiterlaufen kann
 
-        // powerStationId merken (BLOCKER für StartCharging)
-        if (isset($data['powerStationId']) && is_string($data['powerStationId']) && $data['powerStationId'] !== '') {
-            $this->WriteAttributeString('PowerStationId', $data['powerStationId']);
+        // powerStationId merken (falls vorhanden)
+        if (isset($view['powerStationId']) && is_string($view['powerStationId']) && $view['powerStationId'] !== '') {
+            $this->WriteAttributeString('PowerStationId', $view['powerStationId']);
         }
 
-        // normale WB_* Variablen setzen
         $statusJson = [];
 
-        foreach ($data as $key => $value) {
+        // WICHTIG: über $view iterieren (nicht über einen Wrapper)
+        foreach ($view as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+
             $ident = "WB_" . $key;
             $varID = @$this->GetIDForIdent($ident);
 
-            if ($varID !== false && $value !== null) {
-                if ($key === 'power') { // kW -> W
+            // Nur setzen, wenn Variable existiert
+            if ($varID !== false) {
+                // Sonderfall: power (kW als String) -> W int
+                if ($key === 'power') {
                     $value = (int)round(((float)$value) * 1000);
                 }
+
                 $this->SetValueIfChanged($ident, $value);
                 $statusJson[$ident] = GetValue($varID);
             }
 
-            // WB_Charging aus workstate
-            if ($key === "workstate" && $value !== null) {
+            // WB_Charging aus workstate ableiten (0=aus, !=0 aktiv)
+            if ($key === "workstate") {
                 $chargingState = ((int)$value !== 0);
                 $this->SetValueIfChanged('WB_Charging', $chargingState);
                 $cid = @$this->GetIDForIdent('WB_Charging');
@@ -581,8 +587,8 @@ class Goodwe extends IPSModule
                 }
             }
 
-            // WB_ChargeMode aus chargeMode
-            if ($key === "chargeMode" && $value !== null) {
+            // WB_ChargeMode aus chargeMode spiegeln
+            if ($key === "chargeMode") {
                 $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
                 $mid = @$this->GetIDForIdent('WB_ChargeMode');
                 if ($mid !== false) {
