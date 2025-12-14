@@ -295,62 +295,51 @@ class Goodwe extends IPSModule
                 break;
             }
 
-            case 'WB_ChargeMode': {
-                $mode = (int)$value;
+                case 'WB_ChargeMode':
+                    $this->SetValueIfChanged($ident, (int)$value);
 
-                // Optimistisch setzen
-                $this->SetValueIfChanged('WB_ChargeMode', $mode);
-
-                // Pending für Mode (ebenfalls 5 Minuten, damit es nicht zurückspringt)
-                $this->SetWbPending('WB_ChargeMode', $mode, 300);
-
-                // Optional: aktuelle Soll-Leistung mitschicken, wenn vorhanden
-                $chargePowerKW = null;
-                $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                if ($powerID !== false) {
-                    $w = (int)GetValue($powerID);
-                    if ($w > 0) {
-                        $chargePowerKW = round($w / 1000, 1);
+                    $chargePowerKW = null;
+                    $powerID = @$this->GetIDForIdent('WB_ChargePower');
+                    if ($powerID !== false) {
+                        $w = (int)GetValue($powerID);
+                        if ($w > 0) {
+                            $chargePowerKW = round($w / 1000, 1);
+                        }
                     }
-                }
 
-                $this->QueueWallboxChange(
-                    'WB_ChargeMode',
-                    ['sn' => $serial, 'type' => $mode, 'charge_power' => $chargePowerKW],
-                    'setmode'
-                );
+                    $data = [
+                        'sn'           => $serial,
+                        'type'         => (int)$value,      // <-- v3: type, nicht mode
+                    ];
+                    if ($chargePowerKW !== null) {
+                        $data['charge_power'] = $chargePowerKW;
+                    }
 
-                $this->SendDebug("RequestAction", "WB_ChargeMode queued -> type=$mode, charge_power=" . json_encode($chargePowerKW), 0);
-                break;
-            }
+                    $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                    break;
 
-            case 'WB_ChargePower': {
-                $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
 
-                // runden auf 100W + Offset
-                $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-                $val = min(max($val, 4200), 9700);
+                case 'WB_ChargePower':
+                    $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
+                    $val = (int)(round(((int)$value) / 100) * 100 + $offset);
+                    $val = min(max($val, 4200), 9700);
 
-                // Optimistisch setzen
-                $this->SetValueIfChanged('WB_ChargePower', $val);
+                    $this->SetValueIfChanged($ident, $val);
 
-                // Wenn du weiterhin willst: beim Setzen der Power automatisch Schnellmodus (0)
-                $this->SetValueIfChanged('WB_ChargeMode', 0);
+                    // wenn du beim Setzen der Leistung immer "Schnell" willst:
+                    $this->SetValueIfChanged('WB_ChargeMode', 0);
+                    $type = 0;
 
-                // Pending für Power (und Mode, weil du ihn mitsendest)
-                $this->SetWbPending('WB_ChargePower', $val, 300);
+                    $kw = round($val / 1000, 1);
 
-                $kw = round($val / 1000, 1);
+                    $data = [
+                        'sn'           => $serial,
+                        'type'         => $type,            // <-- v3 braucht type IMMER
+                        'charge_power' => $kw
+                    ];
 
-                $this->QueueWallboxChange(
-                    'WB_ChargePower',
-                    ['sn' => $serial, 'type' => 0, 'charge_power' => $kw],
-                    'setmode'
-                );
-
-                $this->SendDebug("RequestAction", "WB_ChargePower queued -> type=0, charge_power={$kw}kW", 0);
-                break;
-            }
+                    $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                    break;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
