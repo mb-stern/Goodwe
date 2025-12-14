@@ -1216,11 +1216,15 @@ class Goodwe extends IPSModule
 
     private function SemsGetWallboxView(string $sn): ?array
     {
-        $res = $this->SemsPost("/v4/EvCharger/GetEvChargerAloneViewBySn", ["sn" => $sn], "4.0");
-        if (!is_array($res) || !isset($res["data"]) || !is_array($res["data"])) {
+        $resp = $this->SemsPost("/v4/EvCharger/GetEvChargerAloneViewBySn", ["sn" => $sn], false, 2);
+        if (!is_array($resp)) {
             return null;
         }
-        return $res["data"];
+        if (!isset($resp["data"]) || !is_array($resp["data"])) {
+            $this->SendDebug("SemsGetWallboxView", "Keine data in Antwort: " . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return null;
+        }
+        return $resp["data"];
     }
 
     private function SemsStartCharging(string $sn, int $mode): ?array
@@ -1366,16 +1370,30 @@ class Goodwe extends IPSModule
         return $token;
     }
 
-    private function SemsPost(string $url, array $payload, bool $renewToken = false, int $maxRetries = 2): ?array
+    private function SemsPost(string $pathOrUrl, array $payload, bool $renewToken = false, int $maxRetries = 2): ?array
     {
         if ($maxRetries <= 0) {
-            $this->SendDebug("SemsPost", "Max retries erreicht für $url", 0);
+            $this->SendDebug("SemsPost", "Max retries erreicht für " . $pathOrUrl, 0);
             return null;
         }
 
         $token = $this->SemsGetToken($renewToken);
         if ($token === null) {
+            $this->SendDebug("SemsPost", "Kein Token erhalten.", 0);
             return null;
+        }
+
+        // Base-URL aus Token (HA-Style) oder Fallback
+        $base = $token["api"] ?? "https://eu.semsportal.com/api/";
+        if (!is_string($base) || $base === "") {
+            $base = "https://eu.semsportal.com/api/";
+        }
+
+        // URL bauen: erlaubt entweder volle URL oder Pfad wie "/v4/...." bzw. "/api/v4/...."
+        $url = $pathOrUrl;
+        if (stripos($url, "http://") !== 0 && stripos($url, "https://") !== 0) {
+            // token["api"] endet meist auf "/api/"
+            $url = rtrim($base, "/") . "/" . ltrim($pathOrUrl, "/");
         }
 
         $headers = [
@@ -1388,16 +1406,23 @@ class Goodwe extends IPSModule
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         $resp = $this->CurlJson($url, $headers, $body);
+        $this->SendDebug("SemsPost", json_encode([
+            "url" => $url,
+            "renewToken" => $renewToken,
+            "payload" => $payload,
+            "response" => $resp
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
         if ($resp === null) {
-            $this->SendDebug("SemsPost", "CurlJson null -> retry mit neuem Token", 0);
-            return $this->SemsPost($url, $payload, true, $maxRetries - 1);
+            // Netzwerk/HTTP/JSON Fehler -> einmal mit neuem Token versuchen
+            return $this->SemsPost($pathOrUrl, $payload, true, $maxRetries - 1);
         }
 
-        // Viele SEMS endpoints liefern: { msg:"success", data:... }
-        // Wenn nicht success -> Token erneuern und nochmals probieren
-        if (isset($resp["msg"]) && $resp["msg"] !== "success") {
-            $this->SendDebug("SemsPost", "msg != success (" . $resp["msg"] . ") -> retry mit neuem Token", 0);
-            return $this->SemsPost($url, $payload, true, $maxRetries - 1);
+        // Erfolgskriterium: SEMS nutzt zuverlässig code==0 (msg kann "success" ODER "操作成功" usw. sein)
+        $code = $resp["code"] ?? null;
+        if (!($code === 0 || $code === "0")) {
+            // häufig Token-Probleme -> retry mit neuem Token
+            return $this->SemsPost($pathOrUrl, $payload, true, $maxRetries - 1);
         }
 
         return $resp;
@@ -1421,42 +1446,28 @@ class Goodwe extends IPSModule
 
     private function SemsSetCharging(string $sn, bool $on): bool
     {
-        // WICHTIG: HA nutzt /api/v3/EvCharger/Charging mit status als STRING
-        $url = "https://eu.semsportal.com/api/v3/EvCharger/Charging";
-        $payload = [
+        $resp = $this->SemsPost("/v3/EvCharger/Charging", [
             "sn"     => $sn,
             "status" => $on ? "1" : "0"
-        ];
+        ], false, 2);
 
-        $resp = $this->SemsPost($url, $payload, false, 2);
-        if ($resp === null) {
-            $this->SendDebug("SemsSetCharging", "Keine Antwort", 0);
-            return false;
-        }
-        $this->SendDebug("SemsSetCharging", "Antwort: " . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        return true;
+        $ok = is_array($resp) && (($resp["code"] ?? null) === 0 || ($resp["code"] ?? null) === "0");
+        $this->SendDebug("SemsSetCharging", json_encode(["ok"=>$ok, "resp"=>$resp], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return $ok;
     }
 
     private function SemsSetChargeMode(string $sn, int $type, ?float $chargePowerKw = null): bool
     {
-        // WICHTIG: HA nutzt "type" (nicht "mode")
-        $url = "https://eu.semsportal.com/api/v3/EvCharger/SetChargeMode";
-
-        $payload = [
-            "sn"   => $sn,
-            "type" => $type
-        ];
+        $payload = ["sn" => $sn, "type" => $type];
         if ($chargePowerKw !== null) {
-            $payload["charge_power"] = $chargePowerKw; // kW, z.B. 4.2
+            $payload["charge_power"] = $chargePowerKw;
         }
 
-        $resp = $this->SemsPost($url, $payload, false, 2);
-        if ($resp === null) {
-            $this->SendDebug("SemsSetChargeMode", "Keine Antwort", 0);
-            return false;
-        }
-        $this->SendDebug("SemsSetChargeMode", "Antwort: " . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        return true;
+        $resp = $this->SemsPost("/v3/EvCharger/SetChargeMode", $payload, false, 2);
+
+        $ok = is_array($resp) && (($resp["code"] ?? null) === 0 || ($resp["code"] ?? null) === "0");
+        $this->SendDebug("SemsSetChargeMode", json_encode(["ok"=>$ok, "resp"=>$resp], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return $ok;
     }
 
     private function CurlJson(string $url, array $headers, string $body): ?array
