@@ -261,68 +261,64 @@ class Goodwe extends IPSModule
 
         // Für Wallbox
         $serial = $this->ReadPropertyString("WallboxSerial");
-        if ($serial === "") {
+        if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer vorhanden – Abbruch.", 0);
             return;
         }
 
         switch ($ident) {
-
-        case 'WB_Charging':
-            $this->SetValueIfChanged($ident, (bool)$value);
-
-            $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-            $data = ['sn' => $serial];
-
-            if ($value) {
-                $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
-
-                // Optional: viele Boxen wollen beim Start auch eine Leistung
-                $pid = @$this->GetIDForIdent('WB_ChargePower');
-                if ($pid !== false) {
-                    $w = (int)GetValue($pid);
-                    if ($w > 0) {
-                        $data['charge_power'] = round($w / 1000, 1); // kW
-                    }
+            case 'WB_Charging': {
+                $on = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($on === null) {
+                    // kommt manchmal als 0/1 oder "" -> sauber casten
+                    $on = ((int)$value) === 1;
                 }
+
+                // optimistic
+                $this->SetValueIfChanged($ident, (bool)$on);
+
+                // NEU: v3 Charging
+                $this->QueueWallboxChange($ident, ['sn' => $serial, 'on' => (bool)$on], '__SEMS_CHARGING__');
+                break;
             }
 
-            $this->QueueWallboxChange($ident, $data, $endpoint);
-            break;
-
-            case 'WB_ChargeMode':
+            case 'WB_ChargeMode': {
                 $this->SetValueIfChanged($ident, (int)$value);
 
-                // optional: Leistung mitschicken, wenn gesetzt
+                $chargePowerKW = null;
                 $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                $kw = null;
                 if ($powerID !== false) {
                     $w = (int)GetValue($powerID);
                     if ($w > 0) {
-                        $kw = round($w / 1000, 1);
+                        $chargePowerKW = round($w / 1000, 1);
                     }
                 }
 
-                $data = ["sn" => $serial, "mode" => (int)$value];
-                if ($kw !== null) {
-                    $data["charge_power"] = $kw;
-                }
-                $this->QueueWallboxChange($ident, $data, "/v3/EvCharger/SetChargeMode");
+                $this->QueueWallboxChange(
+                    $ident,
+                    ['sn' => $serial, 'type' => (int)$value, 'charge_power' => $chargePowerKW],
+                    '__SEMS_SETMODE__'
+                );
                 break;
+            }
 
-            case 'WB_ChargePower':
+            case 'WB_ChargePower': {
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700);
 
                 $this->SetValueIfChanged($ident, $val);
-
-                // bei Leistung setzen: Modus 0 erzwingen (wie bisher)
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
                 $kw = round($val / 1000, 1);
-                $this->QueueWallboxChange($ident, ["sn" => $serial, "mode" => 0, "charge_power" => $kw], "/v3/EvCharger/SetChargeMode");
+
+                $this->QueueWallboxChange(
+                    $ident,
+                    ['sn' => $serial, 'type' => 0, 'charge_power' => $kw],
+                    '__SEMS_SETMODE__'
+                );
                 break;
+            }
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
@@ -826,48 +822,113 @@ class Goodwe extends IPSModule
 
     public function ProcessWallboxQueue()
     {
+        // Queue aus Buffer laden
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) $queue = [];
+        if (!is_array($queue)) {
+            $queue = [];
+        }
 
+        // Wenn leer: Timer aus, Pending NICHT anfassen
         if (count($queue) === 0) {
+            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
             $this->SetTimerInterval('TimerWBQueue', 0);
             return;
         }
 
+        // Nächsten Command holen
         $cmd = array_shift($queue);
+        $this->SetBuffer('WallboxQueue', json_encode($queue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
+        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
-        $ok = $this->SemsControl($cmd['endpoint'], $cmd['data']);
+        // --- Command validieren ---
+        if (!is_array($cmd) || !isset($cmd['endpoint']) || !isset($cmd['data']) || !is_array($cmd['data'])) {
+            $this->SendDebug('ProcessWallboxQueue', 'Ungültiger Queue-Eintrag – übersprungen: ' . json_encode($cmd), 0);
+        } else {
+            // --- Command senden ---
+            $ok = false;
 
-        if (!$ok) {
-            // Retry: wieder vorne rein, aber mit Zeitstempel-Schutz (max 3 Versuche)
-            $tries = $cmd['tries'] ?? 0;
-            $tries++;
-            $cmd['tries'] = $tries;
+            try {
+                switch ($cmd['endpoint']) {
+                    case '__SEMS_CHARGING__': {
+                        // erwartet data: ['sn'=>..., 'on'=>bool]
+                        $sn = (string)($cmd['data']['sn'] ?? '');
+                        if ($sn === '') {
+                            $this->SendDebug('ProcessWallboxQueue', 'Fehlende sn für __SEMS_CHARGING__', 0);
+                            break;
+                        }
 
-            if ($tries <= 3) {
-                array_unshift($queue, $cmd);
-                $this->SendDebug('ProcessWallboxQueue', "Fehler/Timeout – Retry #$tries in 5s", 0);
-                $this->SetBuffer('WallboxQueue', json_encode($queue));
-                $this->SetTimerInterval('TimerWBQueue', 5000);
-                return;
+                        $on = (bool)($cmd['data']['on'] ?? false);
+                        $ok = $this->SemsSetCharging($sn, $on);
+                        break;
+                    }
+
+                    case '__SEMS_SETMODE__': {
+                        // erwartet data: ['sn'=>..., 'type'=>int, 'charge_power'=>float|null]
+                        $sn = (string)($cmd['data']['sn'] ?? '');
+                        if ($sn === '') {
+                            $this->SendDebug('ProcessWallboxQueue', 'Fehlende sn für __SEMS_SETMODE__', 0);
+                            break;
+                        }
+
+                        $type = (int)($cmd['data']['type'] ?? 0);
+
+                        $cp = $cmd['data']['charge_power'] ?? null;
+                        if ($cp === '' || $cp === false) {
+                            $cp = null;
+                        }
+                        if ($cp !== null) {
+                            $cp = (float)$cp;
+                        }
+
+                        $ok = $this->SemsSetChargeMode($sn, $type, $cp);
+                        break;
+                    }
+
+                    default:
+                        $this->SendDebug('ProcessWallboxQueue', 'Unbekannter endpoint marker: ' . $cmd['endpoint'], 0);
+                        break;
+                }
+            } catch (Exception $e) {
+                $this->SendDebug('ProcessWallboxQueue', 'Exception beim Senden: ' . $e->getMessage(), 0);
+                $ok = false;
             }
 
-            $this->SendDebug('ProcessWallboxQueue', 'Fehler nach 3 Versuchen – Command verworfen', 0);
+            if ($ok) {
+                $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
+            } else {
+                $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command FEHLER', 0);
+            }
         }
 
-        // Queue speichern
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        // WICHTIG: Queue nach dem Senden erneut aus Buffer lesen
+        // (weil in der Zwischenzeit neue Befehle reingekommen sein können)
+        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+        if (!is_array($queue)) {
+            $queue = [];
+        }
 
-        // Wenn jetzt leer → pending leeren + hold setzen
         if (count($queue) === 0) {
-            $this->SetBuffer('WallboxChanges', json_encode([]));
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + 300));
+            // Jetzt wirklich leer → Pending-Map leeren
+            $this->SetBuffer('WallboxChanges', json_encode([], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+            // API-Updates blockieren (SEMS meldet träge zurück)
+            $holdSeconds = 300;
+            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+
+            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
             $this->SetTimerInterval('TimerWBQueue', 0);
-            $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
+            $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
         } else {
-            $this->SetTimerInterval('TimerWBQueue', 1000);
+            // Noch Befehle da → Timer weiterlaufen lassen
+            if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                $this->SetTimerInterval('TimerWBQueue', 1000);
+            }
+            $this->SendDebug(
+                'ProcessWallboxQueue',
+                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
+                0
+            );
         }
     }
 
@@ -1152,98 +1213,6 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    private function SemsPost(string $endpoint, array $param, ?string $version = null): ?array
-    {
-        $email    = $this->ReadPropertyString('WallboxUser');
-        $password = $this->ReadPropertyString('WallboxPassword');
-
-        if ($email === '' || $password === '') {
-            $this->SendDebug('SemsPost', 'User/Pass fehlt', 0);
-            return null;
-        }
-
-        if (!$this->SEMS_Login($email, $password)) {
-            $this->SendDebug('SemsPost', 'Login fehlgeschlagen', 0);
-            return null;
-        }
-
-        // Version automatisch: v4 => 4.0, v3 => 3.0 (Fallback 4.0)
-        if ($version === null) {
-            $version = (strpos($endpoint, '/v3/') === 0) ? '3.0' : '4.0';
-        }
-
-        $cookie = $this->SemsCookieFile();
-
-        // SEMS erwartet meistens: {"api": "...", "version":"4.0", "param": {...}}
-        $payloadObj = [
-            'api'     => $endpoint,
-            'version' => $version,
-            'param'   => $param
-        ];
-
-        // !!! NICHT JSON als Body schicken, sondern form-urlencoded: str=<urlencoded json>
-        $payload = 'str=' . urlencode(json_encode($payloadObj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-        $headers = [
-            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'X-Requested-With: XMLHttpRequest',
-            'Accept: application/json, text/javascript, */*; q=0.01',
-            'Origin: https://eu.semsportal.com',
-            'Referer: https://eu.semsportal.com/',
-            'Connection: keep-alive'
-        ];
-
-        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_COOKIEFILE     => $cookie,
-            CURLOPT_COOKIEJAR      => $cookie,
-
-            // StartCharging kann “zäh” sein → länger als 20s
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_CONNECTTIMEOUT => 10,
-
-            CURLOPT_ENCODING       => ''
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr  = curl_error($ch);
-        curl_close($ch);
-
-        $decoded = null;
-        if ($response !== false && $response !== '') {
-            $decoded = json_decode($response, true);
-        }
-
-        $this->SendDebug('SemsPost', json_encode([
-            'endpoint' => $endpoint,
-            'request'  => $param,
-            'version'  => $version,
-            'httpCode' => $httpCode,
-            'curlErr'  => $curlErr,
-            'response' => $decoded ?? $response
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-
-        if ($httpCode !== 200 || !is_array($decoded)) {
-            return null;
-        }
-        if (!isset($decoded['code']) || (string)$decoded['code'] !== '0') {
-            return null;
-        }
-
-        return $decoded;
-    }
-
-    // ------------------------
-    // WALLBOX WRAPPER (neu)
-    // ------------------------
 
     private function SemsGetWallboxView(string $sn): ?array
     {
@@ -1267,17 +1236,6 @@ class Goodwe extends IPSModule
     private function SemsStopCharging(string $sn): ?array
     {
         return $this->SemsPost("/v4/EvCharger/StopCharging", ["sn" => $sn], "4.0");
-    }
-
-    private function SemsSetChargeMode(string $sn, int $mode, ?float $chargePowerKw = null): ?array
-    {
-        $param = ["sn" => $sn, "mode" => $mode];
-        if ($chargePowerKw !== null) {
-            $param["charge_power"] = $chargePowerKw;
-        }
-
-        // Das ist bei dir /v3/... (SEMS macht das wirklich gemischt)
-        return $this->SemsPost("/v3/EvCharger/SetChargeMode", $param, "3.0");
     }
 
     private function SemsCookieFile(): string
@@ -1347,6 +1305,196 @@ class Goodwe extends IPSModule
         return is_array($res) && isset($res['code']) && (string)$res['code'] === '0';
     }
 
+    // ---------- SEMS v2/v3 (wie HomeAssistant Integration) ----------
+
+    private function SemsGetToken(bool $forceRenew = false): ?array
+    {
+        $email    = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+
+        if ($email === '' || $password === '') {
+            $this->SendDebug("SemsGetToken", "Benutzername/Passwort fehlt.", 0);
+            return null;
+        }
+
+        // Token aus Buffer nehmen (gültig ~ 55 Minuten, sicherheitshalber)
+        $cached = @json_decode($this->GetBuffer("SemsToken"), true);
+        $ts     = (int)@intval($this->GetBuffer("SemsTokenTs"));
+        $age    = time() - $ts;
+
+        if (!$forceRenew && is_array($cached) && $ts > 0 && $age < 55 * 60) {
+            return $cached;
+        }
+
+        $url = "https://eu.semsportal.com/api/v2/Common/CrossLogin";
+
+        $headers = [
+            "Content-Type: application/json",
+            "Accept: application/json",
+            // wie HA: token header muss vorhanden sein, auch beim Login
+            "token: " . '{"version":"","client":"ios","language":"en"}',
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = json_encode([
+            "account" => $email,
+            "pwd"     => $password
+        ], JSON_UNESCAPED_SLASHES);
+
+        $resp = $this->CurlJson($url, $headers, $body);
+
+        if ($resp === null) {
+            $this->SendDebug("SemsGetToken", "Login fehlgeschlagen (CurlJson null).", 0);
+            return null;
+        }
+
+        if (!isset($resp["data"]) || !is_array($resp["data"])) {
+            $this->SendDebug("SemsGetToken", "Login Antwort ohne data: " . json_encode($resp), 0);
+            return null;
+        }
+
+        // wie HA: tokenDict = data + api
+        $token = $resp["data"];
+        if (isset($resp["api"])) {
+            $token["api"] = $resp["api"];
+        }
+
+        $this->SetBuffer("SemsToken", json_encode($token, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $this->SetBuffer("SemsTokenTs", (string)time());
+
+        $this->SendDebug("SemsGetToken", "Token erneuert: " . json_encode($token, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return $token;
+    }
+
+    private function SemsPost(string $url, array $payload, bool $renewToken = false, int $maxRetries = 2): ?array
+    {
+        if ($maxRetries <= 0) {
+            $this->SendDebug("SemsPost", "Max retries erreicht für $url", 0);
+            return null;
+        }
+
+        $token = $this->SemsGetToken($renewToken);
+        if ($token === null) {
+            return null;
+        }
+
+        $headers = [
+            "Content-Type: application/json",
+            "Accept: application/json",
+            "token: " . json_encode($token, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $resp = $this->CurlJson($url, $headers, $body);
+        if ($resp === null) {
+            $this->SendDebug("SemsPost", "CurlJson null -> retry mit neuem Token", 0);
+            return $this->SemsPost($url, $payload, true, $maxRetries - 1);
+        }
+
+        // Viele SEMS endpoints liefern: { msg:"success", data:... }
+        // Wenn nicht success -> Token erneuern und nochmals probieren
+        if (isset($resp["msg"]) && $resp["msg"] !== "success") {
+            $this->SendDebug("SemsPost", "msg != success (" . $resp["msg"] . ") -> retry mit neuem Token", 0);
+            return $this->SemsPost($url, $payload, true, $maxRetries - 1);
+        }
+
+        return $resp;
+    }
+
+    private function SemsGetWallboxStatus(string $sn): ?array
+    {
+        $url = "https://eu.semsportal.com/api/v3/EvCharger/GetCurrentChargeinfo";
+        $resp = $this->SemsPost($url, ["sn" => $sn], false, 3);
+
+        if ($resp === null) {
+            return null;
+        }
+        // erwartet: data ist ein Objekt/Array
+        if (!isset($resp["data"]) || $resp["data"] === null) {
+            $this->SendDebug("SemsGetWallboxStatus", "Keine data in Antwort: " . json_encode($resp), 0);
+            return null;
+        }
+        return $resp["data"];
+    }
+
+    private function SemsSetCharging(string $sn, bool $on): bool
+    {
+        // WICHTIG: HA nutzt /api/v3/EvCharger/Charging mit status als STRING
+        $url = "https://eu.semsportal.com/api/v3/EvCharger/Charging";
+        $payload = [
+            "sn"     => $sn,
+            "status" => $on ? "1" : "0"
+        ];
+
+        $resp = $this->SemsPost($url, $payload, false, 2);
+        if ($resp === null) {
+            $this->SendDebug("SemsSetCharging", "Keine Antwort", 0);
+            return false;
+        }
+        $this->SendDebug("SemsSetCharging", "Antwort: " . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return true;
+    }
+
+    private function SemsSetChargeMode(string $sn, int $type, ?float $chargePowerKw = null): bool
+    {
+        // WICHTIG: HA nutzt "type" (nicht "mode")
+        $url = "https://eu.semsportal.com/api/v3/EvCharger/SetChargeMode";
+
+        $payload = [
+            "sn"   => $sn,
+            "type" => $type
+        ];
+        if ($chargePowerKw !== null) {
+            $payload["charge_power"] = $chargePowerKw; // kW, z.B. 4.2
+        }
+
+        $resp = $this->SemsPost($url, $payload, false, 2);
+        if ($resp === null) {
+            $this->SendDebug("SemsSetChargeMode", "Keine Antwort", 0);
+            return false;
+        }
+        $this->SendDebug("SemsSetChargeMode", "Antwort: " . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        return true;
+    }
+
+    private function CurlJson(string $url, array $headers, string $body): ?array
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $raw = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        $log = [
+            "url"      => $url,
+            "httpCode" => $http,
+            "body"     => $body
+        ];
+
+        if ($raw === false || $raw === '' || $http < 200 || $http >= 300) {
+            $log["error"] = $err;
+            $log["raw"]   = $raw;
+            $this->SendDebug("CurlJson", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $log["raw"] = $raw;
+            $this->SendDebug("CurlJson", "JSON decode fehlgeschlagen: " . json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            return null;
+        }
+
+        return $decoded;
+    }
 
 
 
