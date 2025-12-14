@@ -19,6 +19,10 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
+        $this->RegisterAttributeString('SemsToken', '');
+        $this->RegisterAttributeInteger('SemsTokenUntil', 0);
+        $this->RegisterAttributeString('PowerStationId', '');
+        $this->RegisterAttributeString('CookiesFile', '');
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
@@ -257,71 +261,90 @@ class Goodwe extends IPSModule
 
         // Für Wallbox
         $serial = $this->ReadPropertyString("WallboxSerial");
-        if (empty($serial)) {
+        if ($serial === '') {
             $this->SendDebug("RequestAction", "Keine Seriennummer vorhanden – Abbruch.", 0);
             return;
         }
 
+        $psId = $this->ReadAttributeString('PowerStationId');
+        // Wenn noch leer: einmal fetchen (damit Start sofort klappt)
+        if ($psId === '') {
+            $this->FetchWallboxData();
+            $psId = $this->ReadAttributeString('PowerStationId');
+        }
+
         switch ($ident) {
+
             case 'WB_Charging':
-                // Optimistic Update
                 $this->SetValueIfChanged($ident, (bool)$value);
 
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
+                if ((bool)$value) {
+                    // START
+                    $modeId = @$this->GetIDForIdent('WB_ChargeMode');
+                    $powId  = @$this->GetIDForIdent('WB_ChargePower');
 
-                if ($value) {
-                    // mode mitsenden
-                    $modeID = @$this->GetIDForIdent('WB_ChargeMode');
-                    $data['mode'] = ($modeID !== false) ? (int)GetValue($modeID) : 0;
+                    $mode = ($modeId !== false) ? (int)GetValue($modeId) : 0;
 
-                    // OPTIONAL: charge_power mitsenden (hilft oft genau beim Start)
-                    $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                    if ($powerID !== false) {
-                        $w = (int)GetValue($powerID);
-                        if ($w > 0) {
-                            $data['charge_power'] = round($w / 1000, 1);
-                        }
+                    $watt = ($powId !== false) ? (int)GetValue($powId) : 0;
+                    $kw   = ($watt > 0) ? round($watt / 1000, 1) : null;
+
+                    $param = [
+                        'sn'            => $serial,
+                        'powerStationId'=> $psId,
+                        'mode'          => $mode
+                    ];
+                    if ($kw !== null) {
+                        $param['charge_power'] = $kw;
                     }
+
+                    $resp = $this->SemsPost('/v4/EvCharger/StartCharging', $param);
+                    $this->SendDebug('WB_Charging', 'StartCharging response: ' . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
+                } else {
+                    // STOP
+                    $param = [
+                        'sn'            => $serial,
+                        'powerStationId'=> $psId
+                    ];
+
+                    $resp = $this->SemsPost('/v4/EvCharger/StopCharging', $param);
+                    $this->SendDebug('WB_Charging', 'StopCharging response: ' . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
                 }
 
-                $this->QueueWallboxChange($ident, $data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
                 $this->SetValueIfChanged($ident, (int)$value);
 
-                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
-                $chargePowerKW = null;
-                $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                if ($powerID !== false) {
-                    $w = (int)GetValue($powerID);
-                    if ($w > 0) {
-                        $chargePowerKW = round($w / 1000, 1);
-                    }
-                }
+                $param = [
+                    'sn'            => $serial,
+                    'powerStationId'=> $psId,
+                    'mode'          => (int)$value
+                ];
 
-                $data = ['sn' => $serial, 'mode' => (int)$value];
-                if ($chargePowerKW !== null) {
-                    $data['charge_power'] = $chargePowerKW;
-                }
-
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                $resp = $this->SemsPost('/v3/EvCharger/SetChargeMode', $param);
+                $this->SendDebug('WB_ChargeMode', 'SetChargeMode response: ' . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
                 break;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-                $val = min(max($val, 4200), 9700); // Begrenzung
+                $val = min(max($val, 4200), 9700);
 
-                // Lokale Variablen sofort anpassen
                 $this->SetValueIfChanged($ident, $val);
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
                 $kw = round($val / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
 
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                $param = [
+                    'sn'            => $serial,
+                    'powerStationId'=> $psId,
+                    'mode'          => 0,
+                    'charge_power'  => $kw
+                ];
+
+                $resp = $this->SemsPost('/v3/EvCharger/SetChargeMode', $param);
+                $this->SendDebug('WB_ChargePower', 'SetChargeMode response: ' . json_encode($resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
                 break;
 
             default:
@@ -542,147 +565,66 @@ class Goodwe extends IPSModule
 
     public function FetchWallboxData()
     {
-        $user     = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
-        $serial   = $this->ReadPropertyString("WallboxSerial");
-
-        if (empty($user) || empty($password) || empty($serial)) {
-            $this->SendDebug("FetchWallboxData", "Wallbox-Datenabruf übersprungen: Benutzername, Passwort oder Seriennummer fehlen.", 0);
+        $serial = $this->ReadPropertyString("WallboxSerial");
+        if ($serial === '') {
+            $this->SendDebug("FetchWallboxData", "Seriennummer fehlt.", 0);
             return;
         }
 
-        $this->SendDebug("FetchWallboxData", "Starte Wallbox-Datenabruf...", 0);
-
-        try {
-            $loginResponse = $this->GoodweLogin($user, $password);
-            if (!$loginResponse) {
-                $this->SendDebug("FetchWallboxData", "Login fehlgeschlagen.", 0);
-                return;
-            }
-
-            $apiResponse = $this->GoodweFetchData($serial);
-            if (!$apiResponse) {
-                $this->SendDebug("FetchWallboxData", "API-Datenabruf fehlgeschlagen.", 0);
-                return;
-            }
-
-            $data = json_decode($apiResponse, true);
-            if (!isset($data['data']) || !is_array($data['data'])) {
-                $this->SendDebug("FetchWallboxData", "Keine Daten im API-Response oder ungültiges Format.", 0);
-                return;
-            }
-
-            // --- Status für Pending-Änderungen und Blockierung aus Buffern lesen ---
-            $pending = @json_decode($this->GetBuffer("WallboxChanges"), true);
-            if (!is_array($pending)) {
-                $pending = [];
-            }
-
-            $holdUntil = (int)@intval($this->GetBuffer("ChargingHoldUntil"));
-            $now       = time();
-            $isBlocked = ($holdUntil > $now);
-
-            if (!empty($pending)) {
-                $this->SendDebug("FetchWallboxData", "Eigene Änderungen pending: " . implode(', ', array_keys($pending)), 0);
-            }
-            if ($isBlocked) {
-                $this->SendDebug("FetchWallboxData", "API-Rückmeldungen blockiert bis " . date('H:i:s', $holdUntil), 0);
-            }
-
-            // Status-JSON für alle WB_* Variablen (eine Zeile pro Lauf)
-            $statusJson = [];
-
-            foreach ($data['data'] as $key => $value) {
-                $ident = "WB_" . $key;
-                $varID = @$this->GetIDForIdent($ident);
-
-                // Generelle WB_* Variablen nur, wenn ein gültiger (nicht null) Wert kommt
-                if ($varID !== false && $value !== null) {
-                    // Spezialfall: Ist-Leistung (kW → W)
-                    if ($key === 'power') {
-                        $value = (int)round(((float)$value) * 1000);
-                    }
-
-                    $this->SetValueIfChanged($ident, $value);
-                    $statusJson[$ident] = GetValue($varID);
-                }
-
-                // ----------------- SPEZIAL: Steuer-Variablen -----------------
-
-                // 1) WB_Charging anhand von workstate
-                if ($key === "workstate" && $value !== null) {
-                    $chargingState     = ($value !== 0);
-                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
-
-                    if (!$isPendingCharging && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_Charging', $chargingState);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"),
-                            0
-                        );
-                    } elseif ($isBlocked) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                            0
-                        );
-                    } elseif ($isPendingCharging) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
-                            0
-                        );
-                    }
-
-                    $cid = @$this->GetIDForIdent('WB_Charging');
-                    if ($cid !== false) {
-                        $statusJson['WB_Charging'] = GetValue($cid);
-                    }
-                }
-
-                // 2) WB_ChargeMode anhand von chargeMode
-                if ($key === "chargeMode" && $value !== null) {
-                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
-
-                    if (!$isPendingMode && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
-                            0
-                        );
-                    } else {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
-                            0
-                        );
-                    }
-
-                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($mid !== false) {
-                        $statusJson['WB_ChargeMode'] = GetValue($mid);
-                    }
-                }
-            }
-
-            // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
-            ksort($statusJson);
-            $log = [
-                'source' => 'SEMS_API',
-                'values' => $statusJson
-            ];
-            $this->SendDebug(
-                "FetchWallboxData",
-                json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                0
-            );
-
-            $this->SendDebug("FetchWallboxData", "Wallbox-Daten erfolgreich verarbeitet.", 0);
-        } catch (Exception $e) {
-            $this->SendDebug("FetchWallboxData", "Fehler beim Abruf der Wallbox-Daten: " . $e->getMessage(), 0);
+        $resp = $this->SemsPost('/v4/EvCharger/GetEvChargerAloneViewBySn', ['sn' => $serial]);
+        if (!is_array($resp) || !isset($resp['data']) || !is_array($resp['data'])) {
+            $this->SendDebug("FetchWallboxData", "Ungültige Antwort / keine data.", 0);
+            return;
         }
+
+        $data = $resp['data'];
+
+        // powerStationId merken (BLOCKER für StartCharging)
+        if (isset($data['powerStationId']) && is_string($data['powerStationId']) && $data['powerStationId'] !== '') {
+            $this->WriteAttributeString('PowerStationId', $data['powerStationId']);
+        }
+
+        // normale WB_* Variablen setzen
+        $statusJson = [];
+
+        foreach ($data as $key => $value) {
+            $ident = "WB_" . $key;
+            $varID = @$this->GetIDForIdent($ident);
+
+            if ($varID !== false && $value !== null) {
+                if ($key === 'power') { // kW -> W
+                    $value = (int)round(((float)$value) * 1000);
+                }
+                $this->SetValueIfChanged($ident, $value);
+                $statusJson[$ident] = GetValue($varID);
+            }
+
+            // WB_Charging aus workstate
+            if ($key === "workstate" && $value !== null) {
+                $chargingState = ((int)$value !== 0);
+                $this->SetValueIfChanged('WB_Charging', $chargingState);
+                $cid = @$this->GetIDForIdent('WB_Charging');
+                if ($cid !== false) {
+                    $statusJson['WB_Charging'] = GetValue($cid);
+                }
+            }
+
+            // WB_ChargeMode aus chargeMode
+            if ($key === "chargeMode" && $value !== null) {
+                $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
+                $mid = @$this->GetIDForIdent('WB_ChargeMode');
+                if ($mid !== false) {
+                    $statusJson['WB_ChargeMode'] = GetValue($mid);
+                }
+            }
+        }
+
+        ksort($statusJson);
+        $this->SendDebug("FetchWallboxData", json_encode([
+            'source' => 'SEMS_API',
+            'psId'   => $this->ReadAttributeString('PowerStationId'),
+            'values' => $statusJson
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
     }
 
     private function GoodweFetchData(string $serial): ?string
@@ -1110,8 +1052,165 @@ class Goodwe extends IPSModule
         return [$httpCode, $raw, $decoded];
     }
 
+    private function EnsureAuth(): bool
+    {
+        $user = $this->ReadPropertyString("WallboxUser");
+        $pass = $this->ReadPropertyString("WallboxPassword");
 
+        if ($user === '' || $pass === '') {
+            $this->SendDebug('EnsureAuth', 'User/Pass fehlen.', 0);
+            return false;
+        }
 
+        $until = (int)$this->ReadAttributeInteger('SemsTokenUntil');
+        $token = (string)$this->ReadAttributeString('SemsToken');
+
+        // Token noch gültig? (mit etwas Puffer)
+        if ($token !== '' && $until > (time() + 60)) {
+            return true;
+        }
+
+        return $this->SemsLogin($user, $pass);
+    }
+
+    private function SemsLogin(string $email, string $password): bool
+    {
+        $cookieFile = $this->ReadAttributeString('CookiesFile');
+        if ($cookieFile === '') {
+            $cookieFile = IPS_GetKernelDir() . 'media' . DIRECTORY_SEPARATOR . 'goodwe_sems_' . $this->InstanceID . '.cookie';
+            $this->WriteAttributeString('CookiesFile', $cookieFile);
+        }
+
+        $headers = [
+            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        ];
+
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password,
+            "code"    => ""
+        ]);
+
+        $ch = curl_init('https://eu.semsportal.com/Home/Login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $decoded = null;
+        if ($response !== false && $response !== '') {
+            $decoded = json_decode($response, true);
+        }
+
+        $this->SendDebug('SemsLogin', json_encode([
+            'httpCode' => $httpCode,
+            'response' => $decoded ?? $response
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
+        if ($httpCode !== 200 || !is_array($decoded)) {
+            return false;
+        }
+
+        // SEMS Login liefert mal code=0 (int), mal "0" (string) – wir akzeptieren beides
+        $code = $decoded['code'] ?? null;
+        if (!($code === 0 || $code === "0")) {
+            return false;
+        }
+
+        // Token rausziehen (wie in deinem Dump)
+        $token = $decoded['data']['token']['token'] ?? '';
+        if (!is_string($token) || $token === '') {
+            $this->SendDebug('SemsLogin', 'Kein Token im Login-Response gefunden.', 0);
+            // Login kann trotzdem "gehen", aber für Control ist Token meist Pflicht -> false
+            return false;
+        }
+
+        $this->WriteAttributeString('SemsToken', $token);
+
+        // Gültigkeit: wenn SEMS nichts liefert, nehmen wir 30min als konservativ
+        $expireSeconds = 1800;
+        if (isset($decoded['data']['token']['expire']) && is_numeric($decoded['data']['token']['expire'])) {
+            $expireSeconds = (int)$decoded['data']['token']['expire'];
+        }
+        $this->WriteAttributeInteger('SemsTokenUntil', time() + $expireSeconds);
+
+        return true;
+    }
+
+    private function SemsPost(string $endpoint, array $param): ?array
+    {
+        if (!$this->EnsureAuth()) {
+            $this->SendDebug('SemsPost', 'EnsureAuth fehlgeschlagen.', 0);
+            return null;
+        }
+
+        $cookieFile = $this->ReadAttributeString('CookiesFile');
+        $token      = $this->ReadAttributeString('SemsToken');
+
+        $headers = [
+            "Content-Type: application/json",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "X-Token: " . $token
+        ];
+
+        // SEMS erwartet JSON mit Feld "str" (string, der wiederum JSON enthält)
+        $payload = [
+            "str" => json_encode([
+                "api"     => $endpoint,
+                "version" => "4.0",
+                "param"   => $param
+            ], JSON_UNESCAPED_SLASHES)
+        ];
+
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $decoded = null;
+        if ($response !== false && $response !== '') {
+            $decoded = json_decode($response, true);
+        }
+
+        $this->SendDebug('SemsPost', json_encode([
+            'endpoint' => $endpoint,
+            'request'  => $param,
+            'httpCode' => $httpCode,
+            'response' => $decoded ?? $response
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
+        if ($httpCode !== 200 || !is_array($decoded)) {
+            return null;
+        }
+
+        // Code wieder tolerant
+        $code = $decoded['code'] ?? null;
+        if (!($code === 0 || $code === "0")) {
+            return $decoded; // geben wir trotzdem zurück, damit du den Fehlercode siehst
+        }
+
+        return $decoded;
+    }
 
 
 
