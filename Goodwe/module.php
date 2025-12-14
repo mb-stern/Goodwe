@@ -968,12 +968,6 @@ class Goodwe extends IPSModule
         }
     }
 
-    private function GetSemsBaseUrl(): string
-    {
-        // Falls du später mal dynamisch machen willst, ist das der zentrale Punkt
-        return 'https://eu.semsportal.com';
-    }
-
     private function GetCookieFile(): string
     {
         // Instanz-spezifisch, damit parallele Zugriffe nicht kollidieren
