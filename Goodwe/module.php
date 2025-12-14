@@ -1045,30 +1045,6 @@ class Goodwe extends IPSModule
     }
 
     // ------------------------
-    // Pending (WB_Charging)
-    // ------------------------
-    private function SetWbPending(string $ident, $expected, int $timeoutSec = 300): void
-    {
-        $this->SetBuffer('WB_Pending', json_encode([
-            'ident'    => $ident,
-            'expected' => $expected,
-            'since'    => time(),
-            'timeout'  => $timeoutSec
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-    }
-
-    private function GetWbPending(): ?array
-    {
-        $p = json_decode($this->GetBuffer('WB_Pending'), true);
-        return is_array($p) ? $p : null;
-    }
-
-    private function ClearWbPending(): void
-    {
-        $this->SetBuffer('WB_Pending', '');
-    }
-
-    // ------------------------
     // SEMS Endpoints
     // ------------------------
     private function SemsLoginUrl(): string      { return "https://eu.semsportal.com/api/v2/Common/CrossLogin"; }
