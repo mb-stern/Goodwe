@@ -268,24 +268,31 @@ class Goodwe extends IPSModule
 
             case 'WB_Charging': {
                 $on = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-                if ($on === null) {
-                    $on = ((int)$value === 1);
-                }
+                if ($on === null) $on = ((int)$value === 1);
 
                 // Optimistisch setzen
                 $this->SetValueIfChanged('WB_Charging', (bool)$on);
 
-                // 5 Minuten warten auf Bestätigung via ChargeInfo
+                // 5 Minuten Vertrauen
                 $this->SetWbPending('WB_Charging', (bool)$on, 300);
 
-                // 1× senden (über Queue)
-                $this->QueueWallboxChange(
-                    'WB_Charging',
-                    ['sn' => $serial, 'on' => (bool)$on],
-                    'charging'
-                );
+                // v4 Start/Stop
+                if ($on) {
+                    // mode: nimm deinen aktuellen Soll-Modus, falls vorhanden, sonst 0
+                    $mode = 0;
+                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
+                    if ($mid !== false) $mode = (int)GetValue($mid);
 
-                $this->SendDebug("RequestAction", "WB_Charging queued -> " . ($on ? "ON" : "OFF"), 0);
+                    $ok = $this->SemsStartCharging($serial, $mode);
+                    $this->SendDebug("RequestAction", "StartCharging v4 ok=" . json_encode($ok), 0);
+                } else {
+                    $ok = $this->SemsStopCharging($serial);
+                    $this->SendDebug("RequestAction", "StopCharging v4 ok=" . json_encode($ok), 0);
+
+                    // Optionaler Fallback, falls v4 spinnt:
+                    // if (!$ok) $this->SemsSetChargingStatus($serial, 0);  // v3
+                }
+
                 break;
             }
 
@@ -970,24 +977,21 @@ class Goodwe extends IPSModule
         ];
     }
 
-    // ------------------------
-    // ZIP-Style API Funktionen
-    // ------------------------
     private function SemsGetWallboxStatus(string $sn): ?array
     {
         $url = $this->SemsWallboxUrl();
         $resp = $this->SemsPost($url, ["sn" => $sn], false, 2);
-        if (!is_array($resp)) {
-            return null;
-        }
+        if (!is_array($resp)) return null;
 
         $decoded = $resp['decoded'] ?? null;
-        if (!is_array($decoded) || !isset($decoded['data']) || $decoded['data'] === null) {
-            $this->SendDebug("SemsGetWallboxStatus", "Keine data: " . json_encode($decoded ?? $resp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            return null;
-        }
+        if (!is_array($decoded)) return null;
 
-        return is_array($decoded['data']) ? $decoded['data'] : null;
+        // Swagger: Response ist direkt das Objekt (kein data-wrapper garantiert)
+        // Manche SEMS-Antworten packen es trotzdem in data -> wir unterstützen beides
+        if (isset($decoded['data']) && is_array($decoded['data'])) {
+            return $decoded['data'];
+        }
+        return $decoded;
     }
 
     private function SemsSetCharging(string $sn, bool $on): bool
@@ -1056,10 +1060,13 @@ class Goodwe extends IPSModule
     // ------------------------
     // SEMS Endpoints
     // ------------------------
-    private function SemsLoginUrl(): string      { return "https://eu.semsportal.com/api/v2/Common/CrossLogin"; }
-    private function SemsWallboxUrl(): string    { return "https://eu.semsportal.com/api/v3/EvCharger/GetCurrentChargeinfo"; }
-    private function SemsSetModeUrl(): string    { return "https://eu.semsportal.com/api/v3/EvCharger/SetChargeMode"; }
-    private function SemsChargingUrl(): string   { return "https://eu.semsportal.com/api/v3/EvCharger/Charging"; }
+    private function SemsWallboxUrl(): string      { return "https://eu.semsportal.com/api/v4/EvCharger/GetEvChargerAloneViewBySn"; }
+    private function SemsStartChargingUrl(): string{ return "https://eu.semsportal.com/api/v4/EvCharger/StartCharging"; }
+    private function SemsStopChargingUrl(): string { return "https://eu.semsportal.com/api/v4/EvCharger/StopCharging"; }
+
+    // Optional: v3 als Fallback behalten
+    private function SemsChargingUrl(): string     { return "https://eu.semsportal.com/api/v3/EvCharger/Charging"; }
+
 
     private function CurlJsonHttp(string $url, array $headers, string $body, int $timeout = 20): array
     {
@@ -1184,6 +1191,47 @@ class Goodwe extends IPSModule
         $this->SendDebug('WB_CommandError', $text, 0);
     }
 
+    private function SemsStartCharging(string $sn, int $mode = 0): bool
+    {
+        $url = $this->SemsStartChargingUrl();
+        $payload = ["sn" => $sn, "mode" => $mode];
+
+        $resp = $this->SemsPost($url, $payload, false, 2);
+        $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
+
+        $decoded = $resp['decoded'] ?? null;
+        // Swagger sagt boolean, manchmal kommt aber JSON drumrum -> wir loggen beides
+        $ok = ($http === 200);
+
+        $this->SendDebug("SemsStartCharging", json_encode([
+            'sn'   => $sn,
+            'mode' => $mode,
+            'http' => $http,
+            'resp' => $decoded ?? ($resp['raw'] ?? null)
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
+
+        return $ok;
+    }
+
+    private function SemsStopCharging(string $sn): bool
+    {
+        $url = $this->SemsStopChargingUrl();
+        $payload = ["sn" => $sn];
+
+        $resp = $this->SemsPost($url, $payload, false, 2);
+        $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
+
+        $decoded = $resp['decoded'] ?? null;
+        $ok = ($http === 200);
+
+        $this->SendDebug("SemsStopCharging", json_encode([
+            'sn'   => $sn,
+            'http' => $http,
+            'resp' => $decoded ?? ($resp['raw'] ?? null)
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
+
+        return $ok;
+    }
 
 
 
