@@ -269,8 +269,20 @@ class Goodwe extends IPSModule
 
                 $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
                 $data = ['sn' => $serial];
+
                 if ($value) {
-                    $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
+                    // mode mitsenden
+                    $modeID = @$this->GetIDForIdent('WB_ChargeMode');
+                    $data['mode'] = ($modeID !== false) ? (int)GetValue($modeID) : 0;
+
+                    // OPTIONAL: charge_power mitsenden (hilft oft genau beim Start)
+                    $powerID = @$this->GetIDForIdent('WB_ChargePower');
+                    if ($powerID !== false) {
+                        $w = (int)GetValue($powerID);
+                        if ($w > 0) {
+                            $data['charge_power'] = round($w / 1000, 1);
+                        }
+                    }
                 }
 
                 $this->QueueWallboxChange($ident, $data, $endpoint);
@@ -678,19 +690,60 @@ class Goodwe extends IPSModule
         $this->SendDebug("GoodweFetchData", "Starte API-Datenabruf für Seriennummer: $serial", 0);
 
         $apiEndpoint = "/v4/EvCharger/GetEvChargerAloneViewBySn";
-        $body = "str=%7B%22api%22%3A%22" . urlencode($apiEndpoint) . "%22%2C%22version%22%3A%224.0%22%2C%22param%22%3A%7B%22sn%22%3A%22" . urlencode($serial) . "%22%7D%7D";
+        $payload = [
+            "api"     => $apiEndpoint,
+            "version" => "4.0",
+            "param"   => ["sn" => $serial]
+        ];
+
+        [$httpCode, $raw, $decoded] = $this->SemsPost($apiEndpoint, $payload, 10);
+
+        $log = [
+            'source'   => 'SEMS_API',
+            'endpoint' => $apiEndpoint,
+            'request'  => ['sn' => $serial],
+            'httpCode' => $httpCode,
+            'response' => $decoded ?? $raw
+        ];
+        $this->SendDebug("GoodweFetchData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
+        if ($httpCode !== 200 || !$raw) {
+            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode", 0);
+            return null;
+        }
+
+        return $raw;
+    }
+
+    private function GoodweLogin(string $email, string $password): bool
+    {
+        $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
+
+        $cookieFile = $this->GetCookieFile();
+        $url = $this->GetSemsBaseUrl() . '/Home/Login';
 
         $headers = [
             "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept: application/json, text/plain, */*"
         ];
 
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($apiEndpoint));
+        $body = http_build_query([
+            "account" => $email,
+            "pwd"     => $password,
+            "code"    => ""
+        ]);
+
+        $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+
+        // Instanz-spezifische Cookies
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
         $response = curl_exec($ch);
@@ -703,64 +756,24 @@ class Goodwe extends IPSModule
         }
 
         $log = [
-            'source'   => 'SEMS_API',
-            'endpoint' => $apiEndpoint,
-            'request'  => ['sn' => $serial],
+            'source'   => 'SEMS_LOGIN',
             'httpCode' => $httpCode,
+            'response' => $decoded ?? $response
         ];
-
-        if ($decoded !== null) {
-            $log['response'] = $decoded;
-        } else {
-            $log['responseRaw'] = $response;
-        }
+        $this->SendDebug("GoodweLogin", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
         if ($httpCode !== 200 || !$response) {
-            $log['error'] = 'HTTP-Fehler oder leere Antwort';
-            $this->SendDebug("GoodweFetchData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            $this->SendDebug("GoodweFetchData", "API-Datenabruf fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
-            return null;
-        }
-
-        $this->SendDebug("GoodweFetchData", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        $this->SendDebug("GoodweFetchData", "API-Daten erfolgreich abgerufen.", 0);
-
-        return $response;
-    }
-
-    private function GoodweLogin(string $email, string $password): bool
-    {
-        $this->SendDebug("GoodweLogin", "Starte Login-Vorgang...", 0);
-
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-        ];
-
-        $body = http_build_query([
-            "account" => $email,
-            "pwd"     => $password,
-            "code"    => "",
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode, Antwort: $response", 0);
+            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return false;
         }
 
-        $this->SendDebug("GoodweLogin", "Login erfolgreich. Antwort: $response", 0);
+        // Viele SEMS Logins liefern {"code":0,...} als Erfolg
+        if (is_array($decoded) && isset($decoded['code']) && (int)$decoded['code'] !== 0) {
+            $this->SendDebug("GoodweLogin", "Login fehlgeschlagen (code != 0): " . json_encode($decoded), 0);
+            return false;
+        }
+
+        $this->SendDebug("GoodweLogin", "Login erfolgreich.", 0);
         return true;
     }
 
@@ -960,110 +973,56 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        // Login zur Wallbox
+        // Login
         if (!$this->LoginToWallbox($email, $password)) {
             $this->SendDebug("SendWallboxRequest", "Login fehlgeschlagen. Anfrage abgebrochen.", 0);
             return null;
         }
 
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        // Version passend zum Endpoint (v3/v4). SEMS ist teils tolerant – aber so ist es sauber.
+        $version = (strpos($endpoint, '/v3/') === 0) ? '3.0' : '4.0';
+
+        $payload = [
+            "api"     => $endpoint,
+            "version" => $version,
+            "param"   => $data
         ];
 
-        $body = json_encode([
-            "str" => json_encode([
-                "api"   => $endpoint,
-                "param" => $data
-            ])
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $decoded = null;
-        if ($response !== false && $response !== '') {
-            $decoded = json_decode($response, true);
-        }
+        [$httpCode, $raw, $decoded] = $this->SemsPost($endpoint, $payload, 10);
 
         $log = [
             'type'     => 'control',
             'endpoint' => $endpoint,
+            'version'  => $version,
             'request'  => $data,
             'httpCode' => $httpCode,
+            'response' => $decoded ?? $raw
         ];
-        if ($decoded !== null) {
-            $log['response'] = $decoded;
-        } else {
-            $log['responseRaw'] = $response;
-        }
+        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
-        if ($httpCode !== 200 || !$response) {
-            $log['error'] = 'HTTP-Fehler oder leere Antwort';
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        if ($httpCode !== 200 || !$raw) {
             $this->SendDebug("SendWallboxRequest", "API-Anfrage fehlgeschlagen. HTTP-Code: $httpCode", 0);
             return null;
         }
 
-        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
-            $log['error'] = 'API-Fehlercode';
-            $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-            $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
+        if (!is_array($decoded)) {
+            $this->SendDebug("SendWallboxRequest", "Antwort ist kein JSON: " . (string)$raw, 0);
             return null;
         }
 
-        $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        $this->SendDebug("SendWallboxRequest", "Erfolgreiche API-Antwort: " . json_encode($decoded), 0);
+        // SEMS: success ist meist code "0" (string) oder 0 (int)
+        $code = $decoded['code'] ?? null;
+        if (!($code === 0 || $code === "0")) {
+            $this->SendDebug("SendWallboxRequest", "SEMS API-Fehler: " . json_encode($decoded), 0);
+            return null;
+        }
 
         return $decoded;
     }
 
     private function LoginToWallbox(string $email, string $password): bool
     {
-        $headers = [
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        ];
-
-        $body = http_build_query([
-            "account" => $email,
-            "pwd"     => $password
-        ]);
-
-        $ch = curl_init('https://eu.semsportal.com/Home/Login');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen. HTTP-Code: $httpCode", 0);
-            return false;
-        }
-
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
-            return false;
-        }
-
-        $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
-        return true;
+        return $this->GoodweLogin($email, $password);
     }
 
     public function CalculateMaxPower()
@@ -1094,6 +1053,87 @@ class Goodwe extends IPSModule
             }
         }
     }
+
+    private function GetSemsBaseUrl(): string
+    {
+        // Falls du später mal dynamisch machen willst, ist das der zentrale Punkt
+        return 'https://eu.semsportal.com';
+    }
+
+    private function GetCookieFile(): string
+    {
+        // Instanz-spezifisch, damit parallele Zugriffe nicht kollidieren
+        $dir = IPS_GetKernelDir() . 'media/';
+        return $dir . 'goodwe_sems_' . $this->InstanceID . '.cookie';
+    }
+
+    /**
+     * Sendet SEMS POST im "str=<urlencoded-json>" Format.
+     * Gibt [httpCode, raw, decoded] zurück.
+     */
+    private function SemsPost(string $endpoint, array $payload, int $timeout = 10): array
+    {
+        $cookieFile = $this->GetCookieFile();
+        $url        = $this->GetSemsBaseUrl() . '/GopsApi/Post?s=' . urlencode($endpoint);
+
+        // SEMS erwartet oft x-www-form-urlencoded mit str=<urlencoded json>
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $body = 'str=' . urlencode($json);
+
+        $headers = [
+            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: application/json, text/plain, */*'
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        // WICHTIG: instanz-spezifische Cookies
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+
+        $raw      = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $decoded = null;
+        if ($raw !== false && $raw !== '') {
+            $decoded = json_decode($raw, true);
+        }
+
+        return [$httpCode, $raw, $decoded];
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
     {
