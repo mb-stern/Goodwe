@@ -1244,7 +1244,6 @@ class Goodwe extends IPSModule
 
 
 
-
     private function ReadRegisterValue(int $address, float $scale = 1.0)
     {
         $quantity = 1;
