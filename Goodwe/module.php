@@ -1054,7 +1054,10 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_HEADER, true); // 👈 WICHTIG
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -1064,11 +1067,10 @@ class Goodwe extends IPSModule
             return false;
         }
 
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
-            return false;
+        // 🔍 COOKIE / TOKEN DEBUG
+        if (file_exists('cookies.txt')) {
+            $cookies = file_get_contents('cookies.txt');
+            $this->SendDebug("SEMS Cookie", $cookies, 0);
         }
 
         $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
