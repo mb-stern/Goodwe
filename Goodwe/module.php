@@ -270,19 +270,27 @@ class Goodwe extends IPSModule
                 $on = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 if ($on === null) $on = ((int)$value === 1);
 
+                // Optimistisch setzen
                 $this->SetValueIfChanged('WB_Charging', (bool)$on);
+
+                // 5 Minuten Vertrauen
                 $this->SetWbPending('WB_Charging', (bool)$on, 300);
 
+                // v4 Start/Stop
                 if ($on) {
+                    // mode: nimm deinen aktuellen Soll-Modus, falls vorhanden, sonst 0
                     $mode = 0;
                     $mid = @$this->GetIDForIdent('WB_ChargeMode');
                     if ($mid !== false) $mode = (int)GetValue($mid);
 
-                    $sent = $this->SemsStartCharging($serial, $mode);
-                    $this->SendDebug("RequestAction", "StartCharging sent=" . json_encode($sent), 0);
+                    $ok = $this->SemsStartCharging($serial, $mode);
+                    $this->SendDebug("RequestAction", "StartCharging v4 ok=" . json_encode($ok), 0);
                 } else {
-                    $sent = $this->SemsStopCharging($serial);
-                    $this->SendDebug("RequestAction", "StopCharging sent=" . json_encode($sent), 0);
+                    $ok = $this->SemsStopCharging($serial);
+                    $this->SendDebug("RequestAction", "StopCharging v4 ok=" . json_encode($ok), 0);
+
+                    // Optionaler Fallback, falls v4 spinnt:
+                    // if (!$ok) $this->SemsSetChargingStatus($serial, 0);  // v3
                 }
 
                 break;
@@ -867,7 +875,7 @@ class Goodwe extends IPSModule
             return $cached;
         }
 
-        $url = "https://eu.semsportal.com/api/v2/Common/CrossLogin";
+        $url = $this->SemsLoginUrl();
 
         $headers = [
             "Content-Type: application/json",
