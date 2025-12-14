@@ -822,13 +822,11 @@ class Goodwe extends IPSModule
 
     public function ProcessWallboxQueue()
     {
-        // Queue aus Buffer laden
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
         }
 
-        // Wenn leer: Timer aus, Pending NICHT anfassen
         if (count($queue) === 0) {
             $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
             $this->SetTimerInterval('TimerWBQueue', 0);
@@ -837,98 +835,100 @@ class Goodwe extends IPSModule
 
         // Nächsten Command holen
         $cmd = array_shift($queue);
-        $this->SetBuffer('WallboxQueue', json_encode($queue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $this->SetBuffer('WallboxQueue', json_encode($queue));
 
-        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-
-        // --- Command validieren ---
-        if (!is_array($cmd) || !isset($cmd['endpoint']) || !isset($cmd['data']) || !is_array($cmd['data'])) {
-            $this->SendDebug('ProcessWallboxQueue', 'Ungültiger Queue-Eintrag – übersprungen: ' . json_encode($cmd), 0);
-        } else {
-            // --- Command senden ---
-            $ok = false;
-
-            try {
-                switch ($cmd['endpoint']) {
-                    case '__SEMS_CHARGING__': {
-                        // erwartet data: ['sn'=>..., 'on'=>bool]
-                        $sn = (string)($cmd['data']['sn'] ?? '');
-                        if ($sn === '') {
-                            $this->SendDebug('ProcessWallboxQueue', 'Fehlende sn für __SEMS_CHARGING__', 0);
-                            break;
-                        }
-
-                        $on = (bool)($cmd['data']['on'] ?? false);
-                        $ok = $this->SemsSetCharging($sn, $on);
-                        break;
-                    }
-
-                    case '__SEMS_SETMODE__': {
-                        // erwartet data: ['sn'=>..., 'type'=>int, 'charge_power'=>float|null]
-                        $sn = (string)($cmd['data']['sn'] ?? '');
-                        if ($sn === '') {
-                            $this->SendDebug('ProcessWallboxQueue', 'Fehlende sn für __SEMS_SETMODE__', 0);
-                            break;
-                        }
-
-                        $type = (int)($cmd['data']['type'] ?? 0);
-
-                        $cp = $cmd['data']['charge_power'] ?? null;
-                        if ($cp === '' || $cp === false) {
-                            $cp = null;
-                        }
-                        if ($cp !== null) {
-                            $cp = (float)$cp;
-                        }
-
-                        $ok = $this->SemsSetChargeMode($sn, $type, $cp);
-                        break;
-                    }
-
-                    default:
-                        $this->SendDebug('ProcessWallboxQueue', 'Unbekannter endpoint marker: ' . $cmd['endpoint'], 0);
-                        break;
-                }
-            } catch (Exception $e) {
-                $this->SendDebug('ProcessWallboxQueue', 'Exception beim Senden: ' . $e->getMessage(), 0);
-                $ok = false;
-            }
-
-            if ($ok) {
-                $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
-            } else {
-                $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command FEHLER', 0);
-            }
+        // Retry-Feld vorbereiten
+        if (!isset($cmd['retry'])) {
+            $cmd['retry'] = 0;
         }
 
-        // WICHTIG: Queue nach dem Senden erneut aus Buffer lesen
-        // (weil in der Zwischenzeit neue Befehle reingekommen sein können)
+        $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
+
+        $result = null;
+        try {
+            // __SEMS_CHARGING__ ist bei dir ein Platzhalter – du mapst das intern, passt.
+            // Wenn du echte Endpoints nutzt, bleibt das identisch.
+            $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
+        } catch (Throwable $e) {
+            $this->SendDebug('ProcessWallboxQueue', 'Exception: ' . $e->getMessage(), 0);
+            $result = null;
+        }
+
+        $success = is_array($result); // bei dir: decoded array bei Erfolg, sonst null
+        if ($success) {
+            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command OK', 0);
+
+            // Pending-Map: nur diesen Ident entfernen (nicht alles pauschal leeren!)
+            $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
+            if (!is_array($changes)) {
+                $changes = [];
+            }
+            if (isset($changes[$cmd['ident']])) {
+                unset($changes[$cmd['ident']]);
+                $this->SetBuffer('WallboxChanges', json_encode($changes));
+            }
+
+            // Nach erfolgreichem Schreiben: API-Rückmeldungen kurz blocken (SEMS ist träge)
+            $holdSeconds = 60; // nicht 300, sonst “fühlt sich” alles kaputt an
+            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
+        } else {
+            // Fehler/Timeout
+            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command FEHLER/Timeout', 0);
+
+            // Bei Timeout ist es oft "unknown": kann trotzdem angekommen sein.
+            // Wir versuchen max. 1 Retry (konservativ). Danach bleiben wir im "pending".
+            if ($cmd['retry'] < 1) {
+                $cmd['retry']++;
+                $cmd['time'] = time();
+
+                // Queue erneut laden (wichtig wegen Parallelität)
+                $queue2 = @json_decode($this->GetBuffer('WallboxQueue'), true);
+                if (!is_array($queue2)) {
+                    $queue2 = [];
+                }
+
+                // Coalescing: vorhandene gleiche ident entfernen, dann hinten anhängen
+                $newQueue = [];
+                foreach ($queue2 as $c) {
+                    if (!isset($c['ident']) || $c['ident'] !== $cmd['ident']) {
+                        $newQueue[] = $c;
+                    }
+                }
+                $newQueue[] = $cmd;
+                $this->SetBuffer('WallboxQueue', json_encode($newQueue));
+
+                // Nach einem Timeout: kurz warten, dann nochmal versuchen
+                $this->SendDebug('ProcessWallboxQueue', 'Re-Queue (retry=' . $cmd['retry'] . ')', 0);
+
+                // Wichtig: Timer weiterlaufen lassen
+                if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                    $this->SetTimerInterval('TimerWBQueue', 1000);
+                }
+
+                // Zusätzlich: kurze Hold-Zeit, damit FetchWallboxData nicht sofort überschreibt
+                $this->SetBuffer('ChargingHoldUntil', (string)(time() + 30));
+                return;
+            }
+
+            // Kein weiterer Retry → wir lassen Pending stehen, damit FetchWallboxData nicht drüberbügelt
+            $this->SendDebug('ProcessWallboxQueue', 'Max Retry erreicht – Pending bleibt aktiv', 0);
+            $this->SetBuffer('ChargingHoldUntil', (string)(time() + 60));
+        }
+
+        // Queue NACH dem Request nochmal lesen (weil zwischenzeitlich neue Commands kamen)
         $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
         }
 
         if (count($queue) === 0) {
-            // Jetzt wirklich leer → Pending-Map leeren
-            $this->SetBuffer('WallboxChanges', json_encode([], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-            // API-Updates blockieren (SEMS meldet träge zurück)
-            $holdSeconds = 300;
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
             $this->SetTimerInterval('TimerWBQueue', 0);
-            $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
+            $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
         } else {
-            // Noch Befehle da → Timer weiterlaufen lassen
+            $this->SendDebug('ProcessWallboxQueue', 'Weitere Befehle in Queue (' . count($queue) . '), Timer läuft weiter.', 0);
             if ($this->GetTimerInterval('TimerWBQueue') == 0) {
                 $this->SetTimerInterval('TimerWBQueue', 1000);
             }
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
-                0
-            );
         }
     }
 
@@ -1461,6 +1461,7 @@ class Goodwe extends IPSModule
 
     private function CurlJson(string $url, array $headers, string $body): ?array
     {
+        $url = $this->NormalizeSemsUrl($url);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1496,6 +1497,24 @@ class Goodwe extends IPSModule
         return $decoded;
     }
 
+    private function NormalizeSemsUrl(string $url): string
+    {
+        // Wenn schon absolut → 그대로
+        if (stripos($url, 'http://') === 0 || stripos($url, 'https://') === 0) {
+            return $url;
+        }
+
+        // Base API (bei dir: eu)
+        $base = 'https://eu.semsportal.com/api';
+
+        // url beginnt mit /v4/... → https://.../api/v4/...
+        if ($url !== '' && $url[0] === '/') {
+            return $base . $url;
+        }
+
+        // ohne führenden Slash
+        return $base . '/' . $url;
+    }
 
 
 
