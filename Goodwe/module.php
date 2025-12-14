@@ -298,26 +298,23 @@ class Goodwe extends IPSModule
                 case 'WB_ChargeMode':
                     $this->SetValueIfChanged($ident, (int)$value);
 
-                    $chargePowerKW = null;
+                    // type ist der Modus!
+                    $data = [
+                        'sn'   => $serial,
+                        'type' => (int)$value
+                    ];
+
+                    // optional: aktuelle Soll-Leistung mitschicken (kann helfen)
                     $powerID = @$this->GetIDForIdent('WB_ChargePower');
                     if ($powerID !== false) {
                         $w = (int)GetValue($powerID);
                         if ($w > 0) {
-                            $chargePowerKW = round($w / 1000, 1);
+                            $data['charge_power'] = round($w / 1000, 1);
                         }
-                    }
-
-                    $data = [
-                        'sn'           => $serial,
-                        'type'         => (int)$value,      // <-- v3: type, nicht mode
-                    ];
-                    if ($chargePowerKW !== null) {
-                        $data['charge_power'] = $chargePowerKW;
                     }
 
                     $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
                     break;
-
 
                 case 'WB_ChargePower':
                     $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
@@ -326,16 +323,13 @@ class Goodwe extends IPSModule
 
                     $this->SetValueIfChanged($ident, $val);
 
-                    // wenn du beim Setzen der Leistung immer "Schnell" willst:
+                    // Wenn du bei Power-Set immer "Schnell" willst:
                     $this->SetValueIfChanged('WB_ChargeMode', 0);
-                    $type = 0;
-
-                    $kw = round($val / 1000, 1);
 
                     $data = [
                         'sn'           => $serial,
-                        'type'         => $type,            // <-- v3 braucht type IMMER
-                        'charge_power' => $kw
+                        'type'         => 0,                 // !!! Modus muss als type mit
+                        'charge_power' => round($val / 1000, 1)
                     ];
 
                     $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
@@ -842,61 +836,62 @@ class Goodwe extends IPSModule
     }
 
     // ------------------------
-    // Token (HA-Style)
+    // Token
     // ------------------------
     private function SemsGetToken(bool $forceRenew = false): ?array
     {
-        $email    = $this->ReadPropertyString("WallboxUser");
-        $password = $this->ReadPropertyString("WallboxPassword");
+        $cached = @json_decode($this->GetBuffer('SemsToken'), true);
+        $exp    = (int)@intval($this->GetBuffer('SemsTokenExp'));
 
-        if ($email === '' || $password === '') {
-            $this->SendDebug("SemsGetToken", "User/Pass fehlt.", 0);
-            return null;
-        }
-
-        // Cache: 55min
-        $cached = json_decode($this->GetBuffer("SemsToken"), true);
-        $ts     = (int)$this->GetBuffer("SemsTokenTs");
-        $age    = time() - $ts;
-
-        if (!$forceRenew && is_array($cached) && $ts > 0 && $age < 55 * 60) {
+        if (!$forceRenew && is_array($cached) && $exp > time()) {
             return $cached;
         }
 
-        $url = $this->SemsLoginUrl();
-
-        $headers = [
-            "Content-Type: application/json",
-            "Accept: application/json",
-            // wie HA: token header muss beim Login schon da sein
-            "token: " . '{"version":"","client":"ios","language":"en"}',
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        ];
-
-        $body = json_encode([
-            "account" => $email,
-            "pwd"     => $password
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        [$http, $raw, $decoded] = $this->CurlJsonHttp($url, $headers, $body, 20);
-
-        $this->SendDebug("SemsGetToken", json_encode([
-            'httpCode' => $http,
-            'response' => $decoded ?? $raw
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-
-        if ($http !== 200 || !is_array($decoded) || !isset($decoded['data']) || !is_array($decoded['data'])) {
+        $email    = $this->ReadPropertyString("WallboxUser");
+        $password = $this->ReadPropertyString("WallboxPassword");
+        if ($email === '' || $password === '') {
             return null;
         }
 
-        // TokenDict = data + api (wie HA)
-        $token = $decoded['data'];
-        if (isset($decoded['api'])) {
-            $token['api'] = $decoded['api'];
+        $url = 'https://eu.semsportal.com/api/v2/Common/CrossLogin';
+
+        // Default token header wie in sems_api.py
+        $headers = [
+            "Content-Type: application/json",
+            "Accept: application/json",
+            'token: {"version":"","client":"ios","language":"en"}'
+        ];
+
+        $body = json_encode(["account" => $email, "pwd" => $password], JSON_UNESCAPED_SLASHES);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_TIMEOUT        => 20,
+        ]);
+
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        $decoded = ($resp !== false && $resp !== '') ? json_decode($resp, true) : null;
+
+        $this->SendDebug("SemsGetToken", json_encode([
+            'url' => $url, 'httpCode' => $http, 'curlErr' => $err, 'resp' => $decoded ?? $resp
+        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES), 0);
+
+        if ($http !== 200 || !is_array($decoded) || !isset($decoded['data'])) {
+            return null;
         }
 
-        $this->SetBuffer("SemsToken", json_encode($token, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-        $this->SetBuffer("SemsTokenTs", (string)time());
+        $token = $decoded['data'];
+        // konservatives Expiry (viele Tokens halten ~1h, wir erneuern nach 50min)
+        $this->SetBuffer('SemsToken', json_encode($token));
+        $this->SetBuffer('SemsTokenExp', (string)(time() + 50 * 60));
 
         return $token;
     }
@@ -963,6 +958,58 @@ class Goodwe extends IPSModule
             'raw'      => $raw,
             'decoded'  => $decoded
         ];
+    }
+
+    private function SemsPostJson(string $apiPath, array $payload): ?array
+    {
+        $token = $this->SemsGetToken(false);
+        if (!is_array($token)) {
+            $this->SendDebug("SemsPostJson", "Kein Token – Abbruch", 0);
+            return null;
+        }
+
+        $url = 'https://eu.semsportal.com/api' . $apiPath;
+
+        $headers = [
+            "Content-Type: application/json",
+            "Accept: application/json",
+            "token: " . json_encode($token, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),
+        ];
+
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_TIMEOUT        => 20,
+        ]);
+
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        $decoded = ($resp !== false && $resp !== '') ? json_decode($resp, true) : null;
+
+        $this->SendDebug("SemsPostJson", json_encode([
+            'url' => $url, 'httpCode' => $http, 'curlErr' => $err,
+            'payload' => $payload,
+            'response' => $decoded ?? $resp
+        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES), 0);
+
+        if ($http !== 200 || !is_array($decoded)) {
+            return null;
+        }
+
+        // v4: code "0" / 0; v3 häufig auch ähnlich
+        if (isset($decoded['code']) && (string)$decoded['code'] !== "0") {
+            return null;
+        }
+
+        return $decoded;
     }
 
     private function SemsGetWallboxStatus(string $sn): ?array
