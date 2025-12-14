@@ -1240,6 +1240,10 @@ class Goodwe extends IPSModule
         return $sent;
     }
 
+    private function SemsLoginUrl(): string
+    {
+        return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
+    }
 
 
 
