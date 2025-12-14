@@ -1068,92 +1068,25 @@ class Goodwe extends IPSModule
         return true;
     }
 
-    private function SemsPost(string $endpoint, array $param): ?array
+    // ------------------------
+    // SEMS CORE (neu)
+    // ------------------------
+
+    private function GetSemsBaseUrl(): string
     {
-        if (!$this->EnsureAuth()) {
-            $this->SendDebug('SemsPost', 'EnsureAuth fehlgeschlagen.', 0);
-            return null;
-        }
-
-        $cookieFile = $this->ReadAttributeString('CookiesFile');
-        $token      = $this->ReadAttributeString('SemsToken');
-
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "X-Token: " . $token
-        ];
-
-        // SEMS erwartet JSON mit Feld "str" (string, der wiederum JSON enthält)
-        $payload = [
-            "str" => json_encode([
-                "api"     => $endpoint,
-                "version" => "4.0",
-                "param"   => $param
-            ], JSON_UNESCAPED_SLASHES)
-        ];
-
-        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
-
-        $url = 'https://eu.semsportal.com/GopsApi/Post?s=' . urlencode($endpoint);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $decoded = null;
-        if ($response !== false && $response !== '') {
-            $decoded = json_decode($response, true);
-        }
-
-        $this->SendDebug('SemsPost', json_encode([
-            'endpoint' => $endpoint,
-            'request'  => $param,
-            'httpCode' => $httpCode,
-            'response' => $decoded ?? $response
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-
-        if ($httpCode !== 200 || !is_array($decoded)) {
-            return null;
-        }
-
-        // Code wieder tolerant
-        $code = $decoded['code'] ?? null;
-        if (!($code === 0 || $code === "0")) {
-            return $decoded; // geben wir trotzdem zurück, damit du den Fehlercode siehst
-        }
-
-        return $decoded;
+        // EU-Portal (bei dir war es auch eu.semsportal.com)
+        return "https://eu.semsportal.com";
     }
 
-// ------------------------
-// SEMS CORE (neu)
-// ------------------------
-
-private function GetSemsBaseUrl(): string
-{
-    // EU-Portal (bei dir war es auch eu.semsportal.com)
-    return "https://eu.semsportal.com";
-}
-
-private function GetSemsCookieFile(): string
-{
-    // Wichtig: pro IPS-Instanz eigenes Cookiefile, und Pfad muss existieren & beschreibbar sein
-    $dir = IPS_GetKernelDir() . "media" . DIRECTORY_SEPARATOR . "Goodwe" . DIRECTORY_SEPARATOR;
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
+    private function GetSemsCookieFile(): string
+    {
+        // Wichtig: pro IPS-Instanz eigenes Cookiefile, und Pfad muss existieren & beschreibbar sein
+        $dir = IPS_GetKernelDir() . "media" . DIRECTORY_SEPARATOR . "Goodwe" . DIRECTORY_SEPARATOR;
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        return $dir . "sems_cookie_" . $this->InstanceID . ".txt";
     }
-    return $dir . "sems_cookie_" . $this->InstanceID . ".txt";
-}
 
     private function SemsEnsureLogin(): bool
     {
