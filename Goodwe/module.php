@@ -998,18 +998,27 @@ class Goodwe extends IPSModule
             "status" => $on ? "1" : "0"
         ];
 
-        $resp = $this->SemsPost($url, $payload, false, 2);
+        // Für Control ruhig länger warten (HCA G1 reagiert manchmal zäh)
+        $resp = $this->SemsPost($url, $payload, false, 2 /*retries*/);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        // HA-Style: Erfolg = HTTP 200 (kein code/msg check)
+        $decoded = (is_array($resp) ? ($resp['decoded'] ?? null) : null);
+        $code = (is_array($decoded) && array_key_exists('code', $decoded)) ? $decoded['code'] : null;
+        $msg  = (is_array($decoded) && array_key_exists('msg',  $decoded)) ? $decoded['msg']  : null;
+        $data = (is_array($decoded) && array_key_exists('data', $decoded)) ? $decoded['data'] : null;
+
+        // Für Diagnose: wir loggen alles – ok bleibt erstmal HTTP 200 wie im Referenzprojekt
         $ok = ($http === 200);
 
         $this->SendDebug("SemsSetCharging", json_encode([
-            'sn'   => $sn,
-            'on'   => $on,
-            'http' => $http,
-            'ok'   => $ok,
-            'resp' => $resp['decoded'] ?? $resp['raw'] ?? $resp
+            'sn'      => $sn,
+            'status'  => $payload['status'],
+            'http'    => $http,
+            'ok_http' => $ok,
+            'code'    => $code,
+            'msg'     => $msg,
+            'data'    => $data,
+            'raw'     => $resp['raw'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
         return $ok;
@@ -1052,7 +1061,6 @@ class Goodwe extends IPSModule
     private function SemsSetModeUrl(): string    { return "https://eu.semsportal.com/api/v3/EvCharger/SetChargeMode"; }
     private function SemsChargingUrl(): string   { return "https://eu.semsportal.com/api/v3/EvCharger/Charging"; }
 
-    // CurlJson liefert [httpCode, raw, decoded|null]
     private function CurlJsonHttp(string $url, array $headers, string $body, int $timeout = 20): array
     {
         $ch = curl_init($url);
@@ -1063,7 +1071,7 @@ class Goodwe extends IPSModule
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_ENCODING       => '' // gzip/deflate
+            CURLOPT_ENCODING       => ''
         ]);
 
         $raw  = curl_exec($ch);
@@ -1074,17 +1082,22 @@ class Goodwe extends IPSModule
         $decoded = null;
         if (is_string($raw) && $raw !== '') {
             $tmp = json_decode($raw, true);
-            if (is_array($tmp)) {
-                $decoded = $tmp;
-            }
+            if (is_array($tmp)) $decoded = $tmp;
         }
 
-        // Debug immer, damit du siehst was passiert
+        // Body maskieren (Passwort)
+        $bodyForLog = $body;
+        $tmpBody = json_decode($body, true);
+        if (is_array($tmpBody) && isset($tmpBody['pwd'])) {
+            $tmpBody['pwd'] = '***';
+            $bodyForLog = json_encode($tmpBody, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         $this->SendDebug("CurlJsonHttp", json_encode([
             'url'      => $url,
             'httpCode' => $http,
             'curlErr'  => $err,
-            'body'     => $body,
+            'body'     => $bodyForLog,
             'response' => $decoded ?? $raw
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
