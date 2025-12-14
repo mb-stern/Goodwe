@@ -1194,60 +1194,50 @@ class Goodwe extends IPSModule
     private function SemsStartCharging(string $sn, int $mode = 0): bool
     {
         $url = $this->SemsStartChargingUrl();
-        $payload = [
-            "sn"   => $sn,
-            "mode" => $mode
-        ];
+        $payload = ["sn" => $sn, "mode" => $mode];
 
-        // Einmalig senden, keine Retry-Orgie
-        $resp = $this->SemsPost($url, $payload, false, 1);
+        $resp = $this->SemsPost($url, $payload, false, 2);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        // Swagger sagt boolean, manchmal kommt JSON drumrum.
-        $decoded = is_array($resp) ? ($resp['decoded'] ?? null) : null;
-        $raw     = is_array($resp) ? ($resp['raw'] ?? null) : null;
-
-        // Wichtig: Timeout/HTTP 0 gilt als "unknown/gesendet"
-        $sent = ($http === 200) || ($http === 0);
+        $decoded = $resp['decoded'] ?? null;
+        // Swagger sagt boolean, manchmal kommt aber JSON drumrum -> wir loggen beides
+        $ok = ($http === 200);
 
         $this->SendDebug("SemsStartCharging", json_encode([
-            'sn'       => $sn,
-            'mode'     => $mode,
-            'http'     => $http,
-            'sent'     => $sent,
-            'resp'     => $decoded ?? $raw,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            'sn'   => $sn,
+            'mode' => $mode,
+            'http' => $http,
+            'resp' => $decoded ?? ($resp['raw'] ?? null)
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
 
-        return $sent;
+        return $ok;
     }
 
     private function SemsStopCharging(string $sn): bool
     {
         $url = $this->SemsStopChargingUrl();
-        $payload = [
-            "sn" => $sn
-        ];
+        $payload = ["sn" => $sn];
 
-        // Einmalig senden
-        $resp = $this->SemsPost($url, $payload, false, 1);
+        $resp = $this->SemsPost($url, $payload, false, 2);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        $decoded = is_array($resp) ? ($resp['decoded'] ?? null) : null;
-        $raw     = is_array($resp) ? ($resp['raw'] ?? null) : null;
-
-        // Timeout/HTTP 0 => "unknown/gesendet"
-        $sent = ($http === 200) || ($http === 0);
+        $decoded = $resp['decoded'] ?? null;
+        $ok = ($http === 200);
 
         $this->SendDebug("SemsStopCharging", json_encode([
-            'sn'       => $sn,
-            'http'     => $http,
-            'sent'     => $sent,
-            'resp'     => $decoded ?? $raw,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+            'sn'   => $sn,
+            'http' => $http,
+            'resp' => $decoded ?? ($resp['raw'] ?? null)
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
 
-        return $sent;
+        return $ok;
     }
 
+    private function SemsLoginUrl(): string
+    {
+        // Standard Login Endpoint (wie in deinem bisherigen Code erwartet)
+        return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
+    }
 
 
 
