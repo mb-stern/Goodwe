@@ -276,21 +276,20 @@ class Goodwe extends IPSModule
                 // 5 Minuten Vertrauen
                 $this->SetWbPending('WB_Charging', (bool)$on, 300);
 
-                // v4 Start/Stop
+                // EIN = v3, AUS = v4
                 if ($on) {
-                    // mode: nimm deinen aktuellen Soll-Modus, falls vorhanden, sonst 0
-                    $mode = 0;
-                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($mid !== false) $mode = (int)GetValue($mid);
+                    // v3 Charging (status=1)
+                    $ok = $this->SemsSetCharging($serial, true);
+                    $this->SendDebug("RequestAction", "StartCharging via v3 Charging ok=" . json_encode($ok), 0);
 
-                    $ok = $this->SemsStartCharging($serial, $mode);
-                    $this->SendDebug("RequestAction", "StartCharging v4 ok=" . json_encode($ok), 0);
+                    // Pending als "gesendet" markieren (weil wir nicht über Queue gehen)
+                    $this->MarkWbPendingSent($ok, 'WB_Charging', 'v3_charging');
                 } else {
+                    // v4 StopCharging
                     $ok = $this->SemsStopCharging($serial);
-                    $this->SendDebug("RequestAction", "StopCharging v4 ok=" . json_encode($ok), 0);
+                    $this->SendDebug("RequestAction", "StopCharging via v4 ok=" . json_encode($ok), 0);
 
-                    // Optionaler Fallback, falls v4 spinnt:
-                    // if (!$ok) $this->SemsSetChargingStatus($serial, 0);  // v3
+                    $this->MarkWbPendingSent($ok, 'WB_Charging', 'v4_stop');
                 }
 
                 break;
@@ -997,26 +996,27 @@ class Goodwe extends IPSModule
     private function SemsSetCharging(string $sn, bool $on): bool
     {
         $url = $this->SemsChargingUrl();
+
+        // status als INT (0/1) senden
         $payload = [
             "sn"     => $sn,
-            "status" => $on ? "1" : "0"
+            "status" => $on ? 1 : 0
         ];
 
-        // Für Control ruhig länger warten (HCA G1 reagiert manchmal zäh)
-        $resp = $this->SemsPost($url, $payload, false, 2 /*retries*/);
+        $resp = $this->SemsPost($url, $payload, false, 2);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        $decoded = (is_array($resp) ? ($resp['decoded'] ?? null) : null);
+        $decoded = is_array($resp) ? ($resp['decoded'] ?? null) : null;
         $code = (is_array($decoded) && array_key_exists('code', $decoded)) ? $decoded['code'] : null;
         $msg  = (is_array($decoded) && array_key_exists('msg',  $decoded)) ? $decoded['msg']  : null;
         $data = (is_array($decoded) && array_key_exists('data', $decoded)) ? $decoded['data'] : null;
 
-        // Für Diagnose: wir loggen alles – ok bleibt erstmal HTTP 200 wie im Referenzprojekt
+        // Erfolg weiterhin wie bei dir: HTTP 200 reicht
         $ok = ($http === 200);
 
         $this->SendDebug("SemsSetCharging", json_encode([
             'sn'      => $sn,
-            'status'  => $payload['status'],
+            'status'  => $payload['status'], // int
             'http'    => $http,
             'ok_http' => $ok,
             'code'    => $code,
@@ -1061,10 +1061,7 @@ class Goodwe extends IPSModule
     // SEMS Endpoints
     // ------------------------
     private function SemsWallboxUrl(): string      { return "https://eu.semsportal.com/api/v4/EvCharger/GetEvChargerAloneViewBySn"; }
-    private function SemsStartChargingUrl(): string{ return "https://eu.semsportal.com/api/v4/EvCharger/StartCharging"; }
     private function SemsStopChargingUrl(): string { return "https://eu.semsportal.com/api/v4/EvCharger/StopCharging"; }
-
-    // Optional: v3 als Fallback behalten
     private function SemsChargingUrl(): string     { return "https://eu.semsportal.com/api/v3/EvCharger/Charging"; }
 
 
@@ -1238,6 +1235,27 @@ class Goodwe extends IPSModule
         // Standard Login Endpoint (wie in deinem bisherigen Code erwartet)
         return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
     }
+
+    private function MarkWbPendingSent(bool $ok, string $ident, string $action): void
+    {
+        $pending = $this->GetWbPending();
+        if (!is_array($pending)) return;
+
+        // nur markieren, wenn es wirklich zum aktuellen Pending passt
+        if (($pending['ident'] ?? '') !== $ident) return;
+
+        $pending['sent'] = true;
+        $pending['lastResult'] = [
+            'time'   => time(),
+            'ok'     => $ok,
+            'cmd'    => $ident,
+            'action' => $action
+        ];
+        $this->UpdateWbPending($pending);
+    }
+
+
+
 
 
 
