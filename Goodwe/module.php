@@ -270,27 +270,19 @@ class Goodwe extends IPSModule
                 $on = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 if ($on === null) $on = ((int)$value === 1);
 
-                // Optimistisch setzen
                 $this->SetValueIfChanged('WB_Charging', (bool)$on);
-
-                // 5 Minuten Vertrauen
                 $this->SetWbPending('WB_Charging', (bool)$on, 300);
 
-                // v4 Start/Stop
                 if ($on) {
-                    // mode: nimm deinen aktuellen Soll-Modus, falls vorhanden, sonst 0
                     $mode = 0;
                     $mid = @$this->GetIDForIdent('WB_ChargeMode');
                     if ($mid !== false) $mode = (int)GetValue($mid);
 
-                    $ok = $this->SemsStartCharging($serial, $mode);
-                    $this->SendDebug("RequestAction", "StartCharging v4 ok=" . json_encode($ok), 0);
+                    $sent = $this->SemsStartCharging($serial, $mode);
+                    $this->SendDebug("RequestAction", "StartCharging sent=" . json_encode($sent), 0);
                 } else {
-                    $ok = $this->SemsStopCharging($serial);
-                    $this->SendDebug("RequestAction", "StopCharging v4 ok=" . json_encode($ok), 0);
-
-                    // Optionaler Fallback, falls v4 spinnt:
-                    // if (!$ok) $this->SemsSetChargingStatus($serial, 0);  // v3
+                    $sent = $this->SemsStopCharging($serial);
+                    $this->SendDebug("RequestAction", "StopCharging sent=" . json_encode($sent), 0);
                 }
 
                 break;
@@ -1194,50 +1186,60 @@ class Goodwe extends IPSModule
     private function SemsStartCharging(string $sn, int $mode = 0): bool
     {
         $url = $this->SemsStartChargingUrl();
-        $payload = ["sn" => $sn, "mode" => $mode];
+        $payload = [
+            "sn"   => $sn,
+            "mode" => $mode
+        ];
 
-        $resp = $this->SemsPost($url, $payload, false, 2);
+        // Einmalig senden, keine Retry-Orgie
+        $resp = $this->SemsPost($url, $payload, false, 1);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        $decoded = $resp['decoded'] ?? null;
-        // Swagger sagt boolean, manchmal kommt aber JSON drumrum -> wir loggen beides
-        $ok = ($http === 200);
+        // Swagger sagt boolean, manchmal kommt JSON drumrum.
+        $decoded = is_array($resp) ? ($resp['decoded'] ?? null) : null;
+        $raw     = is_array($resp) ? ($resp['raw'] ?? null) : null;
+
+        // Wichtig: Timeout/HTTP 0 gilt als "unknown/gesendet"
+        $sent = ($http === 200) || ($http === 0);
 
         $this->SendDebug("SemsStartCharging", json_encode([
-            'sn'   => $sn,
-            'mode' => $mode,
-            'http' => $http,
-            'resp' => $decoded ?? ($resp['raw'] ?? null)
-        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
+            'sn'       => $sn,
+            'mode'     => $mode,
+            'http'     => $http,
+            'sent'     => $sent,
+            'resp'     => $decoded ?? $raw,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
-        return $ok;
+        return $sent;
     }
 
     private function SemsStopCharging(string $sn): bool
     {
         $url = $this->SemsStopChargingUrl();
-        $payload = ["sn" => $sn];
+        $payload = [
+            "sn" => $sn
+        ];
 
-        $resp = $this->SemsPost($url, $payload, false, 2);
+        // Einmalig senden
+        $resp = $this->SemsPost($url, $payload, false, 1);
         $http = is_array($resp) ? (int)($resp['httpCode'] ?? 0) : 0;
 
-        $decoded = $resp['decoded'] ?? null;
-        $ok = ($http === 200);
+        $decoded = is_array($resp) ? ($resp['decoded'] ?? null) : null;
+        $raw     = is_array($resp) ? ($resp['raw'] ?? null) : null;
+
+        // Timeout/HTTP 0 => "unknown/gesendet"
+        $sent = ($http === 200) || ($http === 0);
 
         $this->SendDebug("SemsStopCharging", json_encode([
-            'sn'   => $sn,
-            'http' => $http,
-            'resp' => $decoded ?? ($resp['raw'] ?? null)
-        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), 0);
+            'sn'       => $sn,
+            'http'     => $http,
+            'sent'     => $sent,
+            'resp'     => $decoded ?? $raw,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
-        return $ok;
+        return $sent;
     }
 
-    private function SemsLoginUrl(): string
-    {
-        // Standard Login Endpoint (wie in deinem bisherigen Code erwartet)
-        return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
-    }
 
 
 
