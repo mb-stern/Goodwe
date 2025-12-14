@@ -1009,49 +1009,6 @@ class Goodwe extends IPSModule
         return $dir . 'goodwe_sems_' . $this->InstanceID . '.cookie';
     }
 
-    /**
-     * Sendet SEMS POST im "str=<urlencoded-json>" Format.
-     * Gibt [httpCode, raw, decoded] zurück.
-     */
-    private function SemsPost(string $endpoint, array $payload, int $timeout = 10): array
-    {
-        $cookieFile = $this->GetCookieFile();
-        $url        = $this->GetSemsBaseUrl() . '/GopsApi/Post?s=' . urlencode($endpoint);
-
-        // SEMS erwartet oft x-www-form-urlencoded mit str=<urlencoded json>
-        $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $body = 'str=' . urlencode($json);
-
-        $headers = [
-            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: application/json, text/plain, */*'
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        // WICHTIG: instanz-spezifische Cookies
-        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
-
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-
-        $raw      = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $decoded = null;
-        if ($raw !== false && $raw !== '') {
-            $decoded = json_decode($raw, true);
-        }
-
-        return [$httpCode, $raw, $decoded];
-    }
-
     private function EnsureAuth(): bool
     {
         $user = $this->ReadPropertyString("WallboxUser");
