@@ -867,7 +867,7 @@ class Goodwe extends IPSModule
             return $cached;
         }
 
-        $url = $this->SemsLoginUrl();
+        $url = "https://eu.semsportal.com/api/v2/Common/CrossLogin";
 
         $headers = [
             "Content-Type: application/json",
@@ -1240,10 +1240,6 @@ class Goodwe extends IPSModule
         return $sent;
     }
 
-    private function SemsLoginUrl(): string
-    {
-        return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
-    }
 
 
 
