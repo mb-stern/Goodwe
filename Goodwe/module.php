@@ -1233,6 +1233,11 @@ class Goodwe extends IPSModule
         return $ok;
     }
 
+    private function SemsLoginUrl(): string
+    {
+        // Standard Login Endpoint (wie in deinem bisherigen Code erwartet)
+        return "https://eu.semsportal.com/api/v2/Common/CrossLogin";
+    }
 
 
 
