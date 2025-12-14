@@ -243,7 +243,7 @@ class Goodwe extends IPSModule
     {
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: " . json_encode($value), 0);
 
-        // Für Register (bleibt bei dir wie gehabt)
+        // Register bleibt wie gehabt
         if (strpos($ident, 'Addr') === 0) {
             $address = intval(substr($ident, 4));
             if ($this->WriteRegister($address, (int)$value)) {
@@ -272,12 +272,13 @@ class Goodwe extends IPSModule
                     $on = ((int)$value === 1);
                 }
 
-                // optimistic UI
+                // Optimistisch setzen
                 $this->SetValueIfChanged('WB_Charging', (bool)$on);
 
-                // Pending 5 Minuten, bis Istwerte passen
+                // 5 Minuten warten auf Bestätigung via ChargeInfo
                 $this->SetWbPending('WB_Charging', (bool)$on, 300);
 
+                // 1× senden (über Queue)
                 $this->QueueWallboxChange(
                     'WB_Charging',
                     ['sn' => $serial, 'on' => (bool)$on],
@@ -288,21 +289,22 @@ class Goodwe extends IPSModule
                 break;
             }
 
-            // Modus setzen (0 Schnell, 1 PV, 2 PV&Batt) – du nutzt 'type'
             case 'WB_ChargeMode': {
                 $mode = (int)$value;
 
-                // optimistic
+                // Optimistisch setzen
                 $this->SetValueIfChanged('WB_ChargeMode', $mode);
 
-                // optional: falls du beim Mode-Setzen die aktuelle Soll-Leistung mitschicken willst:
-                // (Wenn du das NICHT willst: $chargePowerKW = null;)
+                // Pending für Mode (ebenfalls 5 Minuten, damit es nicht zurückspringt)
+                $this->SetWbPending('WB_ChargeMode', $mode, 300);
+
+                // Optional: aktuelle Soll-Leistung mitschicken, wenn vorhanden
                 $chargePowerKW = null;
                 $powerID = @$this->GetIDForIdent('WB_ChargePower');
                 if ($powerID !== false) {
                     $w = (int)GetValue($powerID);
                     if ($w > 0) {
-                        $chargePowerKW = round($w / 1000, 1);  // W -> kW
+                        $chargePowerKW = round($w / 1000, 1);
                     }
                 }
 
@@ -316,22 +318,21 @@ class Goodwe extends IPSModule
                 break;
             }
 
-            // Soll-Leistung setzen
             case 'WB_ChargePower': {
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
 
-                // Runden auf 100W und Offset addieren
+                // runden auf 100W + Offset
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-
-                // Limits
                 $val = min(max($val, 4200), 9700);
 
-                // optimistic
+                // Optimistisch setzen
                 $this->SetValueIfChanged('WB_ChargePower', $val);
 
-                // Wenn du willst, dass beim Setzen der Leistung automatisch Schnell-Modus aktiv ist:
-                // (du hattest das vorher so)
+                // Wenn du weiterhin willst: beim Setzen der Power automatisch Schnellmodus (0)
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
+
+                // Pending für Power (und Mode, weil du ihn mitsendest)
+                $this->SetWbPending('WB_ChargePower', $val, 300);
 
                 $kw = round($val / 1000, 1);
 
@@ -569,7 +570,6 @@ class Goodwe extends IPSModule
             return;
         }
 
-        // ZIP: GetCurrentChargeinfo
         $view = $this->SemsGetWallboxStatus($serial);
         if (!is_array($view)) {
             $this->SendDebug("FetchWallboxData", "Ungültige Antwort / keine data.", 0);
@@ -590,7 +590,7 @@ class Goodwe extends IPSModule
                 $value = (strpos($value, '.') !== false) ? (float)$value : (int)$value;
             }
 
-            // falls power in kW kommt -> W
+            // power kommt teils in kW -> W
             if ($key === 'power') {
                 $value = (int)round(((float)$value) * 1000);
             }
@@ -600,50 +600,87 @@ class Goodwe extends IPSModule
         }
 
         // ----------------------------
-        // Abgeleitete "Soll"-Variablen (mit Pending)
+        // Pending-Auswertung (5 Minuten Vertrauen)
         // ----------------------------
         $pending = $this->GetWbPending();
 
-        // workstate -> lädt?
-        if (isset($view['workstate'])) {
-            $ws = (int)$view['workstate'];
-            $isChargingNow = ($ws === 2);
+        // 1) WB_Charging aus ChargeInfo ableiten (aber Pending respektieren)
+        $isChargingNow = null;
+        $chargingFromView = $this->IsChargingFromView($view);
+        if ($chargingFromView !== null) {
+            $isChargingNow = (bool)$chargingFromView;
+        }
 
-            $blockChargingUpdate = false;
+        $blockChargingUpdate = false;
 
-            if (is_array($pending) && ($pending['ident'] ?? '') === 'WB_Charging') {
-                $expected = (bool)($pending['expected'] ?? false);
-                $since    = (int)($pending['since'] ?? 0);
-                $timeout  = (int)($pending['timeout'] ?? 300);
+        if (is_array($pending) && ($pending['ident'] ?? '') === 'WB_Charging') {
+            $expected = (bool)($pending['expected'] ?? false);
+            $since    = (int)($pending['since'] ?? 0);
+            $timeout  = (int)($pending['timeout'] ?? 300);
 
-                if ($isChargingNow === $expected) {
-                    // Ziel erreicht -> Pending weg
+            // Innerhalb des Timeout: nicht überschreiben
+            if ($since > 0 && (time() - $since) < $timeout) {
+                $blockChargingUpdate = true;
+
+                // Wenn ChargeInfo bereits passt -> Pending löschen (früher fertig)
+                if ($isChargingNow !== null && $isChargingNow === $expected) {
+                    $this->ClearWbPending();
+                    $blockChargingUpdate = false;
+                }
+            } else {
+                // Timeout: jetzt MUSS ChargeInfo passen, sonst Fehler
+                if ($isChargingNow !== null && $isChargingNow === $expected) {
                     $this->ClearWbPending();
                 } else {
-                    // Noch nicht angekommen
-                    if ($since > 0 && (time() - $since) < $timeout) {
-                        $blockChargingUpdate = true;
-                    } else {
-                        // Timeout -> Pending weg, dann darf IPS wieder normal schreiben
-                        $this->ClearWbPending();
-                        $this->SendDebug('WB_Charging', 'Timeout: keine Statusänderung innerhalb 5 Min (Ist=' . (int)$isChargingNow . ')', 0);
-                    }
+                    $this->SetWbCommandError("Timeout nach {$timeout}s: WB_Charging wurde nicht bestätigt. Erwartet=" . (int)$expected . ", Ist=" . json_encode($isChargingNow));
+                    $this->ClearWbPending();
                 }
-            }
-
-            if (!$blockChargingUpdate) {
-                $this->SetValueIfChanged('WB_Charging', $isChargingNow);
-            }
-
-            $cid = @$this->GetIDForIdent('WB_Charging');
-            if ($cid !== false) {
-                $statusJson['WB_Charging'] = GetValue($cid);
+                $blockChargingUpdate = false;
             }
         }
 
-        // chargeMode Ist -> WB_ChargeMode
+        if (!$blockChargingUpdate && $isChargingNow !== null) {
+            $this->SetValueIfChanged('WB_Charging', $isChargingNow);
+        }
+
+        $cid = @$this->GetIDForIdent('WB_Charging');
+        if ($cid !== false) {
+            $statusJson['WB_Charging'] = GetValue($cid);
+        }
+
+        // 2) chargeMode Ist -> WB_ChargeMode (Pending respektieren)
         if (isset($view['chargeMode'])) {
-            $this->SetValueIfChanged('WB_ChargeMode', (int)$view['chargeMode']);
+            $modeNow = is_numeric($view['chargeMode']) ? (int)$view['chargeMode'] : null;
+
+            $blockModeUpdate = false;
+            $pending = $this->GetWbPending(); // ggf. oben gelöscht → neu holen
+
+            if (is_array($pending) && ($pending['ident'] ?? '') === 'WB_ChargeMode') {
+                $expected = (int)($pending['expected'] ?? 0);
+                $since    = (int)($pending['since'] ?? 0);
+                $timeout  = (int)($pending['timeout'] ?? 300);
+
+                if ($since > 0 && (time() - $since) < $timeout) {
+                    $blockModeUpdate = true;
+                    if ($modeNow !== null && $modeNow === $expected) {
+                        $this->ClearWbPending();
+                        $blockModeUpdate = false;
+                    }
+                } else {
+                    if ($modeNow !== null && $modeNow === $expected) {
+                        $this->ClearWbPending();
+                    } else {
+                        $this->SetWbCommandError("Timeout nach {$timeout}s: WB_ChargeMode wurde nicht bestätigt. Erwartet={$expected}, Ist=" . json_encode($modeNow));
+                        $this->ClearWbPending();
+                    }
+                    $blockModeUpdate = false;
+                }
+            }
+
+            if (!$blockModeUpdate && $modeNow !== null) {
+                $this->SetValueIfChanged('WB_ChargeMode', $modeNow);
+            }
+
             $mid = @$this->GetIDForIdent('WB_ChargeMode');
             if ($mid !== false) {
                 $statusJson['WB_ChargeMode'] = GetValue($mid);
@@ -653,13 +690,13 @@ class Goodwe extends IPSModule
         ksort($statusJson);
         $this->SendDebug("FetchWallboxData", json_encode([
             'source' => 'SEMS_API_ZIP',
-            'values' => $statusJson
+            'values' => $statusJson,
+            'workstate_raw' => $view['workstate'] ?? null
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
     }
 
     private function QueueWallboxChange(string $ident, array $data, string $action): void
     {
-        // action: 'charging' | 'setmode'
         $queue = json_decode($this->GetBuffer('WallboxQueue'), true);
         if (!is_array($queue)) {
             $queue = [];
@@ -675,16 +712,15 @@ class Goodwe extends IPSModule
 
         $cmd = [
             'ident'  => $ident,
-            'action' => $action,
+            'action' => $action, // 'charging' | 'setmode'
             'data'   => $data,
-            'time'   => time(),
-            'retry'  => 0
+            'time'   => time()
         ];
         $newQueue[] = $cmd;
 
         $this->SetBuffer('WallboxQueue', json_encode($newQueue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-        // Timer starten
+        // Timer starten (kurz, einmalig abarbeiten)
         if ($this->GetTimerInterval('TimerWBQueue') == 0) {
             $this->SetTimerInterval('TimerWBQueue', 1000);
         }
@@ -708,7 +744,7 @@ class Goodwe extends IPSModule
         $cmd = array_shift($queue);
         $this->SetBuffer('WallboxQueue', json_encode($queue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-        $this->SendDebug('ProcessWallboxQueue', 'Sende Command: ' . json_encode($cmd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $this->SendDebug('ProcessWallboxQueue', 'Sende Command (1x): ' . json_encode($cmd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
 
         $ok = false;
         try {
@@ -756,41 +792,27 @@ class Goodwe extends IPSModule
             $ok = false;
         }
 
-        if (!$ok) {
-            // Retry-Logik: max 3 Versuche, dann verwerfen
-            $retry = (int)($cmd['retry'] ?? 0);
-            $retry++;
-
-            if ($retry <= 3) {
-                $cmd['retry'] = $retry;
-
-                // hinten wieder anstellen
-                $queue2 = json_decode($this->GetBuffer('WallboxQueue'), true);
-                if (!is_array($queue2)) {
-                    $queue2 = [];
-                }
-                $queue2[] = $cmd;
-                $this->SetBuffer('WallboxQueue', json_encode($queue2, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-                // kleiner Backoff: 2s, 4s, 6s
-                $this->SetTimerInterval('TimerWBQueue', 2000 * $retry);
-
-                $this->SendDebug('ProcessWallboxQueue', "FEHLER – retry $retry/3, erneut eingequeued", 0);
-                return;
-            }
-
-            $this->SendDebug('ProcessWallboxQueue', 'FEHLER – nach 3 Retries verworfen', 0);
-        } else {
-            $this->SendDebug('ProcessWallboxQueue', 'OK', 0);
+        // Wichtig: wir wiederholen NICHT. Wir vertrauen auf Zustandsabgleich via FetchWallboxData.
+        $pending = $this->GetWbPending();
+        if (is_array($pending)) {
+            $pending['sent'] = true;
+            $pending['lastResult'] = [
+                'time' => time(),
+                'ok'   => $ok,
+                'cmd'  => $cmd['ident'] ?? '',
+                'action' => $cmd['action'] ?? ''
+            ];
+            $this->UpdateWbPending($pending);
         }
 
-        // Wenn nach dem Senden nichts mehr da ist: Timer aus
-        $queue = json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue) || count($queue) === 0) {
+        $this->SendDebug('ProcessWallboxQueue', $ok ? 'SENT (HTTP ok)' : 'SENT (no HTTP ok / timeout / unknown) - no retry', 0);
+
+        // Timer: wenn leer stop, sonst weiter
+        $queueLeft = json_decode($this->GetBuffer('WallboxQueue'), true);
+        if (!is_array($queueLeft) || count($queueLeft) === 0) {
             $this->SetTimerInterval('TimerWBQueue', 0);
             $this->SendDebug('ProcessWallboxQueue', 'Queue nun leer – Timer gestoppt.', 0);
         } else {
-            // normal weiter
             $this->SetTimerInterval('TimerWBQueue', 1000);
         }
     }
@@ -1093,7 +1115,85 @@ class Goodwe extends IPSModule
         return [$http, $raw, $decoded];
     }
 
+    private function IsChargingFromView(array $view): ?bool
+    {
+        // Liefert true/false wenn erkennbar, sonst null (unbekannt)
 
+        // workstate kann numerisch ODER String sein
+        if (isset($view['workstate'])) {
+            $ws = $view['workstate'];
+
+            // numerisch?
+            if (is_int($ws) || (is_string($ws) && ctype_digit($ws))) {
+                $wsInt = (int)$ws;
+                // nach deinem Mapping: 2 = läuft
+                return ($wsInt === 2);
+            }
+
+            // String-Codes (Beispiele aus SEMS: "...Stat01" waiting, "...Stat02" charging, "...Stat03" ending)
+            if (is_string($ws)) {
+                if (stripos($ws, 'Stat02') !== false) return true;
+                if (stripos($ws, 'Stat01') !== false) return false;
+                if (stripos($ws, 'Stat03') !== false) return false;
+                // falls andere Codes kommen: unbekannt
+            }
+        }
+
+        // Fallback: manchmal gibt es ein Feld, das Charging direkt ausdrückt (nicht garantiert)
+        if (isset($view['status']) && is_string($view['status'])) {
+            if (stripos($view['status'], 'charging') !== false) return true;
+            if (stripos($view['status'], 'stop') !== false) return false;
+        }
+
+        return null;
+    }
+
+    private function SetWbPending(string $ident, $expected, int $timeoutSec = 300): void
+    {
+        $this->SetBuffer('WB_Pending', json_encode([
+            'ident'       => $ident,
+            'expected'    => $expected,
+            'since'       => time(),
+            'timeout'     => $timeoutSec,
+            'sent'        => false,      // wird nach dem 1× Senden gesetzt
+            'lastResult'  => null         // rein fürs Debug
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        // Fehler beim neuen Command löschen
+        if (@$this->GetIDForIdent('WB_CommandError') !== false) {
+            $this->SetValueIfChanged('WB_CommandError', false);
+        }
+        if (@$this->GetIDForIdent('WB_CommandErrorText') !== false) {
+            $this->SetValueIfChanged('WB_CommandErrorText', '');
+        }
+    }
+
+    private function GetWbPending(): ?array
+    {
+        $p = json_decode($this->GetBuffer('WB_Pending'), true);
+        return is_array($p) ? $p : null;
+    }
+
+    private function UpdateWbPending(array $pending): void
+    {
+        $this->SetBuffer('WB_Pending', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function ClearWbPending(): void
+    {
+        $this->SetBuffer('WB_Pending', '');
+    }
+
+    private function SetWbCommandError(string $text): void
+    {
+        if (@$this->GetIDForIdent('WB_CommandError') !== false) {
+            $this->SetValueIfChanged('WB_CommandError', true);
+        }
+        if (@$this->GetIDForIdent('WB_CommandErrorText') !== false) {
+            $this->SetValueIfChanged('WB_CommandErrorText', $text);
+        }
+        $this->SendDebug('WB_CommandError', $text, 0);
+    }
 
 
 
