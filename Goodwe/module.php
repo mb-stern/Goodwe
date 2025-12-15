@@ -282,9 +282,15 @@ class Goodwe extends IPSModule
                 return;
 
             case 'WB_ChargeMode':
-                $this->SetValueIfChanged($ident, (int)$value);
+                $this->SetValueIfChanged($ident, (int)$value); // optimistisch
 
-                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
+                // Pending setzen (5 Minuten)
+                $this->SetBuffer("WB_PendingChargeMode", json_encode([
+                    'desired' => (int)$value,
+                    'until'   => time() + 300
+                ]));
+
+                // Optional: aktuelle Soll-Leistung mitsenden
                 $chargePowerKW = null;
                 $powerID = @$this->GetIDForIdent('WB_ChargePower');
                 if ($powerID !== false) {
@@ -299,11 +305,9 @@ class Goodwe extends IPSModule
                     $data['charge_power'] = $chargePowerKW;
                 }
 
-                // ✅ sofort senden
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargeMode sofort senden: " . json_encode($data) . " -> $endpoint", 0);
                 $this->SendWallboxRequest($data, $endpoint);
-                break;
+                return;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
@@ -637,22 +641,27 @@ class Goodwe extends IPSModule
                 }
 
                 // 2) WB_ChargeMode anhand von chargeMode
+                i// 2) WB_ChargeMode anhand von chargeMode (mit Pending)
                 if ($key === "chargeMode" && $value !== null) {
-                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
+                    $apiMode = (int)$value;
 
-                    if (!$isPendingMode && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
-                            0
-                        );
+                    $p = json_decode($this->GetBuffer("WB_PendingChargeMode"), true);
+                    $hasPending = is_array($p) && isset($p['desired'], $p['until']);
+
+                    if ($hasPending) {
+                        $desired = (int)$p['desired'];
+                        $until   = (int)$p['until'];
+
+                        if ($apiMode === $desired || time() >= $until) {
+                            // passt oder Timeout → übernehmen
+                            $this->SetValueIfChanged('WB_ChargeMode', $apiMode);
+                            $this->SetBuffer("WB_PendingChargeMode", "");
+                        } else {
+                            // pending → NICHT überschreiben
+                        }
                     } else {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
-                            0
-                        );
+                        // normaler Betrieb
+                        $this->SetValueIfChanged('WB_ChargeMode', $apiMode);
                     }
 
                     $mid = @$this->GetIDForIdent('WB_ChargeMode');
