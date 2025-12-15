@@ -276,9 +276,10 @@ class Goodwe extends IPSModule
                     ];
                 } else {
                     // STOP bleibt wie bisher über v4
-                    $endpoint = '/v4/EvCharger/StopCharging';
+                    $endpoint = '/v3/EvCharger/Charging';
                     $data = [
-                        'sn' => $serial
+                        'sn'     => $serial,
+                        'status' => 2
                     ];
                 }
 
