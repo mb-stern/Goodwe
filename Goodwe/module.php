@@ -641,7 +641,6 @@ class Goodwe extends IPSModule
                 }
 
                 // 2) WB_ChargeMode anhand von chargeMode
-                i// 2) WB_ChargeMode anhand von chargeMode (mit Pending)
                 if ($key === "chargeMode" && $value !== null) {
                     $apiMode = (int)$value;
 
