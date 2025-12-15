@@ -636,7 +636,6 @@ class Goodwe extends IPSModule
                     }
                 }
 
-
                 // 2) WB_ChargeMode anhand von chargeMode
                 if ($key === "chargeMode" && $value !== null) {
                     $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
