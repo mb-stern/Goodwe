@@ -282,10 +282,9 @@ class Goodwe extends IPSModule
                 return;
 
             case 'WB_ChargeMode':
-                // Wunschwert lokal setzen (und NIE durch API überschreiben lassen)
                 $this->SetValueIfChanged($ident, (int)$value);
 
-                // Optional: aktuelle Soll-Leistung mitsenden (falls SetChargeMode das braucht)
+                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
                 $chargePowerKW = null;
                 $powerID = @$this->GetIDForIdent('WB_ChargePower');
                 if ($powerID !== false) {
@@ -300,10 +299,11 @@ class Goodwe extends IPSModule
                     $data['charge_power'] = $chargePowerKW;
                 }
 
+                // ✅ sofort senden
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargeMode Wunsch senden: " . json_encode($data) . " -> $endpoint", 0);
+                $this->SendDebug("RequestAction", "WB_ChargeMode sofort senden: " . json_encode($data) . " -> $endpoint", 0);
                 $this->SendWallboxRequest($data, $endpoint);
-                return;
+                break;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
@@ -647,9 +647,29 @@ class Goodwe extends IPSModule
 
                 // 2) WB_ChargeMode anhand von chargeMode
                 if ($key === "chargeMode" && $value !== null) {
-                    $this->SendDebug("FetchWallboxData", "WB_chargeMode (Ist) = " . (int)$value, 0);
-                }
+                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
 
+                    if (!$isPendingMode && !$isBlocked) {
+                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
+                            0
+                        );
+                    } else {
+                        $this->SendDebug(
+                            "FetchWallboxData",
+                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
+                            0
+                        );
+                    }
+
+                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
+                    if ($mid !== false) {
+                        $statusJson['WB_ChargeMode'] = GetValue($mid);
+                    }
+                }
+            }
 
             // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
             ksort($statusJson);
