@@ -264,19 +264,22 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                // Optimistic Update
-                $this->SetValueIfChanged($ident, (bool)$value);
+                $this->SetValueIfChanged($ident, (bool)$value); // optimistic UI
 
+                // pending merken (nur für "nicht sofort überschreiben")
+                $this->SetBuffer("WB_PendingCharging", json_encode([
+                    'desired' => (bool)$value,
+                    'until'   => time() + 300
+                ]));
+
+                // direkt senden
                 $endpoint = '/v3/EvCharger/Charging';
                 $data = [
                     'sn'     => $serial,
                     'status' => ((bool)$value) ? 1 : 0
                 ];
-
-                // ✅ sofort senden (keine Queue)
-                $this->SendDebug("RequestAction", "WB_Charging sofort senden: " . json_encode($data) . " -> $endpoint", 0);
                 $this->SendWallboxRequest($data, $endpoint);
-                break;
+                return;
 
             case 'WB_ChargeMode':
                 $this->SetValueIfChanged($ident, (int)$value);
@@ -608,29 +611,33 @@ class Goodwe extends IPSModule
 
                 // 1) WB_Charging anhand von workstate
                 if ($key === "workstate" && $value !== null) {
-                    $chargingState     = ($value !== 0);
-                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+                    $apiCharging = ((int)$value !== 0);
 
-                    if (!$isPendingCharging && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_Charging', $chargingState);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"),
-                            0
-                        );
-                    } elseif ($isBlocked) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                            0
-                        );
-                    } elseif ($isPendingCharging) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
-                            0
-                        );
+                    $p = json_decode($this->GetBuffer("WB_PendingCharging"), true);
+                    $hasPending = is_array($p) && isset($p['until'], $p['desired']) && ((int)$p['until'] > 0);
+
+                    if ($hasPending) {
+                        $desired = (bool)$p['desired'];
+                        $until   = (int)$p['until'];
+
+                        if ($apiCharging === $desired) {
+                            // Istwert ist angekommen -> übernehmen & pending löschen
+                            $this->SetValueIfChanged('WB_Charging', $apiCharging);
+                            $this->SetBuffer("WB_PendingCharging", "");
+                        } elseif (time() >= $until) {
+                            // Timeout -> Istwert übernehmen & pending löschen
+                            $this->SetValueIfChanged('WB_Charging', $apiCharging);
+                            $this->SetBuffer("WB_PendingCharging", "");
+                        } else {
+                            // Noch pending -> NICHT überschreiben (optimistischer Wert bleibt)
+                            // (optional debug)
+                            // $this->SendDebug("FetchWallboxData", "WB_Charging pending, API noch nicht soweit", 0);
+                        }
+                    } else {
+                        // normaler Betrieb -> immer übernehmen
+                        $this->SetValueIfChanged('WB_Charging', $apiCharging);
                     }
+                }
 
                     $cid = @$this->GetIDForIdent('WB_Charging');
                     if ($cid !== false) {
