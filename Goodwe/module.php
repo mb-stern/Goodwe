@@ -267,23 +267,15 @@ class Goodwe extends IPSModule
                 // Optimistic Update
                 $this->SetValueIfChanged($ident, (bool)$value);
 
-                if ($value) {
-                    // START: v3 Charging – status muss immer 0 sein
-                    $endpoint = '/v3/EvCharger/Charging';
-                    $data = [
-                        'sn'     => $serial,
-                        'status' => 1
-                    ];
-                } else {
-                    // STOP bleibt wie bisher über v4
-                    $endpoint = '/v3/EvCharger/Charging';
-                    $data = [
-                        'sn'     => $serial,
-                        'status' => 2
-                    ];
-                }
+                $endpoint = '/v3/EvCharger/Charging';
+                $data = [
+                    'sn'     => $serial,
+                    'status' => ((bool)$value) ? 1 : 0
+                ];
 
-                $this->QueueWallboxChange($ident, $data, $endpoint);
+                // ✅ sofort senden (keine Queue)
+                $this->SendDebug("RequestAction", "WB_Charging sofort senden: " . json_encode($data) . " -> $endpoint", 0);
+                $this->SendWallboxRequest($data, $endpoint);
                 break;
 
             case 'WB_ChargeMode':
@@ -304,13 +296,16 @@ class Goodwe extends IPSModule
                     $data['charge_power'] = $chargePowerKW;
                 }
 
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                // ✅ sofort senden
+                $endpoint = '/v3/EvCharger/SetChargeMode';
+                $this->SendDebug("RequestAction", "WB_ChargeMode sofort senden: " . json_encode($data) . " -> $endpoint", 0);
+                $this->SendWallboxRequest($data, $endpoint);
                 break;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-                $val = min(max($val, 4200), 9700); // Begrenzung
+                $val = min(max($val, 4200), 9700);
 
                 // Lokale Variablen sofort anpassen
                 $this->SetValueIfChanged($ident, $val);
@@ -319,8 +314,12 @@ class Goodwe extends IPSModule
                 $kw = round($val / 1000, 1);
                 $data = ['sn' => $serial, 'charge_power' => $kw];
 
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
+                // ✅ sofort senden
+                $endpoint = '/v3/EvCharger/SetChargeMode';
+                $this->SendDebug("RequestAction", "WB_ChargePower sofort senden: " . json_encode($data) . " -> $endpoint", 0);
+                $this->SendWallboxRequest($data, $endpoint);
                 break;
+
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
@@ -1024,7 +1023,7 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
+        if (!isset($decoded['code']) || (string)$decoded['code'] !== "0") {
             $log['error'] = 'API-Fehlercode';
             $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
