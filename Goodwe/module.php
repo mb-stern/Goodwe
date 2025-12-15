@@ -282,15 +282,10 @@ class Goodwe extends IPSModule
                 return;
 
             case 'WB_ChargeMode':
-                $this->SetValueIfChanged($ident, (int)$value); // optimistisch
+                // Wunschwert lokal setzen (und NIE durch API überschreiben lassen)
+                $this->SetValueIfChanged($ident, (int)$value);
 
-                // Pending setzen (5 Minuten)
-                $this->SetBuffer("WB_PendingChargeMode", json_encode([
-                    'desired' => (int)$value,
-                    'until'   => time() + 300
-                ]));
-
-                // Optional: aktuelle Soll-Leistung mitsenden
+                // Optional: aktuelle Soll-Leistung mitsenden (falls SetChargeMode das braucht)
                 $chargePowerKW = null;
                 $powerID = @$this->GetIDForIdent('WB_ChargePower');
                 if ($powerID !== false) {
@@ -306,6 +301,7 @@ class Goodwe extends IPSModule
                 }
 
                 $endpoint = '/v3/EvCharger/SetChargeMode';
+                $this->SendDebug("RequestAction", "WB_ChargeMode Wunsch senden: " . json_encode($data) . " -> $endpoint", 0);
                 $this->SendWallboxRequest($data, $endpoint);
                 return;
 
@@ -624,15 +620,24 @@ class Goodwe extends IPSModule
                         $desired = (bool)$p['desired'];
                         $until   = (int)$p['until'];
 
-                        if ($apiCharging === $desired || time() >= $until) {
+                        if ($apiCharging === $desired) {
+                            // Istwert ist angekommen -> übernehmen & pending löschen
+                            $this->SetValueIfChanged('WB_Charging', $apiCharging);
+                            $this->SetBuffer("WB_PendingCharging", "");
+                        } elseif (time() >= $until) {
+                            // Timeout -> Istwert übernehmen & pending löschen
                             $this->SetValueIfChanged('WB_Charging', $apiCharging);
                             $this->SetBuffer("WB_PendingCharging", "");
                         } else {
-                            // pending -> nicht überschreiben
+                            // Noch pending -> NICHT überschreiben (optimistischer Wert bleibt)
+                            // (optional debug)
+                            // $this->SendDebug("FetchWallboxData", "WB_Charging pending, API noch nicht soweit", 0);
                         }
                     } else {
+                        // normaler Betrieb -> immer übernehmen
                         $this->SetValueIfChanged('WB_Charging', $apiCharging);
                     }
+                }
 
                     $cid = @$this->GetIDForIdent('WB_Charging');
                     if ($cid !== false) {
@@ -642,31 +647,7 @@ class Goodwe extends IPSModule
 
                 // 2) WB_ChargeMode anhand von chargeMode
                 if ($key === "chargeMode" && $value !== null) {
-                    $apiMode = (int)$value;
-
-                    $p = json_decode($this->GetBuffer("WB_PendingChargeMode"), true);
-                    $hasPending = is_array($p) && isset($p['desired'], $p['until']);
-
-                    if ($hasPending) {
-                        $desired = (int)$p['desired'];
-                        $until   = (int)$p['until'];
-
-                        if ($apiMode === $desired || time() >= $until) {
-                            // passt oder Timeout → übernehmen
-                            $this->SetValueIfChanged('WB_ChargeMode', $apiMode);
-                            $this->SetBuffer("WB_PendingChargeMode", "");
-                        } else {
-                            // pending → NICHT überschreiben
-                        }
-                    } else {
-                        // normaler Betrieb
-                        $this->SetValueIfChanged('WB_ChargeMode', $apiMode);
-                    }
-
-                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($mid !== false) {
-                        $statusJson['WB_ChargeMode'] = GetValue($mid);
-                    }
+                    $this->SendDebug("FetchWallboxData", "WB_chargeMode (Ist) = " . (int)$value, 0);
                 }
             }
 
