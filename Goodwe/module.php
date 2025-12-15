@@ -620,24 +620,15 @@ class Goodwe extends IPSModule
                         $desired = (bool)$p['desired'];
                         $until   = (int)$p['until'];
 
-                        if ($apiCharging === $desired) {
-                            // Istwert ist angekommen -> übernehmen & pending löschen
-                            $this->SetValueIfChanged('WB_Charging', $apiCharging);
-                            $this->SetBuffer("WB_PendingCharging", "");
-                        } elseif (time() >= $until) {
-                            // Timeout -> Istwert übernehmen & pending löschen
+                        if ($apiCharging === $desired || time() >= $until) {
                             $this->SetValueIfChanged('WB_Charging', $apiCharging);
                             $this->SetBuffer("WB_PendingCharging", "");
                         } else {
-                            // Noch pending -> NICHT überschreiben (optimistischer Wert bleibt)
-                            // (optional debug)
-                            // $this->SendDebug("FetchWallboxData", "WB_Charging pending, API noch nicht soweit", 0);
+                            // pending -> nicht überschreiben
                         }
                     } else {
-                        // normaler Betrieb -> immer übernehmen
                         $this->SetValueIfChanged('WB_Charging', $apiCharging);
                     }
-                }
 
                     $cid = @$this->GetIDForIdent('WB_Charging');
                     if ($cid !== false) {
