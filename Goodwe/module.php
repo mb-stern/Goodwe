@@ -649,7 +649,7 @@ class Goodwe extends IPSModule
                 if ($key === "chargeMode" && $value !== null) {
                     $this->SendDebug("FetchWallboxData", "WB_chargeMode (Ist) = " . (int)$value, 0);
                 }
-            }
+
 
             // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
             ksort($statusJson);
