@@ -836,43 +836,52 @@ class Goodwe extends IPSModule
 
     private function QueueWallboxChange(string $ident, array $data, string $endpoint): void
     {
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
+        $sem = "GoodweWBQueue_" . $this->InstanceID;
+
+        if (!IPS_SemaphoreEnter($sem, 5000)) {
+            $this->SendDebug('QueueWallboxChange', 'SemaphoreEnter timeout – Queue-Write abgebrochen', 0);
+            return;
         }
 
-        // Coalescing: alle alten Einträge mit demselben Ident entfernen
-        $newQueue = [];
-        foreach ($queue as $cmd) {
-            if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
-                $newQueue[] = $cmd;
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) {
+                $queue = [];
             }
+
+            // OPTIONAL: Coalescing nur für identische idents (wie bisher)
+            $newQueue = [];
+            foreach ($queue as $cmd) {
+                if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
+                    $newQueue[] = $cmd;
+                }
+            }
+
+            $cmd = [
+                'ident'    => $ident,
+                'data'     => $data,
+                'endpoint' => $endpoint,
+                'time'     => time()
+            ];
+            $newQueue[] = $cmd;
+
+            $this->SetBuffer('WallboxQueue', json_encode($newQueue));
+
+            $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
+            if (!is_array($changes)) {
+                $changes = [];
+            }
+            $changes[$ident] = true;
+            $this->SetBuffer('WallboxChanges', json_encode($changes));
+
+            if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                $this->SetTimerInterval('TimerWBQueue', 1000);
+            }
+
+            $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt: ' . json_encode($cmd), 0);
+        } finally {
+            IPS_SemaphoreLeave($sem);
         }
-
-        $cmd = [
-            'ident'    => $ident,
-            'data'     => $data,
-            'endpoint' => $endpoint,
-            'time'     => time()
-        ];
-        $newQueue[] = $cmd;
-
-        $this->SetBuffer('WallboxQueue', json_encode($newQueue));
-
-        // Pending-Map aktualisieren
-        $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
-        if (!is_array($changes)) {
-            $changes = [];
-        }
-        $changes[$ident] = true;
-        $this->SetBuffer('WallboxChanges', json_encode($changes));
-
-        // Queue-Timer auf 1s setzen, wenn er nicht läuft
-        if ($this->GetTimerInterval('TimerWBQueue') == 0) {
-            $this->SetTimerInterval('TimerWBQueue', 1000);
-        }
-
-        $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt (coalesced): ' . json_encode($cmd), 0);
     }
 
     public function ProcessWallboxQueue()
