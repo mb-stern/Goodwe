@@ -635,27 +635,6 @@ class Goodwe extends IPSModule
                         $statusJson['WB_Charging'] = GetValue($cid);
                     }
                 }
-
-                    if (!$isPendingMode && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
-                            0
-                        );
-                    } else {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
-                            0
-                        );
-                    }
-
-                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($mid !== false) {
-                        $statusJson['WB_ChargeMode'] = GetValue($mid);
-                    }
-                }
             }
 
             // Immer eine JSON-Zeile mit den wichtigsten WB-Werten (inkl. Quelle)
