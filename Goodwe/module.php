@@ -282,47 +282,49 @@ class Goodwe extends IPSModule
                 return;
 
             case 'WB_ChargeMode':
-                $this->SetValueIfChanged($ident, (int)$value);
+                $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
 
-                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
-                $chargePowerKW = null;
-                $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                if ($powerID !== false) {
-                    $w = (int)GetValue($powerID);
-                    if ($w > 0) {
-                        $chargePowerKW = round($w / 1000, 1);
-                    }
-                }
+                $data = [
+                    'sn'   => $serial,
+                    'mode' => (int)$value
+                ];
 
-                $data = ['sn' => $serial, 'mode' => (int)$value];
-                if ($chargePowerKW !== null) {
-                    $data['charge_power'] = $chargePowerKW;
-                }
-
-                // ✅ sofort senden
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargeMode sofort senden: " . json_encode($data) . " -> $endpoint", 0);
-                $this->SendWallboxRequest($data, $endpoint);
-                break;
+                $this->SendDebug("RequestAction", "WB_ChargeMode -> sende NUR mode: " . json_encode($data) . " -> $endpoint", 0);
+
+                // direkt oder Queue
+                // $this->SendWallboxRequest($data, $endpoint);
+                $this->QueueWallboxChange('WB_ChargeMode', $data, $endpoint);
+                return;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700);
 
-                // Lokale Variablen sofort anpassen
-                $this->SetValueIfChanged($ident, $val);
+                // UI sofort (optimistic)
+                $this->SetValueIfChanged('WB_ChargePower', $val);
+
+                // WICHTIG: bei Soll-Leistung IMMER auf Schnell stellen
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
+                // Und an die API beides senden: mode + charge_power
                 $kw = round($val / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
+                $data = [
+                    'sn'          => $serial,
+                    'mode'        => 0,
+                    'charge_power'=> $kw
+                ];
 
-                // ✅ sofort senden
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargePower sofort senden: " . json_encode($data) . " -> $endpoint", 0);
-                $this->SendWallboxRequest($data, $endpoint);
-                break;
+                $this->SendDebug("RequestAction", "WB_ChargePower -> sende mode=0 + charge_power: " . json_encode($data) . " -> $endpoint", 0);
 
+                // Entweder direkt senden (wie jetzt) ...
+                // $this->SendWallboxRequest($data, $endpoint);
+
+                // ... oder (empfohlen) über Queue, damit schnelle Klicks nicht kollidieren:
+                $this->QueueWallboxChange('WB_ChargePower', $data, $endpoint);
+                return;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
