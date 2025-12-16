@@ -112,7 +112,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.9 (14.12.2025)
+Version 2.9 (16.12.2025)
 - Die Wallbox-Steuerung wurde weiter überarbeitet.
 
 Version 2.8 (29.11.2025)
