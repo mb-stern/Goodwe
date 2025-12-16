@@ -839,7 +839,6 @@ class Goodwe extends IPSModule
     private function QueueWallboxChange(string $ident, array $data, string $endpoint): void
     {
         $sem = "GoodweWBQueue_" . $this->InstanceID;
-
         if (!IPS_SemaphoreEnter($sem, 5000)) {
             $this->SendDebug('QueueWallboxChange', 'SemaphoreEnter timeout – Queue-Write abgebrochen', 0);
             return;
@@ -847,11 +846,9 @@ class Goodwe extends IPSModule
 
         try {
             $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-            if (!is_array($queue)) {
-                $queue = [];
-            }
+            if (!is_array($queue)) $queue = [];
 
-            // OPTIONAL: Coalescing nur für identische idents (wie bisher)
+            // Coalescing: nur gleicher ident ersetzt (Power ersetzt Power, Mode ersetzt Mode)
             $newQueue = [];
             foreach ($queue as $cmd) {
                 if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
@@ -869,13 +866,7 @@ class Goodwe extends IPSModule
 
             $this->SetBuffer('WallboxQueue', json_encode($newQueue));
 
-            $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
-            if (!is_array($changes)) {
-                $changes = [];
-            }
-            $changes[$ident] = true;
-            $this->SetBuffer('WallboxChanges', json_encode($changes));
-
+            // Timer starten
             if ($this->GetTimerInterval('TimerWBQueue') == 0) {
                 $this->SetTimerInterval('TimerWBQueue', 1000);
             }
@@ -888,58 +879,47 @@ class Goodwe extends IPSModule
 
     public function ProcessWallboxQueue()
     {
-        // Aktuelle Queue aus dem Buffer laden
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
-        }
-
-        // Wenn nichts zu tun: Timer aus, aber Buffer/Changes NICHT anfassen
-        if (count($queue) === 0) {
-            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
-            $this->SetTimerInterval('TimerWBQueue', 0);
+        $sem = "GoodweWBQueue_" . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($sem, 15000)) {
+            $this->SendDebug('ProcessWallboxQueue', 'SemaphoreEnter timeout – Abbruch', 0);
             return;
         }
 
-        // Nächsten Command holen
-        $cmd = array_shift($queue);
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) $queue = [];
 
+            if (count($queue) === 0) {
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                return;
+            }
+
+            $cmd = array_shift($queue);
+            $this->SetBuffer('WallboxQueue', json_encode($queue));
+        } finally {
+            IPS_SemaphoreLeave($sem);
+        }
+
+        // Request OHNE Lock ausführen (darf dauern)
         $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
+        $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
 
-        // API-Aufruf (kann mehrere Sekunden dauern)
-        $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
-        if ($result === null) {
-            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
-        } else {
-            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
+        // Danach: prüfen ob Queue leer ist (wieder gelockt)
+        if (!IPS_SemaphoreEnter($sem, 15000)) {
+            $this->SendDebug('ProcessWallboxQueue', 'SemaphoreEnter timeout – Post-Check Abbruch', 0);
+            return;
         }
 
-        // WICHTIG: Queue NACH dem Request NOCHMAL aus dem Buffer lesen,
-        // denn in der Zwischenzeit könnte ein neuer Befehl eingetroffen sein.
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
-        }
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) $queue = [];
 
-        if (count($queue) === 0) {
-            // Jetzt wirklich leer → Pending-Map leeren
-            $this->SetBuffer('WallboxChanges', json_encode([]));
-
-            // API-Updates der drei Steuer-Variablen für 300sec blockiern nach setzen neuer Sollwerte (Langsames ausführen der Befehle durch die SEMS_API)
-            $holdSeconds = 300;
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
-            $this->SetTimerInterval('TimerWBQueue', 0);
-            $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
-        } else {
-            // Es sind noch Befehle in der Queue → Timer weiterlaufen lassen
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
-                0
-            );
+            if (count($queue) === 0) {
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
+            }
+        } finally {
+            IPS_SemaphoreLeave($sem);
         }
     }
 
