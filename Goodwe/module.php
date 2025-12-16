@@ -264,21 +264,48 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                $this->SetValueIfChanged($ident, (bool)$value); // optimistic UI
+                // UI sofort setzen (optimistic)
+                $this->SetValueIfChanged($ident, (bool)$value);
 
-                // pending merken (nur für "nicht sofort überschreiben")
+                // Pending setzen, damit FetchWallboxData nicht sofort zurückschreibt
                 $this->SetBuffer("WB_PendingCharging", json_encode([
                     'desired' => (bool)$value,
                     'until'   => time() + 300
                 ]));
 
-                // direkt senden
-                $endpoint = '/v3/EvCharger/Charging';
-                $data = [
-                    'sn'     => $serial,
-                    'status' => ((bool)$value) ? 1 : 0
-                ];
-                $this->SendWallboxRequest($data, $endpoint);
+                if ((bool)$value) {
+                    // =========================
+                    // EIN  -> v3 Charging (BLEIBT!)
+                    // =========================
+                    $endpoint = '/v3/EvCharger/Charging';
+                    $data = [
+                        'sn'     => $serial,
+                        'status' => 1
+                    ];
+
+                    $this->SendDebug(
+                        "RequestAction",
+                        "WB_Charging EIN -> v3 Charging: " . json_encode($data),
+                        0
+                    );
+                    $this->SendWallboxRequest($data, $endpoint);
+
+                } else {
+                    // =========================
+                    // AUS -> v4 StopCharging
+                    // =========================
+                    $endpoint = '/v4/EvCharger/StopCharging';
+                    $data = [
+                        'sn' => $serial
+                    ];
+
+                    $this->SendDebug(
+                        "RequestAction",
+                        "WB_Charging AUS -> v4 StopCharging: " . json_encode($data),
+                        0
+                    );
+                    $this->SendWallboxRequest($data, $endpoint);
+                }
                 return;
 
             case 'WB_ChargeMode':
