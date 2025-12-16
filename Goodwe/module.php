@@ -15,7 +15,7 @@ class Goodwe extends IPSModule
         $this->RegisterPropertyString("WallboxPassword", "");
         $this->RegisterPropertyString("WallboxSerial", "");
         $this->RegisterPropertyInteger("PollIntervalWB", 10);
-        $this->RegisterPropertyInteger("PollIntervalWR", 5);
+        $this->RegisterPropertyInteger("PollIntervalWR", 10);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
@@ -264,53 +264,94 @@ class Goodwe extends IPSModule
 
         switch ($ident) {
             case 'WB_Charging':
-                // Optimistic Update
+                // UI sofort setzen (optimistic)
                 $this->SetValueIfChanged($ident, (bool)$value);
 
-                $endpoint = $value ? '/v4/EvCharger/StartCharging' : '/v4/EvCharger/StopCharging';
-                $data = ['sn' => $serial];
-                if ($value) {
-                    $data['mode'] = (int)GetValue($this->GetIDForIdent('WB_ChargeMode'));
-                }
+                // Pending setzen, damit FetchWallboxData nicht sofort zurückschreibt
+                $this->SetBuffer("WB_PendingCharging", json_encode([
+                    'desired' => (bool)$value,
+                    'until'   => time() + 300
+                ]));
 
-                $this->QueueWallboxChange($ident, $data, $endpoint);
-                break;
+                if ((bool)$value) {
+                    // =========================
+                    // EIN  -> v3 Charging (BLEIBT!)
+                    // =========================
+                    $endpoint = '/v3/EvCharger/Charging';
+                    $data = [
+                        'sn'     => $serial,
+                        'status' => 1
+                    ];
+
+                    $this->SendDebug(
+                        "RequestAction",
+                        "WB_Charging EIN -> v3 Charging: " . json_encode($data),
+                        0
+                    );
+                    $this->SendWallboxRequest($data, $endpoint);
+
+                } else {
+                    // =========================
+                    // AUS -> v4 StopCharging
+                    // =========================
+                    $endpoint = '/v4/EvCharger/StopCharging';
+                    $data = [
+                        'sn' => $serial
+                    ];
+
+                    $this->SendDebug(
+                        "RequestAction",
+                        "WB_Charging AUS -> v4 StopCharging: " . json_encode($data),
+                        0
+                    );
+                    $this->SendWallboxRequest($data, $endpoint);
+                }
+                return;
 
             case 'WB_ChargeMode':
-                $this->SetValueIfChanged($ident, (int)$value);
+                $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
 
-                // Optional: aktuelle Soll-Leistung mitsenden (hilft gegen API-Fehler code_100004)
-                $chargePowerKW = null;
-                $powerID = @$this->GetIDForIdent('WB_ChargePower');
-                if ($powerID !== false) {
-                    $w = (int)GetValue($powerID);
-                    if ($w > 0) {
-                        $chargePowerKW = round($w / 1000, 1);
-                    }
-                }
+                $data = [
+                    'sn'   => $serial,
+                    'mode' => (int)$value
+                ];
 
-                $data = ['sn' => $serial, 'mode' => (int)$value];
-                if ($chargePowerKW !== null) {
-                    $data['charge_power'] = $chargePowerKW;
-                }
+                $endpoint = '/v3/EvCharger/SetChargeMode';
+                $this->SendDebug("RequestAction", "WB_ChargeMode -> sende NUR mode: " . json_encode($data) . " -> $endpoint", 0);
 
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
-                break;
+                // direkt oder Queue
+                // $this->SendWallboxRequest($data, $endpoint);
+                $this->QueueWallboxChange('WB_ChargeMode', $data, $endpoint);
+                return;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
                 $val = (int)(round(((int)$value) / 100) * 100 + $offset);
-                $val = min(max($val, 4200), 9700); // Begrenzung
+                $val = min(max($val, 4200), 9700);
 
-                // Lokale Variablen sofort anpassen
-                $this->SetValueIfChanged($ident, $val);
+                // UI sofort (optimistic)
+                $this->SetValueIfChanged('WB_ChargePower', $val);
+
+                // WICHTIG: bei Soll-Leistung IMMER auf Schnell stellen
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
+                // Und an die API beides senden: mode + charge_power
                 $kw = round($val / 1000, 1);
-                $data = ['sn' => $serial, 'charge_power' => $kw];
+                $data = [
+                    'sn'          => $serial,
+                    'mode'        => 0,
+                    'charge_power'=> $kw
+                ];
 
-                $this->QueueWallboxChange($ident, $data, '/v3/EvCharger/SetChargeMode');
-                break;
+                $endpoint = '/v3/EvCharger/SetChargeMode';
+                $this->SendDebug("RequestAction", "WB_ChargePower -> sende mode=0 + charge_power: " . json_encode($data) . " -> $endpoint", 0);
+
+                // Entweder direkt senden (wie jetzt) ...
+                // $this->SendWallboxRequest($data, $endpoint);
+
+                // ... oder (empfohlen) über Queue, damit schnelle Klicks nicht kollidieren:
+                $this->QueueWallboxChange('WB_ChargePower', $data, $endpoint);
+                return;
 
             default:
                 throw new Exception("Ungültiger Ident: $ident");
@@ -599,58 +640,28 @@ class Goodwe extends IPSModule
 
                 // 1) WB_Charging anhand von workstate
                 if ($key === "workstate" && $value !== null) {
-                    $chargingState     = ($value !== 0);
-                    $isPendingCharging = array_key_exists('WB_Charging', $pending);
+                    $apiCharging = ((int)$value !== 0);
 
-                    if (!$isPendingCharging && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_Charging', $chargingState);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging aus API aktualisiert auf " . ($chargingState ? "true" : "false"),
-                            0
-                        );
-                    } elseif ($isBlocked) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – Rückmeldung blockiert bis " . date('H:i:s', $holdUntil),
-                            0
-                        );
-                    } elseif ($isPendingCharging) {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_Charging nicht aktualisiert – eigene Änderung steht noch aus.",
-                            0
-                        );
+                    $p = json_decode($this->GetBuffer("WB_PendingCharging"), true);
+                    $hasPending = is_array($p) && isset($p['until'], $p['desired']) && ((int)$p['until'] > 0);
+
+                    if ($hasPending) {
+                        $desired = (bool)$p['desired'];
+                        $until   = (int)$p['until'];
+
+                        if ($apiCharging === $desired || time() >= $until) {
+                            $this->SetValueIfChanged('WB_Charging', $apiCharging);
+                            $this->SetBuffer("WB_PendingCharging", "");
+                        } else {
+                            // pending -> nicht überschreiben
+                        }
+                    } else {
+                        $this->SetValueIfChanged('WB_Charging', $apiCharging);
                     }
 
                     $cid = @$this->GetIDForIdent('WB_Charging');
                     if ($cid !== false) {
                         $statusJson['WB_Charging'] = GetValue($cid);
-                    }
-                }
-
-                // 2) WB_ChargeMode anhand von chargeMode
-                if ($key === "chargeMode" && $value !== null) {
-                    $isPendingMode = array_key_exists('WB_ChargeMode', $pending);
-
-                    if (!$isPendingMode && !$isBlocked) {
-                        $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode aus API aktualisiert: " . (int)$value,
-                            0
-                        );
-                    } else {
-                        $this->SendDebug(
-                            "FetchWallboxData",
-                            "WB_ChargeMode nicht aktualisiert (pending oder blockiert).",
-                            0
-                        );
-                    }
-
-                    $mid = @$this->GetIDForIdent('WB_ChargeMode');
-                    if ($mid !== false) {
-                        $statusJson['WB_ChargeMode'] = GetValue($mid);
                     }
                 }
             }
@@ -854,99 +865,88 @@ class Goodwe extends IPSModule
 
     private function QueueWallboxChange(string $ident, array $data, string $endpoint): void
     {
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
+        $sem = "GoodweWBQueue_" . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($sem, 5000)) {
+            $this->SendDebug('QueueWallboxChange', 'SemaphoreEnter timeout – Queue-Write abgebrochen', 0);
+            return;
         }
 
-        // Coalescing: alle alten Einträge mit demselben Ident entfernen
-        $newQueue = [];
-        foreach ($queue as $cmd) {
-            if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
-                $newQueue[] = $cmd;
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) $queue = [];
+
+            // Coalescing: nur gleicher ident ersetzt (Power ersetzt Power, Mode ersetzt Mode)
+            $newQueue = [];
+            foreach ($queue as $cmd) {
+                if (!isset($cmd['ident']) || $cmd['ident'] !== $ident) {
+                    $newQueue[] = $cmd;
+                }
             }
+
+            $cmd = [
+                'ident'    => $ident,
+                'data'     => $data,
+                'endpoint' => $endpoint,
+                'time'     => time()
+            ];
+            $newQueue[] = $cmd;
+
+            $this->SetBuffer('WallboxQueue', json_encode($newQueue));
+
+            // Timer starten
+            if ($this->GetTimerInterval('TimerWBQueue') == 0) {
+                $this->SetTimerInterval('TimerWBQueue', 1000);
+            }
+
+            $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt: ' . json_encode($cmd), 0);
+        } finally {
+            IPS_SemaphoreLeave($sem);
         }
-
-        $cmd = [
-            'ident'    => $ident,
-            'data'     => $data,
-            'endpoint' => $endpoint,
-            'time'     => time()
-        ];
-        $newQueue[] = $cmd;
-
-        $this->SetBuffer('WallboxQueue', json_encode($newQueue));
-
-        // Pending-Map aktualisieren
-        $changes = @json_decode($this->GetBuffer('WallboxChanges'), true);
-        if (!is_array($changes)) {
-            $changes = [];
-        }
-        $changes[$ident] = true;
-        $this->SetBuffer('WallboxChanges', json_encode($changes));
-
-        // Queue-Timer auf 1s setzen, wenn er nicht läuft
-        if ($this->GetTimerInterval('TimerWBQueue') == 0) {
-            $this->SetTimerInterval('TimerWBQueue', 1000);
-        }
-
-        $this->SendDebug('QueueWallboxChange', 'Befehl in Queue gelegt (coalesced): ' . json_encode($cmd), 0);
     }
 
     public function ProcessWallboxQueue()
     {
-        // Aktuelle Queue aus dem Buffer laden
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
-        }
-
-        // Wenn nichts zu tun: Timer aus, aber Buffer/Changes NICHT anfassen
-        if (count($queue) === 0) {
-            $this->SendDebug('ProcessWallboxQueue', 'Keine Einträge in der Queue – Timer gestoppt.', 0);
-            $this->SetTimerInterval('TimerWBQueue', 0);
+        $sem = "GoodweWBQueue_" . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($sem, 15000)) {
+            $this->SendDebug('ProcessWallboxQueue', 'SemaphoreEnter timeout – Abbruch', 0);
             return;
         }
 
-        // Nächsten Command holen
-        $cmd = array_shift($queue);
-        $this->SetBuffer('WallboxQueue', json_encode($queue));
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) $queue = [];
 
+            if (count($queue) === 0) {
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                return;
+            }
+
+            $cmd = array_shift($queue);
+            $this->SetBuffer('WallboxQueue', json_encode($queue));
+        } finally {
+            IPS_SemaphoreLeave($sem);
+        }
+
+        // Request OHNE Lock ausführen (darf dauern)
         $this->SendDebug('ProcessWallboxQueue', 'Sende Wallbox-Command: ' . json_encode($cmd), 0);
+        $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
 
-        // API-Aufruf (kann mehrere Sekunden dauern)
-        $result = $this->SendWallboxRequest($cmd['data'], $cmd['endpoint']);
-        if ($result === null) {
-            $this->SendDebug('ProcessWallboxQueue', 'Fehler bei Wallbox-Command', 0);
-        } else {
-            $this->SendDebug('ProcessWallboxQueue', 'Wallbox-Command erfolgreich', 0);
+        // Danach: prüfen ob Queue leer ist (wieder gelockt)
+        if (!IPS_SemaphoreEnter($sem, 15000)) {
+            $this->SendDebug('ProcessWallboxQueue', 'SemaphoreEnter timeout – Post-Check Abbruch', 0);
+            return;
         }
 
-        // WICHTIG: Queue NACH dem Request NOCHMAL aus dem Buffer lesen,
-        // denn in der Zwischenzeit könnte ein neuer Befehl eingetroffen sein.
-        $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
-        if (!is_array($queue)) {
-            $queue = [];
-        }
+        try {
+            $queue = @json_decode($this->GetBuffer('WallboxQueue'), true);
+            if (!is_array($queue)) $queue = [];
 
-        if (count($queue) === 0) {
-            // Jetzt wirklich leer → Pending-Map leeren
-            $this->SetBuffer('WallboxChanges', json_encode([]));
-
-            // API-Updates der drei Steuer-Variablen für 300sec blockiern nach setzen neuer Sollwerte (Langsames ausführen der Befehle durch die SEMS_API)
-            $holdSeconds = 300;
-            $this->SetBuffer('ChargingHoldUntil', (string)(time() + $holdSeconds));
-
-            // Timer stoppen – wird beim nächsten Queue-Eintrag wieder gestartet
-            $this->SetTimerInterval('TimerWBQueue', 0);
-            $this->SendDebug('ProcessWallboxQueue', 'Letzter Command gesendet, Queue leer, Timer gestoppt.', 0);
-        } else {
-            // Es sind noch Befehle in der Queue → Timer weiterlaufen lassen
-            $this->SendDebug(
-                'ProcessWallboxQueue',
-                'Weitere Befehle in Queue vorhanden (' . count($queue) . '), Timer läuft weiter.',
-                0
-            );
+            if (count($queue) === 0) {
+                $this->SetTimerInterval('TimerWBQueue', 0);
+                $this->SendDebug('ProcessWallboxQueue', 'Queue leer, Timer gestoppt.', 0);
+            }
+        } finally {
+            IPS_SemaphoreLeave($sem);
         }
     }
 
@@ -1014,7 +1014,7 @@ class Goodwe extends IPSModule
             return null;
         }
 
-        if (!isset($decoded['code']) || $decoded['code'] !== "0") {
+        if (!isset($decoded['code']) || (string)$decoded['code'] !== "0") {
             $log['error'] = 'API-Fehlercode';
             $this->SendDebug("SendWallboxRequest", json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
             $this->SendDebug("SendWallboxRequest", "Fehler in der API-Antwort: " . json_encode($decoded), 0);
@@ -1045,7 +1045,10 @@ class Goodwe extends IPSModule
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookies.txt');
+        curl_setopt($ch, CURLOPT_HEADER, true); // 👈 WICHTIG
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -1055,11 +1058,10 @@ class Goodwe extends IPSModule
             return false;
         }
 
-        $decodedResponse = json_decode($response, true);
-
-        if (!isset($decodedResponse['code']) || $decodedResponse['code'] !== 0) {
-            $this->SendDebug("LoginToWallbox", "Login fehlgeschlagen: " . json_encode($decodedResponse), 0);
-            return false;
+        // 🔍 COOKIE / TOKEN DEBUG
+        if (file_exists('cookies.txt')) {
+            $cookies = file_get_contents('cookies.txt');
+            $this->SendDebug("SEMS Cookie", $cookies, 0);
         }
 
         $this->SendDebug("LoginToWallbox", "Login erfolgreich.", 0);
