@@ -112,6 +112,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 2.10 (02.01.2026)
+- Umstellung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1.
+
 Version 2.9 (16.12.2025)
 - Die Wallbox-Steuerung wurde weiter überarbeitet.
 
