@@ -539,43 +539,22 @@ class Goodwe extends IPSModuleStrict
     {
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6,
+            "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1,
-            "Data"     => bin2hex(pack("n", $value)),
+            "Quantity" => 1, // 1 Register (16-Bit)
+            "Data"     => bin2hex(pack("n", $value)), // 16-Bit unsigned packen
         ];
 
-        $this->SendDebug("WriteRegister", "TX Register $address Wert $value HEX=" . $data["Data"], 0);
+        // Anfrage an Parent senden
+        $response = $this->SendDataToParent(json_encode($data));
 
-        // 3 Versuche: Timeout/Busy ist bei GoodWe/Modbus leider normal
-        for ($try = 1; $try <= 3; $try++) {
-            try {
-                $response = $this->SendDataToParent(json_encode($data));
-            } catch (Throwable $e) {
-                $msg = $e->getMessage();
-                $this->SendDebug("WriteRegister", "Exception (try=$try) Register $address: $msg", 0);
-
-                // Timeout -> Backoff und retry
-                if (stripos($msg, 'Zeitüberschreitung') !== false || stripos($msg, 'timeout') !== false) {
-                    IPS_Sleep(400 + ($try * 300)); // 700ms, 1000ms, 1300ms
-                    continue;
-                }
-
-                // Andere Fehler -> sofort raus
-                return false;
-            }
-
-            if ($response !== false) {
-                $this->SendDebug("WriteRegister", "OK (try=$try) Register $address geschrieben: $value", 0);
-                return true;
-            }
-
-            $this->SendDebug("WriteRegister", "response=false (try=$try) Register $address", 0);
-            IPS_Sleep(400 + ($try * 300));
+        if ($response === false) {
+            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
+            return false;
         }
 
-        $this->SendDebug("WriteRegister", "Fehlgeschlagen nach Retry: Register $address Wert $value", 0);
-        return false;
+        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        return true;
     }
 
     public function FetchWallboxData()
