@@ -36,7 +36,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit d
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 8.1
 - Goodwe Wechselrichter der ET-, EH-, BH-, oder BT-Serie mit/ohne Batterie und/oder eine Goodwe Wallbox GW11K-HCA.
 
 ### 3. Software-Installation
@@ -111,6 +111,9 @@ Goodwe_FetchWallboxData(12345); |   Datenpunkte der Wallbox aktualisieren (Über
 Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren (Über Modbus)
 
 ### 8. Versionen
+
+Version 2.10 (02.01.2026)
+- Umstellung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1.
 
 Version 2.9 (16.12.2025)
 - Die Wallbox-Steuerung wurde weiter überarbeitet.

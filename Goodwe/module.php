@@ -1,12 +1,9 @@
 <?php
 
-class Goodwe extends IPSModule
+class Goodwe extends IPSModuleStrict
 {
-    public function Create()
+    public function Create(): void
     {
-        parent::Create();
-
-        $this->ConnectParent("{A5F663AB-C400-4FE5-B207-4D67CC030564}");
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $this->RegisterPropertyBoolean("Entladen_Max", false);
@@ -26,7 +23,15 @@ class Goodwe extends IPSModule
 
     }
 
-    public function ApplyChanges()
+    public function GetCompatibleParents(): string
+    {
+        
+    //Modbus-Gateway
+    return '{"type": "connect", "moduleIDs": ["{A5F663AB-C400-4FE5-B207-4D67CC030564}"]}';
+
+    }
+
+    public function ApplyChanges(): void
     {
         parent::ApplyChanges();
 
@@ -239,122 +244,105 @@ class Goodwe extends IPSModule
         }
     }
 
-    public function RequestAction($ident, $value)
+    public function RequestAction(string $Ident, mixed $Value): void
     {
-        $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $ident, Wert: $value", 0);
+        $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $Ident, Wert: " . json_encode($Value), 0);
 
-        // Für Register
-        if (strpos($ident, 'Addr') === 0) {
-            $address = intval(substr($ident, 4));
-            if ($this->WriteRegister($address, (int)$value)) {
-                $this->SetValueIfChanged($ident, (int)$value);
-                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $value", 0);
+        // -------------------------
+        // Register (Modbus) schreiben
+        // -------------------------
+        if (strpos($Ident, 'Addr') === 0) {
+            $address = (int)substr($Ident, 4);
+
+            if ($this->WriteRegister($address, (int)$Value)) {
+                $this->SetValueIfChanged($Ident, (int)$Value);
+                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $Value", 0);
             } else {
-                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $value", 0);
+                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $Value", 0);
             }
             return;
         }
 
-        // Für Wallbox
+        // -------------------------
+        // Wallbox (SEMS) steuern
+        // -------------------------
         $serial = $this->ReadPropertyString("WallboxSerial");
         if (empty($serial)) {
             $this->SendDebug("RequestAction", "Keine Seriennummer vorhanden – Abbruch.", 0);
             return;
         }
 
-        switch ($ident) {
+        switch ($Ident) {
             case 'WB_Charging':
                 // UI sofort setzen (optimistic)
-                $this->SetValueIfChanged($ident, (bool)$value);
+                $this->SetValueIfChanged($Ident, (bool)$Value);
 
                 // Pending setzen, damit FetchWallboxData nicht sofort zurückschreibt
                 $this->SetBuffer("WB_PendingCharging", json_encode([
-                    'desired' => (bool)$value,
+                    'desired' => (bool)$Value,
                     'until'   => time() + 300
                 ]));
 
-                if ((bool)$value) {
-                    // =========================
-                    // EIN  -> v3 Charging (BLEIBT!)
-                    // =========================
+                if ((bool)$Value) {
+                    // EIN -> v3 Charging
                     $endpoint = '/v3/EvCharger/Charging';
                     $data = [
                         'sn'     => $serial,
                         'status' => 1
                     ];
 
-                    $this->SendDebug(
-                        "RequestAction",
-                        "WB_Charging EIN -> v3 Charging: " . json_encode($data),
-                        0
-                    );
+                    $this->SendDebug("RequestAction", "WB_Charging EIN -> $endpoint: " . json_encode($data), 0);
                     $this->SendWallboxRequest($data, $endpoint);
-
                 } else {
-                    // =========================
                     // AUS -> v4 StopCharging
-                    // =========================
                     $endpoint = '/v4/EvCharger/StopCharging';
                     $data = [
                         'sn' => $serial
                     ];
 
-                    $this->SendDebug(
-                        "RequestAction",
-                        "WB_Charging AUS -> v4 StopCharging: " . json_encode($data),
-                        0
-                    );
+                    $this->SendDebug("RequestAction", "WB_Charging AUS -> $endpoint: " . json_encode($data), 0);
                     $this->SendWallboxRequest($data, $endpoint);
                 }
                 return;
 
             case 'WB_ChargeMode':
-                $this->SetValueIfChanged('WB_ChargeMode', (int)$value);
+                $this->SetValueIfChanged('WB_ChargeMode', (int)$Value);
 
                 $data = [
                     'sn'   => $serial,
-                    'mode' => (int)$value
+                    'mode' => (int)$Value
                 ];
-
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargeMode -> sende NUR mode: " . json_encode($data) . " -> $endpoint", 0);
 
-                // direkt oder Queue
-                // $this->SendWallboxRequest($data, $endpoint);
+                $this->SendDebug("RequestAction", "WB_ChargeMode -> Queue: " . json_encode($data) . " -> $endpoint", 0);
                 $this->QueueWallboxChange('WB_ChargeMode', $data, $endpoint);
                 return;
 
             case 'WB_ChargePower':
                 $offset = (int)$this->ReadPropertyInteger('ChargePowerOffset');
-                $val = (int)(round(((int)$value) / 100) * 100 + $offset);
+                $val = (int)(round(((int)$Value) / 100) * 100 + $offset);
                 $val = min(max($val, 4200), 9700);
 
                 // UI sofort (optimistic)
                 $this->SetValueIfChanged('WB_ChargePower', $val);
 
-                // WICHTIG: bei Soll-Leistung IMMER auf Schnell stellen
+                // Bei Soll-Leistung IMMER auf Schnell stellen
                 $this->SetValueIfChanged('WB_ChargeMode', 0);
 
-                // Und an die API beides senden: mode + charge_power
                 $kw = round($val / 1000, 1);
                 $data = [
-                    'sn'          => $serial,
-                    'mode'        => 0,
-                    'charge_power'=> $kw
+                    'sn'           => $serial,
+                    'mode'         => 0,
+                    'charge_power' => $kw
                 ];
-
                 $endpoint = '/v3/EvCharger/SetChargeMode';
-                $this->SendDebug("RequestAction", "WB_ChargePower -> sende mode=0 + charge_power: " . json_encode($data) . " -> $endpoint", 0);
 
-                // Entweder direkt senden (wie jetzt) ...
-                // $this->SendWallboxRequest($data, $endpoint);
-
-                // ... oder (empfohlen) über Queue, damit schnelle Klicks nicht kollidieren:
+                $this->SendDebug("RequestAction", "WB_ChargePower -> Queue: " . json_encode($data) . " -> $endpoint", 0);
                 $this->QueueWallboxChange('WB_ChargePower', $data, $endpoint);
                 return;
 
             default:
-                throw new Exception("Ungültiger Ident: $ident");
+                throw new Exception("Ungültiger Ident: $Ident");
         }
     }
 
@@ -554,7 +542,7 @@ class Goodwe extends IPSModule
             "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
             "Quantity" => 1, // 1 Register (16-Bit)
-            "Data"     => utf8_encode(pack("n", $value)), // 16-Bit unsigned packen
+            "Data"     => bin2hex(pack("n", $value)), // 16-Bit unsigned packen
         ];
 
         // Anfrage an Parent senden
@@ -1124,7 +1112,7 @@ class Goodwe extends IPSModule
         return $value * $scale;
     }
 
-    public function GetConfigurationForm()
+    public function GetConfigurationForm(): string
     {
         $all = $this->GetRegisters();
 
@@ -1238,32 +1226,42 @@ class Goodwe extends IPSModule
         ]);
     }
 
-        private function SetValueIfChanged(string $ident, $value): void
+    private function SetValueIfChanged(string $Ident, mixed $Value): void
     {
-        $vid = @$this->GetIDForIdent($ident);
+        $vid = @$this->GetIDForIdent($Ident);
         if ($vid === false) {
             return;
         }
 
+        // Typ der Variable ermitteln und sauber casten
         $var = IPS_GetVariable($vid);
+
         switch ($var['VariableType']) {
             case VARIABLETYPE_BOOLEAN:
-                $new = (bool)$value;
+                $new = (bool)$Value;
+                $old = (bool)GetValue($vid);
                 break;
+
             case VARIABLETYPE_INTEGER:
-                $new = (int)$value;
+                $new = (int)$Value;
+                $old = (int)GetValue($vid);
                 break;
+
             case VARIABLETYPE_FLOAT:
-                $new = (float)$value;
+                $new = (float)$Value;
+                $old = (float)GetValue($vid);
                 break;
+
             case VARIABLETYPE_STRING:
             default:
-                $new = (string)$value;
+                $new = (string)$Value;
+                $old = (string)GetValue($vid);
                 break;
         }
 
-        if (GetValue($vid) !== $new) {
-            SetValue($vid, $new);
+        if ($old !== $new) {
+            // IPSModuleStrict: IMMER über $this->SetValue(Ident, Value) setzen
+            $this->SetValue($Ident, $new);
         }
     }
 
