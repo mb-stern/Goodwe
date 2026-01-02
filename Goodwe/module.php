@@ -537,23 +537,38 @@ class Goodwe extends IPSModuleStrict
 
     private function WriteRegister(int $address, int $value): bool
     {
-        $data = [
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6, // Funktionscode für Schreiben eines Registers
-            "Address"  => $address,
-            "Quantity" => 1, // 1 Register (16-Bit)
-            "Data"     => utf8_encode(pack("n", $value)), // 16-Bit unsigned packen
-        ];
-
-        // Anfrage an Parent senden
-        $response = $this->SendDataToParent(json_encode($data));
-
-        if ($response === false) {
-            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
+        // U16 validieren (dein Write ist aktuell U16/Function 6)
+        if ($value < 0 || $value > 0xFFFF) {
+            $this->SendDebug("WriteRegister", "U16 Range Fehler: addr=$address value=$value", 0);
             return false;
         }
 
-        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        // Big-Endian U16 -> Binär -> HEX-String (transport-sicher)
+        $hexData = bin2hex(pack('n', $value));
+
+        $data = [
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 6,          // Write Single Register
+            "Address"  => $address,
+            "Quantity" => 1,
+            "Data"     => $hexData
+        ];
+
+        $this->SendDebug("WriteRegister", "TX addr=$address value=$value hex=$hexData", 0);
+
+        try {
+            $response = $this->SendDataToParent(json_encode($data));
+        } catch (Throwable $e) {
+            $this->SendDebug("WriteRegister", "Exception: " . $e->getMessage(), 0);
+            return false;
+        }
+
+        if ($response === false) {
+            $this->SendDebug("WriteRegister", "response=false (addr=$address value=$value)", 0);
+            return false;
+        }
+
+        $this->SendDebug("WriteRegister", "OK (addr=$address value=$value)", 0);
         return true;
     }
 
