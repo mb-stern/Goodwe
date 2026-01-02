@@ -36,7 +36,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit d
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 8.1
 - Goodwe Wechselrichter der ET-, EH-, BH-, oder BT-Serie mit/ohne Batterie und/oder eine Goodwe Wallbox GW11K-HCA.
 
 ### 3. Software-Installation
