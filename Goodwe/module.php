@@ -537,28 +537,16 @@ class Goodwe extends IPSModuleStrict
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // Optional: U16 absichern (GoodWe schreibt meist U16)
-        if ($value < 0 || $value > 0xFFFF) {
-            $this->SendDebug("WriteRegister", "Wert ausserhalb U16: Register $address, Wert $value", 0);
-            return false;
-        }
-
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6, // Write Single Register
+            "Function" => 6, // Funktionscode für Schreiben eines Registers
             "Address"  => $address,
-            "Quantity" => 1,
-            "Data"     => pack("n", $value), // ✅ BINÄR, kein utf8_encode!
+            "Quantity" => 1, // 1 Register (16-Bit)
+            "Data"     => bin2hex(pack("n", $value)), // 16-Bit unsigned packen
         ];
 
-        $this->SendDebug("WriteRegister", "Sende Write: Register $address, Wert $value, BIN=" . bin2hex($data["Data"]), 0);
-
-        try {
-            $response = $this->SendDataToParent(json_encode($data));
-        } catch (Throwable $e) {
-            $this->SendDebug("WriteRegister", "Exception beim Schreiben Register $address: " . $e->getMessage(), 0);
-            return false;
-        }
+        // Anfrage an Parent senden
+        $response = $this->SendDataToParent(json_encode($data));
 
         if ($response === false) {
             $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
