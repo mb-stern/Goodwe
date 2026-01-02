@@ -29,7 +29,7 @@ class Goodwe extends IPSModuleStrict
     {
         
     //Modbus-Gateway
-    return '{"type": "require", "moduleIDs": ["{A5F663AB-C400-4FE5-B207-4D67CC030564}"]}';
+    return '{"type": "connect", "moduleIDs": ["{A5F663AB-C400-4FE5-B207-4D67CC030564}"]}';
 
     }
 
