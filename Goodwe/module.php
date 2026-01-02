@@ -2,10 +2,8 @@
 
 class Goodwe extends IPSModuleStrict
 {
-    public function Create()
+    public function Create(): void
     {
-        public function Create(): void
-
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
         $this->RegisterPropertyBoolean("Entladen_Max", false);
