@@ -537,18 +537,16 @@ class Goodwe extends IPSModuleStrict
 
     private function WriteRegister(int $address, int $value): bool
     {
-        // U16 validieren (dein Write ist aktuell U16/Function 6)
         if ($value < 0 || $value > 0xFFFF) {
             $this->SendDebug("WriteRegister", "U16 Range Fehler: addr=$address value=$value", 0);
             return false;
         }
 
-        // Big-Endian U16 -> Binär -> HEX-String (transport-sicher)
         $hexData = bin2hex(pack('n', $value));
 
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6,          // Write Single Register
+            "Function" => 6,
             "Address"  => $address,
             "Quantity" => 1,
             "Data"     => $hexData
@@ -556,20 +554,35 @@ class Goodwe extends IPSModuleStrict
 
         $this->SendDebug("WriteRegister", "TX addr=$address value=$value hex=$hexData", 0);
 
-        try {
-            $response = $this->SendDataToParent(json_encode($data));
-        } catch (Throwable $e) {
-            $this->SendDebug("WriteRegister", "Exception: " . $e->getMessage(), 0);
-            return false;
+        // 2 Versuche mit kurzer Pause (verhindert “Busy”-Kollisionen)
+        for ($try = 1; $try <= 2; $try++) {
+            try {
+                $response = $this->SendDataToParent(json_encode($data));
+                if ($response !== false) {
+                    $this->SendDebug("WriteRegister", "OK (try=$try) addr=$address value=$value", 0);
+                    return true;
+                }
+
+                $this->SendDebug("WriteRegister", "response=false (try=$try)", 0);
+            } catch (Throwable $e) {
+                $msg = $e->getMessage();
+                $this->SendDebug("WriteRegister", "Exception (try=$try): " . $msg, 0);
+
+                // Timeout? -> kurzer Backoff und nochmal
+                if (stripos($msg, 'Zeitüberschreitung') !== false || stripos($msg, 'timeout') !== false) {
+                    IPS_Sleep(250);
+                    continue;
+                }
+
+                // Andere Fehler: sofort raus
+                return false;
+            }
+
+            IPS_Sleep(250);
         }
 
-        if ($response === false) {
-            $this->SendDebug("WriteRegister", "response=false (addr=$address value=$value)", 0);
-            return false;
-        }
-
-        $this->SendDebug("WriteRegister", "OK (addr=$address value=$value)", 0);
-        return true;
+        $this->SendDebug("WriteRegister", "Fehlgeschlagen nach Retry addr=$address value=$value", 0);
+        return false;
     }
 
     public function FetchWallboxData()
