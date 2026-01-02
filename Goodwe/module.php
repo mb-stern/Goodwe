@@ -537,34 +537,35 @@ class Goodwe extends IPSModuleStrict
 
     private function WriteRegister(int $address, int $value): bool
     {
+        // Optional: U16 absichern (GoodWe schreibt meist U16)
         if ($value < 0 || $value > 0xFFFF) {
-            $this->SendDebug("WriteRegister", "U16 Range Fehler: addr=$address value=$value", 0);
+            $this->SendDebug("WriteRegister", "Wert ausserhalb U16: Register $address, Wert $value", 0);
             return false;
         }
 
         $data = [
             "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 6,
+            "Function" => 6, // Write Single Register
             "Address"  => $address,
             "Quantity" => 1,
-            "Data"     => pack("n", $value)  // ✅ BINÄR, kein UTF, kein HEX
+            "Data"     => pack("n", $value), // ✅ BINÄR, kein utf8_encode!
         ];
 
-        $this->SendDebug("WriteRegister", "TX addr=$address value=$value bin=" . bin2hex($data["Data"]), 0);
+        $this->SendDebug("WriteRegister", "Sende Write: Register $address, Wert $value, BIN=" . bin2hex($data["Data"]), 0);
 
         try {
             $response = $this->SendDataToParent(json_encode($data));
         } catch (Throwable $e) {
-            $this->SendDebug("WriteRegister", "Exception: " . $e->getMessage(), 0);
+            $this->SendDebug("WriteRegister", "Exception beim Schreiben Register $address: " . $e->getMessage(), 0);
             return false;
         }
 
         if ($response === false) {
-            $this->SendDebug("WriteRegister", "response=false (addr=$address value=$value)", 0);
+            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
             return false;
         }
 
-        $this->SendDebug("WriteRegister", "OK addr=$address value=$value", 0);
+        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
         return true;
     }
 
