@@ -23,7 +23,7 @@ class Goodwe extends IPSModuleStrict
 
     }
 
-    public function GetCompatibleParents() 
+    public function GetCompatibleParents(): string
     {
         
     //Modbus-Gateway
