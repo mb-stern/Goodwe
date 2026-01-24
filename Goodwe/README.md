@@ -4,7 +4,7 @@ Dieses Modul ermöglicht, Daten von einem Goodwe Wechselricher mit/ohne Batterie
 Unterstützt sind folgende Komponenten:
 Goodwe Wechselrichter (ET Plus+ 10kW). Andere Goodwe-Wechselrichter (insbesondere alle der Serie ET, EH, BH, BT) dürften ebenfalls kompatibel sein, da diese gemäss Doku über dieselben Register angesprochen werden.
 Goodwe Batterie (Lynx Home F Plus). Andere mit dem Wechslerichter kompatible Batterien dürften ebenfalls kompatibel sein, da diese über den Wechslerichter abgefragt werden.
-Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2)ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
+Goodwe Wallbox der 1. Generation (HCA-Serie) wird über die SEMS-API unterstützt, da diese kein Modbus beherrscht. Die Wallbox der 2. Generation (HCA-Serie G2) ist angekündigt ca. Mai 2025 und beherrscht dann Modbus und Phasenumschaltung. Falls ich diese anschaffe wird diese dann ebenfalls unterstützt sein.
 
 
 ### Wichtig zu wissen zur Konfiguration des Moduls
@@ -36,7 +36,7 @@ Ansonsten den Port des Modbus-Adapters verwenden, welcher dann über RS485 mit d
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 8.1
 - Goodwe Wechselrichter der ET-, EH-, BH-, oder BT-Serie mit/ohne Batterie und/oder eine Goodwe Wallbox GW11K-HCA.
 
 ### 3. Software-Installation
@@ -53,8 +53,8 @@ __Konfigurationsseite__:
 Name     | Beschreibung
 -------- | ------------------
 Selected Registers         |  Hier können die Register für die Modbus-Abfrage ausgewählt werden. Diese sind nach WR (Wechselrichter), BAT (Batterie) und SM (Smartmeter) gruppiert. Die Variablen werden automatisch erstellt oder gelöscht.
-Intervall                  |  Intervall für die Abfrage der Modbus-Register. Standard ist 5 sek.
-SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 30 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht. Vorsicht, nicht zu häufig abfragen, sonst blockiert die API.
+Intervall                  |  Intervall für die Abfrage der Modbus-Register. Standard ist 10 sek.
+SEMS-API-Konfiguration     |  Die Konfiguration ist nur bei vorhandener Goodwe-Wallbox erforderlich, da sich diese nicht über Modbus abfragen lässt. Der Timer ist hier Standardmässig auf 10 sec eingestellt. Die Wallbox Variablen (WB) werden automatisch nach der Eingabe der Zugangsdaten erstellt bzw. gelöscht.
 Werte lesen                |  Hiermit können alle aktvierten Datenpunkte abgefragt werden
 
 ### 5. Statusvariablen und Profile
@@ -96,6 +96,7 @@ Goodwe.WB_Workstate     |  Integer
 Goodwe.Watt             |  Integer
 Goodwe.Percent          |  Integer
 Goodwe.WattEMS          |  Integer
+Goodwe.kOhm             |  Integer
 
 ### 6. WebFront
 
@@ -111,8 +112,39 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.2 (28.04.2025)
-- Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung stellt.
+Version 2.10 (02.01.2026)
+- Umstellung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1.
+
+Version 2.9 (16.12.2025)
+- Die Wallbox-Steuerung wurde weiter überarbeitet.
+
+Version 2.8 (29.11.2025)
+- Die Wallbox-Steuerung wurde überarbeitet.
+- Debug etwas überarbeitet.
+
+Version 2.7 (15.09.2025)
+- Das Konfigurationsformular wurde überarbeiten, alle gewünschten Register sind nun gleichzeitig über Checkboxen auswählbar, statt wie vorher jedes einzeln über ein Dropdownfeld. Achtung: Ein Downgrade auf eine Vorgängerversion führt zu einem fehlerhaften Verhalten des Moduls.
+- Variablen werden nur noch aktualisiert wenn sich der Wert ändert.
+
+Version 2.6 (10.08.2025)
+- Die Ladeeinstellungen der Wallbox werden nicht mehr gepuffert, sondern immer direkt an die API gesendet.
+- Die maximale Leistung der Goodwe-Wallbox (Version 1) wurde auf 9700 W reduziert. Da die Box sowieso nie mit der vorgegebenen Leistung lädt, ist so sichergestellt, dass sie effektiv nicht über 9000W lädt, da der WR ansonsten keine Leistung mehr abgibt (Ev. Bug der EMS-SW).
+- Kleine Änderungen bei der Aktualisierungs-Häufigkeit der Variablen.
+
+Version 2.5 (01.07.2025)
+- Es sind nun bis 4 Strings und bis 8 MPP-Tracker verfügbar. Ebenfalls ist der Isolationswiderstand verfügbar.
+
+Version 2.4 (29.06.2025)
+- Konfigurierbaren Offset-Wert für die Wallbox Sollleistung hinzugefügt, um das Problem mit 30% Grenze des Energiemanagers und die nicht erreichte Ist-Leistung zu beheben.
+
+Version 2.3 (06.05.2025)
+- Ein Problem wurde behoben, welches die Ansteuerung durch den Energiemanager verhinderte.
+- Ein Problem mit dem doppelten setzen des Timers nach einem Modulupdate wurde behoben.
+- Wenn der Sollwert der Ladeleistung verändert wird, wird der Modus direkt auf 'Schnell' gesetzt.
+- Die Ladeinstellungen für die Wallbox werden gepuffert und verzögert gesandt, da die API eine zu schnelle Befehlsfolge ablehnt.
+
+Version 2.2 (29.04.2025)
+- Die maximal freigegeben Leistung für Laden und Entladen des Speichers kann nun Variable ausgegeben werden. Dies wird vom Modul berechnet, da Goodwe keinen Datenpunkt dazu zur Verfügung stellt. Eventuell kann dieser Datenpunkt in Zukunft als Info für den Energiemanger genutzt werden.
 - Ein Fehler wurde behoben, dass nach einer Aktualisierung des Moduls die neuen Register nicht zur Auswahl standen.
 
 Version 2.1 (25.03.2025)
