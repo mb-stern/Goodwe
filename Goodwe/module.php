@@ -1088,30 +1088,24 @@ class Goodwe extends IPSModuleStrict
                 $tmp = json_decode($sr, true);
                 if (is_array($tmp)) {
                     $sr = $tmp;
+                } else {
+                    continue;
                 }
             }
-            if (is_array($sr)) {
-                if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
-                    $tmp = json_decode($sr['address'], true);
-                    if (is_array($tmp) && isset($tmp['address'])) {
-                        $sr['address'] = $tmp['address'];
-                    }
-                }
 
-                if (isset($sr['addr'])) {
-                    $selectedMap[(string)$sr['addr']] = true;
-                } elseif (isset($sr['address'])) {
-                    $selectedMap[(string)$sr['address']] = true;
-                }
+            if (!is_array($sr) || !isset($sr['address'])) {
+                continue;
             }
+
+            $selectedMap[(string)$sr['address']] = !empty($sr['selected']);
         }
 
         $values = array_map(function ($r) use ($selectedMap) {
-            $addr = (string)$r['address'];
+            $address = (string)$r['address'];
             return [
-                "selected"        => isset($selectedMap[$addr]),
-                "addr"            => $addr,      
-                "address_display" => $addr,     
+                "selected"        => $selectedMap[$address] ?? false,
+                "address"         => $address,
+                "address_display" => $address,
                 "name"            => $r['name'],
             ];
         }, $all);
@@ -1126,7 +1120,7 @@ class Goodwe extends IPSModuleStrict
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        [ "caption" => "",          "name" => "addr",            "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
+                        [ "caption" => "",          "name" => "address",         "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
                         [ "caption" => "Auswählen", "name" => "selected",        "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
                         [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px", "save" => false ],
                         [ "caption" => "Name",      "name" => "name",            "width" => "auto",  "save" => false ]
@@ -1435,7 +1429,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 151],
             ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 150],
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
-            ["address" => 47906, "name" => "BAT1 - Spannung",          "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
+            ["address" => 35180, "name" => "BAT1 - Spannung",          "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 180],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 190],
