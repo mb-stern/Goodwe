@@ -1417,6 +1417,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36025, "name" => "SM - Leistung gesamt",    "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 40],
             // Batterie
             ["address" => 35182, "name" => "BAT - Leistung",          "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 50],
+            ["address" => 35183, "name" => "BAT1 - Leistung",          "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 50],
             ["address" => 35184, "name" => "BAT - Mode",              "type" => "U16", "unit" => "mode","scale" => 1,  "pos" => 60],
             ["address" => 35206, "name" => "BAT - Laden",             "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 70],
             ["address" => 35209, "name" => "BAT - Entladen",          "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 80],
@@ -1430,7 +1431,9 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 151],
             ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 150],
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
+            ["address" => 35180, "name" => "BAT1 - Spannung",          "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
+            ["address" => 35181, "name" => "BAT1 - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 180],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 190],
             // Wechselrichter
