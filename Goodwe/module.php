@@ -37,8 +37,8 @@ class Goodwe extends IPSModuleStrict
 
         $this->CreateProfile();
 
-        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-        $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB') * 1000);
+        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR'));
+        $this->SetTimerInterval('TimerWB', $this->ReadPropertyInteger('PollIntervalWB'));
 
         $user = $this->ReadPropertyString("WallboxUser");
         $password = $this->ReadPropertyString("WallboxPassword");
