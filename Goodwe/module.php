@@ -206,7 +206,7 @@ class Goodwe extends IPSModuleStrict
                 }
             }
 
-            foreach (['Addr45358','Addr45356','Addr47511','Addr47512'] as $writeIdent) {
+            foreach (['Addr45358','Addr45356','Addr45383','Addr45381','Addr47511','Addr47512'] as $writeIdent) {
                 if (@$this->GetIDForIdent($writeIdent)) {
                     $this->EnableAction($writeIdent);
                 }
@@ -1460,6 +1460,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36025, "name" => "SM - Leistung gesamt",    "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 40],
             // Batterie
             ["address" => 35182, "name" => "BAT - Leistung",          "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 50],
+            ["address" => 35183, "name" => "BAT - Leistung",          "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 50],
             ["address" => 35184, "name" => "BAT - Mode",              "type" => "U16", "unit" => "mode","scale" => 1,  "pos" => 60],
             ["address" => 35206, "name" => "BAT - Laden",             "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 70],
             ["address" => 35209, "name" => "BAT - Entladen",          "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 80],
