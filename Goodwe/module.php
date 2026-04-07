@@ -1123,8 +1123,28 @@ class Goodwe extends IPSModuleStrict
 
         $selectedMap = [];
         foreach ($selected as $sr) {
+            if (is_string($sr)) {
+                $tmp = json_decode($sr, true);
+                if (is_array($tmp)) {
+                    $sr = $tmp;
+                } else {
+                    continue;
+                }
+            }
+
             if (!is_array($sr)) {
                 continue;
+            }
+
+            if (!isset($sr['address']) && isset($sr['addr'])) {
+                $sr['address'] = $sr['addr'];
+            }
+
+            if (isset($sr['address']) && is_string($sr['address']) && str_starts_with(trim($sr['address']), '{')) {
+                $tmp = json_decode($sr['address'], true);
+                if (is_array($tmp) && isset($tmp['address'])) {
+                    $sr['address'] = $tmp['address'];
+                }
             }
 
             if (!isset($sr['address'])) {
@@ -1132,7 +1152,7 @@ class Goodwe extends IPSModuleStrict
             }
 
             $selectedMap[(string)$sr['address']] = !empty($sr['selected']);
-        }
+        }   
 
         $values = array_map(function ($r) use ($selectedMap) {
             $address = (string)$r['address'];
