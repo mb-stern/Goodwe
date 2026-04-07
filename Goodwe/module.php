@@ -1082,63 +1082,64 @@ class Goodwe extends IPSModuleStrict
             $selected = [];
         }
 
-        $selectedMap = [];
-        foreach ($selected as $sr) {
-            if (is_string($sr)) {
-                $tmp = json_decode($sr, true);
-                if (is_array($tmp)) {
-                    $sr = $tmp;
-                } else {
-                    continue;
-                }
-            }
+        public function GetConfigurationForm(): string
+{
+    $all = $this->GetRegisters();
 
-            if (!is_array($sr)) {
+    $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+    if (!is_array($selected)) {
+        $selected = [];
+    }
+
+    $selectedMap = [];
+    foreach ($selected as $sr) {
+        if (is_string($sr)) {
+            $tmp = json_decode($sr, true);
+            if (is_array($tmp)) {
+                $sr = $tmp;
+            } else {
                 continue;
             }
-
-            // Altbestand unterstützen: addr ODER address
-            $addr = null;
-            if (isset($sr['address']) && $sr['address'] !== '') {
-                $addr = (string)$sr['address'];
-            } elseif (isset($sr['addr']) && $sr['addr'] !== '') {
-                $addr = (string)$sr['addr'];
-            }
-
-            if ($addr === null) {
-                continue;
-            }
-
-            $selectedMap[$addr] = !empty($sr['selected']);
         }
 
-        $values = array_map(function ($r) use ($selectedMap) {
-            $address = (string)$r['address'];
-            return [
-                "selected"        => $selectedMap[$address] ?? false,
-                "address"         => $address,
-                "address_display" => $address,
-                "name"            => $r['name'],
-            ];
-        }, $all);
+        if (!is_array($sr)) {
+            continue;
+        }
 
-        return json_encode([
-            "elements" => [
-                [
-                    "type"     => "List",
-                    "name"     => "SelectedRegisters",
-                    "caption"  => "Register auswählen",
-                    "rowCount" => 15,
-                    "add"      => false,
-                    "delete"   => false,
-                    "columns"  => [
-                        [ "caption" => "",          "name" => "address",         "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
-                        [ "caption" => "Auswählen", "name" => "selected",        "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px", "save" => false ],
-                        [ "caption" => "Name",      "name" => "name",            "width" => "auto",  "save" => false ]
-                    ],
-                    "values" => $values
+        if (!isset($sr['address'])) {
+            continue;
+        }
+
+        $selectedMap[(string)$sr['address']] = !empty($sr['selected']);
+    }
+
+    $values = array_map(function ($r) use ($selectedMap) {
+        $address = (string)$r['address'];
+        return [
+            "selected"        => $selectedMap[$address] ?? false,
+            "address"         => $address,
+            "address_display" => $address,
+            "name"            => $r['name'],
+        ];
+    }, $all);
+
+    return json_encode([
+        "elements" => [
+            [
+                "type"     => "List",
+                "name"     => "SelectedRegisters",
+                "caption"  => "Register auswählen",
+                "rowCount" => 15,
+                "add"      => false,
+                "delete"   => false,
+                "columns"  => [
+                    [ "caption" => "",          "name" => "address",         "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
+                    [ "caption" => "Auswählen", "name" => "selected",        "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
+                    [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px", "save" => false ],
+                    [ "caption" => "Name",      "name" => "name",            "width" => "auto",  "save" => false ]
                 ],
+                "values" => $values
+            ],
                 [
                     "type"    => "IntervalBox",
                     "name"    => "PollIntervalWR",
