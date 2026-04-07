@@ -128,46 +128,59 @@ class Goodwe extends IPSModuleStrict
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
 
-        $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $r) {
-                if (!is_array($r)) {
-                    $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+            foreach ($selectedRegisters as &$r) {
+                if (is_string($r)) {
+                    $tmp = json_decode($r, true);
+                    if (is_array($tmp)) {
+                        $r = $tmp;
+                    } else {
+                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+                        continue;
+                    }
+                }
+
+                if (isset($r['selected']) && !$r['selected']) {
                     continue;
                 }
 
-                if (empty($r['selected'])) {
-                    continue;
+                if (!isset($r['address']) && isset($r['addr'])) {
+                    $r['address'] = $r['addr'];
+                }
+
+                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                    $decoded = json_decode($r['address'], true);
+                    if (is_array($decoded)) {
+                        $r = array_replace($r, $decoded);
+                    }
                 }
 
                 if (!isset($r['address'])) {
                     $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                     continue;
                 }
-
                 $addrKey = (string)$r['address'];
-
-                if (!isset($masterIndex[$addrKey])) {
+                if (isset($masterIndex[$addrKey])) {
+                    $r = array_merge($masterIndex[$addrKey], $r);
+                } else {
                     $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                     continue;
                 }
 
-                $reg = $masterIndex[$addrKey];
-
                 foreach (['address','name','type','unit','scale','pos'] as $need) {
-                    if (!array_key_exists($need, $reg)) {
+                    if (!array_key_exists($need, $r)) {
                         $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
                         continue 2;
                     }
                 }
 
-                $details = $this->GetVariableDetails((string)$reg['unit']);
+                $details = $this->GetVariableDetails((string)$r['unit']);
                 if ($details === null) {
-                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$reg['unit']}' (Addr $addrKey).", 0);
+                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
                     continue;
                 }
 
@@ -177,19 +190,19 @@ class Goodwe extends IPSModuleStrict
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($details['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
+                            $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
+                            $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
+                            $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
+                            $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$reg['name']}) Profil={$details['profile']}", 0);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
                 }
             }
 
@@ -369,14 +382,30 @@ class Goodwe extends IPSModuleStrict
         // Sammel-Array für alle gelesenen/gesetzten Werte (immer!)
         $values = [];
 
-        foreach ($selectedRegisters as $r) {
-            if (!is_array($r)) {
-                $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+        foreach ($selectedRegisters as &$r) {
+            if (is_string($r)) {
+                $tmp = json_decode($r, true);
+                if (is_array($tmp)) {
+                    $r = $tmp;
+                } else {
+                    $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
+                    continue;
+                }
+            }
+
+            if (isset($r['selected']) && !$r['selected']) {
                 continue;
             }
 
-            if (empty($r['selected'])) {
-                continue;
+            if (!isset($r['address']) && isset($r['addr'])) {
+                $r['address'] = $r['addr'];
+            }
+
+            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
+                $decoded = json_decode($r['address'], true);
+                if (is_array($decoded)) {
+                    $r = array_replace($r, $decoded);
+                }
             }
 
             if (!isset($r['address'])) {
@@ -385,42 +414,41 @@ class Goodwe extends IPSModuleStrict
             }
 
             $addrKey = (string)$r['address'];
-
-            if (!isset($masterIndex[$addrKey])) {
+            if (isset($masterIndex[$addrKey])) {
+                $r = array_merge($masterIndex[$addrKey], $r);
+            } else {
                 $this->SendDebug("FetchInverterData", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                 continue;
             }
 
-            $reg = $masterIndex[$addrKey];
-
             foreach (['address', 'type', 'scale'] as $need) {
-                if (!array_key_exists($need, $reg)) {
-                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($reg), 0);
+                if (!array_key_exists($need, $r)) {
+                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
                     continue 2;
                 }
             }
 
             $ident    = "Addr" . $addrKey;
-            $quantity = (in_array($reg['type'], ["U32", "S32"], true)) ? 2 : 1;
+            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
             try {
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
-                    "Address"  => (int)$reg['address'],
+                    "Address"  => (int)$r['address'],
                     "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
 
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$reg['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
                     continue;
                 }
 
                 $data  = unpack("n*", substr($response, 2));
                 $value = 0;
 
-                switch ($reg['type']) {
+                switch ($r['type']) {
                     case "U16":
                         $value = $data[1];
                         break;
@@ -435,13 +463,13 @@ class Goodwe extends IPSModuleStrict
                         $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
                     default:
-                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$reg['type']}' für {$reg['address']}", 0);
+                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
                         continue 2;
                 }
 
-                $scale = (float)$reg['scale'];
+                $scale = (float)$r['scale'];
                 if ($scale == 0.0) {
-                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$reg['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
@@ -453,6 +481,7 @@ class Goodwe extends IPSModuleStrict
                     continue;
                 }
 
+                // Typgerecht runden/konvertieren
                 $var = IPS_GetVariable($varID);
                 switch ($var['VariableType']) {
                     case VARIABLETYPE_INTEGER:
@@ -479,7 +508,10 @@ class Goodwe extends IPSModuleStrict
                         break;
                 }
 
+                // In IPS nur setzen, wenn geändert
                 $this->SetValueIfChanged($ident, $finalValue);
+
+                // Für das JSON immer merken (auch wenn unverändert)
                 $values[$ident] = $finalValue;
 
             } catch (Exception $e) {
@@ -1417,7 +1449,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36025, "name" => "SM - Leistung gesamt",    "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 40],
             // Batterie
             ["address" => 35182, "name" => "BAT - Leistung",          "type" => "S32", "unit" => "W",  "scale" => 1,   "pos" => 50],
-            ["address" => 35183, "name" => "BAT1 - Leistung",          "type" => "S16", "unit" => "W",  "scale" => 1,   "pos" => 50],
             ["address" => 35184, "name" => "BAT - Mode",              "type" => "U16", "unit" => "mode","scale" => 1,  "pos" => 60],
             ["address" => 35206, "name" => "BAT - Laden",             "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 70],
             ["address" => 35209, "name" => "BAT - Entladen",          "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 80],
@@ -1431,9 +1462,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 151],
             ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 150],
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
-            ["address" => 35180, "name" => "BAT1 - Spannung",          "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
-            ["address" => 35181, "name" => "BAT1 - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 170],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 180],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 190],
             // Wechselrichter
