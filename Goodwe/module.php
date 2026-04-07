@@ -128,34 +128,19 @@ class Goodwe extends IPSModuleStrict
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
 
+        $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$r) {
-                if (is_string($r)) {
-                    $tmp = json_decode($r, true);
-                    if (is_array($tmp)) {
-                        $r = $tmp;
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                        continue;
-                    }
-                }
-
-                if (isset($r['selected']) && !$r['selected']) {
+            foreach ($selectedRegisters as $r) {
+                if (!is_array($r)) {
+                    $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                     continue;
                 }
 
-                if (!isset($r['address'])) {
-                    continue;
-                }
-
-                $addrKey = (string)$r['address'];
-                if (isset($masterIndex[$addrKey])) {
-                    $r = array_merge($masterIndex[$addrKey], $r);
-                } else {
+                if (!isset($r['selected']) || !$r['selected']) {
                     continue;
                 }
 
@@ -163,24 +148,26 @@ class Goodwe extends IPSModuleStrict
                     $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
                     continue;
                 }
+
                 $addrKey = (string)$r['address'];
-                if (isset($masterIndex[$addrKey])) {
-                    $r = array_merge($masterIndex[$addrKey], $r);
-                } else {
+
+                if (!isset($masterIndex[$addrKey])) {
                     $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                     continue;
                 }
 
-                foreach (['address','name','type','unit','scale','pos'] as $need) {
-                    if (!array_key_exists($need, $r)) {
+                $reg = $masterIndex[$addrKey];
+
+                foreach (['address', 'name', 'type', 'unit', 'scale', 'pos'] as $need) {
+                    if (!array_key_exists($need, $reg)) {
                         $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
                         continue 2;
                     }
                 }
 
-                $details = $this->GetVariableDetails((string)$r['unit']);
+                $details = $this->GetVariableDetails((string)$reg['unit']);
                 if ($details === null) {
-                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
+                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$reg['unit']}' (Addr $addrKey).", 0);
                     continue;
                 }
 
@@ -190,19 +177,19 @@ class Goodwe extends IPSModuleStrict
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($details['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableInteger($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableFloat($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableString($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableBoolean($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$reg['name']}) Profil={$details['profile']}", 0);
                 }
             }
 
@@ -382,30 +369,14 @@ class Goodwe extends IPSModuleStrict
         // Sammel-Array für alle gelesenen/gesetzten Werte (immer!)
         $values = [];
 
-        foreach ($selectedRegisters as &$r) {
-            if (is_string($r)) {
-                $tmp = json_decode($r, true);
-                if (is_array($tmp)) {
-                    $r = $tmp;
-                } else {
-                    $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                    continue;
-                }
-            }
-
-            if (isset($r['selected']) && !$r['selected']) {
+        foreach ($selectedRegisters as $r) {
+            if (!is_array($r)) {
+                $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                 continue;
             }
 
-            if (!isset($r['address']) && isset($r['addr'])) {
-                $r['address'] = $r['addr'];
-            }
-
-            if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                $decoded = json_decode($r['address'], true);
-                if (is_array($decoded)) {
-                    $r = array_replace($r, $decoded);
-                }
+            if (!isset($r['selected']) || !$r['selected']) {
+                continue;
             }
 
             if (!isset($r['address'])) {
@@ -414,41 +385,42 @@ class Goodwe extends IPSModuleStrict
             }
 
             $addrKey = (string)$r['address'];
-            if (isset($masterIndex[$addrKey])) {
-                $r = array_merge($masterIndex[$addrKey], $r);
-            } else {
+
+            if (!isset($masterIndex[$addrKey])) {
                 $this->SendDebug("FetchInverterData", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
                 continue;
             }
 
+            $reg = $masterIndex[$addrKey];
+
             foreach (['address', 'type', 'scale'] as $need) {
-                if (!array_key_exists($need, $r)) {
-                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                if (!array_key_exists($need, $reg)) {
+                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($reg), 0);
                     continue 2;
                 }
             }
 
             $ident    = "Addr" . $addrKey;
-            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
+            $quantity = in_array($reg['type'], ["U32", "S32"], true) ? 2 : 1;
 
             try {
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
-                    "Address"  => (int)$r['address'],
+                    "Address"  => (int)$reg['address'],
                     "Quantity" => $quantity,
                     "Data"     => ""
                 ]));
 
                 if ($response === false || strlen($response) < (2 * $quantity + 2)) {
-                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$reg['address']}", 0);
                     continue;
                 }
 
                 $data  = unpack("n*", substr($response, 2));
                 $value = 0;
 
-                switch ($r['type']) {
+                switch ($reg['type']) {
                     case "U16":
                         $value = $data[1];
                         break;
@@ -463,13 +435,13 @@ class Goodwe extends IPSModuleStrict
                         $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
                         break;
                     default:
-                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$reg['type']}' für {$reg['address']}", 0);
                         continue 2;
                 }
 
-                $scale = (float)$r['scale'];
+                $scale = (float)$reg['scale'];
                 if ($scale == 0.0) {
-                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
+                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$reg['address']}", 0);
                     continue;
                 }
 
@@ -481,7 +453,6 @@ class Goodwe extends IPSModuleStrict
                     continue;
                 }
 
-                // Typgerecht runden/konvertieren
                 $var = IPS_GetVariable($varID);
                 switch ($var['VariableType']) {
                     case VARIABLETYPE_INTEGER:
@@ -508,10 +479,7 @@ class Goodwe extends IPSModuleStrict
                         break;
                 }
 
-                // In IPS nur setzen, wenn geändert
                 $this->SetValueIfChanged($ident, $finalValue);
-
-                // Für das JSON immer merken (auch wenn unverändert)
                 $values[$ident] = $finalValue;
 
             } catch (Exception $e) {
@@ -1155,46 +1123,74 @@ class Goodwe extends IPSModuleStrict
         }, $all);
 
         return json_encode([
-            "elements" => [
-                [
-                    "type"     => "List",
-                    "name"     => "SelectedRegisters",
-                    "caption"  => "Register auswählen",
-                    "rowCount" => 15,
-                    "add"      => false,
-                    "delete"   => false,
-                    "columns"  => [
-                        [ "caption" => "",          "name" => "address",  "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
-                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px", "save" => false ],
-                        [ "caption" => "Name",      "name" => "name",     "width" => "auto",  "save" => false ],
-                    ],
-                [
-                    "type"    => "IntervalBox",
-                    "name"    => "PollIntervalWR",
-                    "caption" => "Sekunden",
-                    "suffix"  => "s"
+        "elements" => [
+            [
+                "type"     => "List",
+                "name"     => "SelectedRegisters",
+                "caption"  => "Register auswählen",
+                "rowCount" => 15,
+                "add"      => false,
+                "delete"   => false,
+                "columns"  => [
+                    [ "caption" => "",          "name" => "address",  "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
+                    [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
+                    [ "caption" => "Adresse",   "name" => "address",  "width" => "110px", "save" => false ],
+                    [ "caption" => "Name",      "name" => "name",     "width" => "auto",  "save" => false ]
                 ],
-                [
-                    "type"    => "ExpansionPanel",
-                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                    "items"   => [
-                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
-                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
-                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
-                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
-                    ]
-                ],
-                [
-                    "type"    => "ExpansionPanel",
-                    "caption" => "Zusätzliche Werte berechnen",
-                    "items"   => [
-                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
-                    ]
-                ],
+                "values" => $values
             ],
+            [
+                "type"    => "IntervalBox",
+                "name"    => "PollIntervalWR",
+                "caption" => "Sekunden",
+                "suffix"  => "s"
+            ],
+            [
+                "type"    => "ExpansionPanel",
+                "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
+                "items"   => [
+                    [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
+                    [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
+                    [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
+                    [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
+                    [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                ]
+            ],
+            [
+                "type"    => "ExpansionPanel",
+                "caption" => "Zusätzliche Werte berechnen",
+                "items"   => [
+                    [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
+                    [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                ]
+            ]
+        ],
+    "actions" => [
+        [
+            "type" => "Button",
+            "caption" => "Werte lesen",
+            "onClick" => 'Goodwe_FetchAll($id);'
+        ],
+        [
+            "type" => "Label",
+            "caption" => "Sag danke und unterstütze den Modulentwickler:"
+        ],
+        [
+            "type" => "RowLayout",
+            "items" => [
+                [
+                    "type" => "Image",
+                    "onClick" => "echo 'https://paypal.me/mbstern';",
+                    "image" => "..."
+                ],
+                [
+                    "type" => "Label",
+                    "caption" => ""
+                ]
+            ]
+        ]
+    ]
+]);
              "actions" => [
                 [
                     "type" => "Button",
