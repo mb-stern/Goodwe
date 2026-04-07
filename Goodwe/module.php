@@ -128,59 +128,48 @@ class Goodwe extends IPSModuleStrict
         $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
 
+        $masterIndex = [];
         foreach ($this->GetRegisters() as $mr) {
             $masterIndex[(string)$mr['address']] = $mr;
         }
 
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as &$r) {
+            foreach ($selectedRegisters as $r) {
                 if (is_string($r)) {
                     $tmp = json_decode($r, true);
                     if (is_array($tmp)) {
                         $r = $tmp;
                     } else {
-                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
                         continue;
                     }
                 }
 
-                if (isset($r['selected']) && !$r['selected']) {
+                if (!is_array($r)) {
                     continue;
                 }
 
-                if (!isset($r['address']) && isset($r['addr'])) {
-                    $r['address'] = $r['addr'];
-                }
-
-                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                    $decoded = json_decode($r['address'], true);
-                    if (is_array($decoded)) {
-                        $r = array_replace($r, $decoded);
-                    }
-                }
-
-                if (!isset($r['address'])) {
-                    $this->SendDebug("ApplyChanges", "Kein 'address' im Eintrag: " . json_encode($r), 0);
-                    continue;
-                }
-                $addrKey = (string)$r['address'];
-                if (isset($masterIndex[$addrKey])) {
-                    $r = array_merge($masterIndex[$addrKey], $r);
-                } else {
-                    $this->SendDebug("ApplyChanges", "Adresse $addrKey nicht in Masterliste gefunden.", 0);
+                if (!empty($r['selected']) !== true) {
                     continue;
                 }
 
-                foreach (['address','name','type','unit','scale','pos'] as $need) {
-                    if (!array_key_exists($need, $r)) {
-                        $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
-                        continue 2;
-                    }
+                $addrKey = null;
+
+                if (isset($r['address'])) {
+                    $addrKey = (string)$r['address'];
+                } elseif (isset($r['addr'])) {
+                    $addrKey = (string)$r['addr'];
                 }
 
-                $details = $this->GetVariableDetails((string)$r['unit']);
+                if ($addrKey === null || !isset($masterIndex[$addrKey])) {
+                    $this->SendDebug("ApplyChanges", "Adresse nicht in Masterliste gefunden: " . json_encode($r), 0);
+                    continue;
+                }
+
+                $reg = $masterIndex[$addrKey];
+
+                $details = $this->GetVariableDetails((string)$reg['unit']);
                 if ($details === null) {
-                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
+                    $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$reg['unit']}' (Addr $addrKey).", 0);
                     continue;
                 }
 
@@ -190,19 +179,19 @@ class Goodwe extends IPSModuleStrict
                 if (!@$this->GetIDForIdent($ident)) {
                     switch ($details['type']) {
                         case VARIABLETYPE_INTEGER:
-                            $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableInteger($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_FLOAT:
-                            $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableFloat($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_STRING:
-                            $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableString($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                         case VARIABLETYPE_BOOLEAN:
-                            $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                            $this->RegisterVariableBoolean($ident, $reg['name'], $details['profile'], (int)$reg['pos']);
                             break;
                     }
-                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
+                    $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$reg['name']}) Profil={$details['profile']}", 0);
                 }
             }
 
