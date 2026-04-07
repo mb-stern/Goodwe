@@ -1126,10 +1126,10 @@ class Goodwe extends IPSModuleStrict
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        [ "caption" => "", "name" => "addr", "width" => "0px", "visible" => false, "save" => true, "edit" => [ "type" => "ValidationTextBox" ] ],
-                        [ "caption" => "Auswählen", "name" => "selected",         "width" => "120px","edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address_display",  "width" => "110px" ],
-                        [ "caption" => "Name",      "name" => "name",             "width" => "auto" ],
+                        [ "caption" => "",          "name" => "addr",            "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
+                        [ "caption" => "Auswählen", "name" => "selected",        "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address_display", "width" => "110px", "save" => false ],
+                        [ "caption" => "Name",      "name" => "name",            "width" => "auto",  "save" => false ]
                     ],
                     "values" => $values
                 ],
