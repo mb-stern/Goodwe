@@ -148,15 +148,15 @@ class Goodwe extends IPSModuleStrict
                     continue;
                 }
 
-                if (!isset($r['address']) && isset($r['addr'])) {
-                    $r['address'] = $r['addr'];
+                if (!isset($r['address'])) {
+                    continue;
                 }
 
-                if (isset($r['address']) && is_string($r['address']) && str_starts_with(trim($r['address']), "{")) {
-                    $decoded = json_decode($r['address'], true);
-                    if (is_array($decoded)) {
-                        $r = array_replace($r, $decoded);
-                    }
+                $addrKey = (string)$r['address'];
+                if (isset($masterIndex[$addrKey])) {
+                    $r = array_merge($masterIndex[$addrKey], $r);
+                } else {
+                    continue;
                 }
 
                 if (!isset($r['address'])) {
@@ -1146,12 +1146,11 @@ class Goodwe extends IPSModuleStrict
         }
 
         $values = array_map(function ($r) use ($selectedMap) {
-            $addr = (string)$r['address'];
+            $address = (string)$r['address'];
             return [
-                "selected"        => isset($selectedMap[$addr]),
-                "addr"            => $addr,      
-                "address_display" => $addr,     
-                "name"            => $r['name'],
+                "selected" => isset($selectedMap[$address]),
+                "address"  => $address,
+                "name"     => $r['name'],
             ];
         }, $all);
 
@@ -1165,13 +1164,11 @@ class Goodwe extends IPSModuleStrict
                     "add"      => false,
                     "delete"   => false,
                     "columns"  => [
-                        [ "caption" => "",          "name" => "addr",             "width" => "0px",   "visible" => false, "save" => true, "edit" => [ "type" => "ValidationTextBox" ] ],
-                        [ "caption" => "Auswählen", "name" => "selected",         "width" => "120px", "save" => true, "edit" => [ "type" => "CheckBox" ] ],
-                        [ "caption" => "Adresse",   "name" => "address_display",  "width" => "110px", "save" => false ],
-                        [ "caption" => "Name",      "name" => "name",             "width" => "auto",  "save" => false ],
+                        [ "caption" => "",          "name" => "address",  "width" => "0px",   "visible" => false, "save" => true,  "edit" => [ "type" => "ValidationTextBox" ] ],
+                        [ "caption" => "Auswählen", "name" => "selected", "width" => "120px", "save" => true,  "edit" => [ "type" => "CheckBox" ] ],
+                        [ "caption" => "Adresse",   "name" => "address",  "width" => "110px", "save" => false ],
+                        [ "caption" => "Name",      "name" => "name",     "width" => "auto",  "save" => false ],
                     ],
-                    "values" => $values
-                ],
                 [
                     "type"    => "IntervalBox",
                     "name"    => "PollIntervalWR",
