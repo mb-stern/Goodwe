@@ -1165,32 +1165,7 @@ class Goodwe extends IPSModuleStrict
                 ]
             ]
         ],
-    "actions" => [
-        [
-            "type" => "Button",
-            "caption" => "Werte lesen",
-            "onClick" => 'Goodwe_FetchAll($id);'
-        ],
-        [
-            "type" => "Label",
-            "caption" => "Sag danke und unterstütze den Modulentwickler:"
-        ],
-        [
-            "type" => "RowLayout",
-            "items" => [
-                [
-                    "type" => "Image",
-                    "onClick" => "echo 'https://paypal.me/mbstern';",
-                    "image" => "..."
-                ],
-                [
-                    "type" => "Label",
-                    "caption" => ""
-                ]
-            ]
-        ]
-    ]
-]);
+    
              "actions" => [
                 [
                     "type" => "Button",
