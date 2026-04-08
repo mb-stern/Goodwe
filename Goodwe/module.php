@@ -1099,64 +1099,71 @@ class Goodwe extends IPSModuleStrict
     }
 
     public function GetConfigurationForm(): string
-{
-    $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-    if (!is_array($selected)) {
-        $selected = [];
-    }
+    {
+        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selected)) {
+            $selected = [];
+        }
 
-    $values = [];
-    foreach ($this->GetRegisters() as $r) {
-        $addr = (string)$r['address'];
-        $values[] = [
-            "caption" => $addr . " - " . $r['name'],
-            "value"   => $addr
-        ];
-    }
+        $selectedMap = [];
+        foreach ($selected as $addr) {
+            $selectedMap[(string)$addr] = true;
+        }
 
-    return json_encode([
-        "elements" => [
-            [
-                "type"    => "CheckBoxList",
-                "name"    => "SelectedRegisters",
-                "caption" => "Register auswählen",
-                "values"  => $values
-            ],
-            [
-                "type"    => "IntervalBox",
-                "name"    => "PollIntervalWR",
-                "caption" => "Sekunden",
-                "suffix"  => "s"
-            ],
-            [
-                "type"    => "ExpansionPanel",
-                "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
-                "items"   => [
-                    [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
-                    [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
-                    [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
-                    [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
-                    [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+        $registerItems = [];
+        foreach ($this->GetRegisters() as $r) {
+            $addr = (string)$r['address'];
+
+            $registerItems[] = [
+                "type"    => "CheckBox",
+                "name"    => "Reg_" . $addr,
+                "caption" => $addr . " - " . $r['name'],
+                "value"   => isset($selectedMap[$addr])
+            ];
+        }
+
+        return json_encode([
+            "elements" => [
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Register auswählen",
+                    "items"   => $registerItems
+                ],
+                [
+                    "type"    => "IntervalBox",
+                    "name"    => "PollIntervalWR",
+                    "caption" => "Sekunden",
+                    "suffix"  => "s"
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "SEMS-API-Konfiguration (nur für Wallbox der 1. Generation erforderlich)",
+                    "items"   => [
+                        [ "type" => "ValidationTextBox", "name" => "WallboxUser",       "caption" => "Benutzername" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxPassword",   "caption" => "Passwort" ],
+                        [ "type" => "ValidationTextBox", "name" => "WallboxSerial",     "caption" => "Seriennummer Wallbox" ],
+                        [ "type" => "IntervalBox",       "name" => "PollIntervalWB",    "caption" => "Sekunden", "suffix" => "s" ],
+                        [ "type" => "NumberSpinner",     "name" => "ChargePowerOffset", "caption" => "Soll-Ladeleistung erhöhen", "suffix" => "W" ]
+                    ]
+                ],
+                [
+                    "type"    => "ExpansionPanel",
+                    "caption" => "Zusätzliche Werte berechnen",
+                    "items"   => [
+                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+                    ]
                 ]
             ],
-            [
-                "type"    => "ExpansionPanel",
-                "caption" => "Zusätzliche Werte berechnen",
-                "items"   => [
-                    [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                    [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+            "actions" => [
+                [
+                    "type" => "Button",
+                    "caption" => "Werte lesen",
+                    "onClick" => 'Goodwe_FetchAll($id);'
                 ]
             ]
-        ],
-        "actions" => [
-            [
-                "type" => "Button",
-                "caption" => "Werte lesen",
-                "onClick" => 'Goodwe_FetchAll($id);'
-            ]
-        ]
-    ]);
-}
+        ]);
+    }
 
     private function SetValueIfChanged(string $Ident, mixed $Value): void
     {
