@@ -1150,7 +1150,7 @@ class Goodwe extends IPSModuleStrict
                         "type"     => "List",
                         "name"     => "SelectedRegisters",
                         "caption"  => "Register auswählen",
-                        "rowCount" => 15,
+                        "rowCount" => max(count($values), 1),
                         "add"      => false,
                         "delete"   => false,
                         "columns"  => [
@@ -1159,8 +1159,7 @@ class Goodwe extends IPSModuleStrict
                                 "name"    => "addr",
                                 "width"   => "0px",
                                 "visible" => false,
-                                "save"    => true,
-                                "edit"    => [ "type" => "ValidationTextBox" ]
+                                "save"    => true
                             ],
                             [
                                 "caption" => "Auswählen",
