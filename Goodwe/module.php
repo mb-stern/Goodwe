@@ -15,6 +15,10 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterPropertyInteger("PollIntervalWR", 10);
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
+        foreach ($this->GetRegisters() as $r) {
+            $this->RegisterPropertyBoolean('Reg_' . (string)$r['address'], false);
+        }
+
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
@@ -125,20 +129,12 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         $registerCurrentIdents = [];
-        $selectedMap = [];
-
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $addr) {
-                $selectedMap[(string)$addr] = true;
-            }
-        }
 
         foreach ($this->GetRegisters() as $r) {
             $addrKey = (string)$r['address'];
 
-            if (!isset($selectedMap[$addrKey])) {
+            if (!$this->ReadPropertyBoolean('Reg_' . $addrKey)) {
                 continue;
             }
 
@@ -326,18 +322,16 @@ class Goodwe extends IPSModuleStrict
 
     public function FetchInverterData()
     {
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selectedRegisters)) {
-            $this->SendDebug("FetchInverterData", "SelectedRegisters ist keine gültige Liste", 0);
-            return;
+        $hasSelection = false;
+        foreach ($this->GetRegisters() as $r) {
+            $addrKey = (string)$r['address'];
+            if ($this->ReadPropertyBoolean('Reg_' . $addrKey)) {
+                $hasSelection = true;
+                break;
+            }
         }
 
-        $selectedMap = [];
-        foreach ($selectedRegisters as $addr) {
-            $selectedMap[(string)$addr] = true;
-        }
-
-        if (count($selectedMap) === 0) {
+        if (!$hasSelection) {
             $this->SendDebug("FetchInverterData", "Keine Register ausgewählt.", 0);
             return;
         }
@@ -361,7 +355,7 @@ class Goodwe extends IPSModuleStrict
         foreach ($this->GetRegisters() as $r) {
             $addrKey = (string)$r['address'];
 
-            if (!isset($selectedMap[$addrKey])) {
+            if (!$this->ReadPropertyBoolean('Reg_' . $addrKey)) {
                 continue;
             }
 
@@ -1054,16 +1048,6 @@ class Goodwe extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($selected)) {
-            $selected = [];
-        }
-
-        $selectedMap = [];
-        foreach ($selected as $addr) {
-            $selectedMap[(string)$addr] = true;
-        }
-
         $registerItems = [];
         foreach ($this->GetRegisters() as $r) {
             $addr = (string)$r['address'];
@@ -1071,8 +1055,7 @@ class Goodwe extends IPSModuleStrict
             $registerItems[] = [
                 "type"    => "CheckBox",
                 "name"    => "Reg_" . $addr,
-                "caption" => $addr . " - " . $r['name'],
-                "value"   => isset($selectedMap[$addr])
+                "caption" => $addr . " - " . $r['name']
             ];
         }
 
