@@ -35,6 +35,58 @@ class Goodwe extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
+        $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($rawSelected)) {
+            $rawSelected = [];
+        }
+
+        $selectedMap = [];
+        foreach ($rawSelected as $r) {
+            if (is_string($r)) {
+                $tmp = json_decode($r, true);
+                if (is_array($tmp)) {
+                    $r = $tmp;
+                } else {
+                    continue;
+                }
+            }
+
+            if (!is_array($r)) {
+                continue;
+            }
+
+            $addr = null;
+            if (isset($r['addr'])) {
+                $addr = (string)$r['addr'];
+            } elseif (isset($r['address'])) {
+                $addr = (string)$r['address'];
+            }
+
+            if ($addr === null || $addr === '') {
+                continue;
+            }
+
+            $selectedMap[$addr] = (bool)($r['selected'] ?? false);
+        }
+
+        $normalized = [];
+        foreach ($this->GetRegisters() as $r) {
+            $addr = (string)$r['address'];
+            $normalized[] = [
+                'addr'     => $addr,
+                'selected' => $selectedMap[$addr] ?? false
+            ];
+        }
+
+        $currentJson = json_encode($rawSelected);
+        $normalizedJson = json_encode($normalized);
+
+        if ($currentJson !== $normalizedJson) {
+            IPS_SetProperty($this->InstanceID, "SelectedRegisters", $normalizedJson);
+            IPS_ApplyChanges($this->InstanceID);
+            return;
+        }
+
         $this->CreateProfile();
 
         $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
@@ -131,28 +183,17 @@ class Goodwe extends IPSModuleStrict
 
         if (is_array($selectedRegisters)) {
             foreach ($selectedRegisters as $r) {
-                if (is_string($r)) {
-                    $tmp = json_decode($r, true);
-                    if (is_array($tmp)) {
-                        $r = $tmp;
-                    } else {
-                        continue;
-                    }
-                }
-
                 if (!is_array($r)) {
                     continue;
                 }
 
-                $isSelected = isset($r['selected']) ? (bool)$r['selected'] : false;
-                if (!$isSelected) {
+                $addr = isset($r['addr']) ? (string)$r['addr'] : null;
+                if ($addr === null || $addr === '') {
                     continue;
                 }
 
-                if (isset($r['addr'])) {
-                    $selectedMap[(string)$r['addr']] = true;
-                } elseif (isset($r['address'])) {
-                    $selectedMap[(string)$r['address']] = true;
+                if (!empty($r['selected'])) {
+                    $selectedMap[$addr] = true;
                 }
             }
         }
@@ -356,28 +397,17 @@ class Goodwe extends IPSModuleStrict
 
         $selectedMap = [];
         foreach ($selectedRegisters as $r) {
-            if (is_string($r)) {
-                $tmp = json_decode($r, true);
-                if (is_array($tmp)) {
-                    $r = $tmp;
-                } else {
-                    continue;
-                }
-            }
-
             if (!is_array($r)) {
                 continue;
             }
 
-            $isSelected = isset($r['selected']) ? (bool)$r['selected'] : false;
-            if (!$isSelected) {
+            $addr = isset($r['addr']) ? (string)$r['addr'] : null;
+            if ($addr === null || $addr === '') {
                 continue;
             }
 
-            if (isset($r['addr'])) {
-                $selectedMap[(string)$r['addr']] = true;
-            } elseif (isset($r['address'])) {
-                $selectedMap[(string)$r['address']] = true;
+            if (!empty($r['selected'])) {
+                $selectedMap[$addr] = true;
             }
         }
 
