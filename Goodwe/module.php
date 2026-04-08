@@ -130,31 +130,8 @@ class Goodwe extends IPSModuleStrict
         $selectedMap = [];
 
         if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $r) {
-                if (is_string($r)) {
-                    $tmp = json_decode($r, true);
-                    if (is_array($tmp)) {
-                        $r = $tmp;
-                    } else {
-                        $this->SendDebug("ApplyChanges", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                        continue;
-                    }
-                }
-
-                if (!is_array($r)) {
-                    continue;
-                }
-
-                $isSelected = isset($r['selected']) ? (bool)$r['selected'] : false;
-                if (!$isSelected) {
-                    continue;
-                }
-
-                if (isset($r['address'])) {
-                    $selectedMap[(string)$r['address']] = true;
-                } elseif (isset($r['addr'])) {
-                    $selectedMap[(string)$r['addr']] = true;
-                }
+            foreach ($selectedRegisters as $addr) {
+                $selectedMap[(string)$addr] = true;
             }
         }
 
@@ -356,31 +333,8 @@ class Goodwe extends IPSModuleStrict
         }
 
         $selectedMap = [];
-        foreach ($selectedRegisters as $r) {
-            if (is_string($r)) {
-                $tmp = json_decode($r, true);
-                if (is_array($tmp)) {
-                    $r = $tmp;
-                } else {
-                    $this->SendDebug("FetchInverterData", "Eintrag ist kein Array – übersprungen: " . json_encode($r), 0);
-                    continue;
-                }
-            }
-
-            if (!is_array($r)) {
-                continue;
-            }
-
-            $isSelected = isset($r['selected']) ? (bool)$r['selected'] : false;
-            if (!$isSelected) {
-                continue;
-            }
-
-            if (isset($r['address'])) {
-                $selectedMap[(string)$r['address']] = true;
-            } elseif (isset($r['addr'])) {
-                $selectedMap[(string)$r['addr']] = true;
-            }
+        foreach ($selectedRegisters as $addr) {
+            $selectedMap[(string)$addr] = true;
         }
 
         if (count($selectedMap) === 0) {
