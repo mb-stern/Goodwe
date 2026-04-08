@@ -1048,23 +1048,87 @@ class Goodwe extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-        $registerItems = [];
-        foreach ($this->GetRegisters() as $r) {
-            $addr = (string)$r['address'];
+        $all = $this->GetRegisters();
 
-            $registerItems[] = [
-                "type"    => "CheckBox",
-                "name"    => "Reg_" . $addr,
-                "caption" => $addr . " - " . $r['name']
-            ];
+        $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selected)) {
+            $selected = [];
         }
+
+        $selectedMap = [];
+        foreach ($selected as $sr) {
+            if (is_string($sr)) {
+                $tmp = json_decode($sr, true);
+                if (is_array($tmp)) {
+                    $sr = $tmp;
+                }
+            }
+
+            if (!is_array($sr)) {
+                continue;
+            }
+
+            $addr = null;
+            if (isset($sr['addr'])) {
+                $addr = (string)$sr['addr'];
+            } elseif (isset($sr['address'])) {
+                $addr = (string)$sr['address'];
+            }
+
+            if ($addr === null || $addr === '') {
+                continue;
+            }
+
+            $selectedMap[$addr] = (bool)($sr['selected'] ?? false);
+        }
+
+        $values = array_map(function ($r) use ($selectedMap) {
+            $addr = (string)$r['address'];
+            return [
+                "addr"            => $addr,
+                "selected"        => $selectedMap[$addr] ?? false,
+                "address_display" => $addr,
+                "name"            => $r['name'],
+            ];
+        }, $all);
 
         return json_encode([
             "elements" => [
                 [
-                    "type"    => "ExpansionPanel",
-                    "caption" => "Register auswählen",
-                    "items"   => $registerItems
+                    "type"                        => "List",
+                    "name"                        => "SelectedRegisters",
+                    "caption"                     => "Register auswählen",
+                    "rowCount"                    => 15,
+                    "add"                         => false,
+                    "delete"                      => false,
+                    "loadValuesFromConfiguration" => false,
+                    "columns"                     => [
+                        [
+                            "caption" => "",
+                            "name"    => "addr",
+                            "width"   => "0px",
+                            "visible" => false,
+                            "save"    => true
+                        ],
+                        [
+                            "caption" => "Auswählen",
+                            "name"    => "selected",
+                            "width"   => "120px",
+                            "save"    => true,
+                            "edit"    => [ "type" => "CheckBox" ]
+                        ],
+                        [
+                            "caption" => "Adresse",
+                            "name"    => "address_display",
+                            "width"   => "110px"
+                        ],
+                        [
+                            "caption" => "Name",
+                            "name"    => "name",
+                            "width"   => "auto"
+                        ]
+                    ],
+                    "values" => $values
                 ],
                 [
                     "type"    => "IntervalBox",
@@ -1088,15 +1152,15 @@ class Goodwe extends IPSModuleStrict
                     "caption" => "Zusätzliche Werte berechnen",
                     "items"   => [
                         [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
                     ]
                 ]
             ],
             "actions" => [
                 [
-                    "type" => "Button",
+                    "type"    => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchAll($id);'
+                    "onClick" => "Goodwe_FetchAll($id);"
                 ]
             ]
         ]);
