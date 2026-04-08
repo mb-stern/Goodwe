@@ -1485,7 +1485,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
             ["address" => 35180, "name" => "BAT1 - Spannung",          "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 160],
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  " scale" => 0.1, "pos" => 170],
-            ["address" => 35181, "name" => "BAT1 - Strom",             "type" => "S16", "unit" => "A",  " scale" => 0.1, "pos" => 170],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 180],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 190],
             // Wechselrichter
