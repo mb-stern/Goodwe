@@ -1160,7 +1160,7 @@ class Goodwe extends IPSModuleStrict
                 [
                     "type"    => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => "Goodwe_FetchAll($id);"
+                    "onClick" => 'Goodwe_FetchAll($id);'
                 ]
             ]
         ]);
