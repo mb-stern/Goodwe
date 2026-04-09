@@ -1496,7 +1496,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 240],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 250],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 260],
-            //Batterie 2
+            // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",           "type" => "S32", "unit" => "W",   "scale" => 1,   "pos" => 300],
             ["address" => 35266, "name" => "BAT2 - Mode",               "type" => "U16", "unit" => "mode","scale" => 1,   "pos" => 310],
 
@@ -1540,7 +1540,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35350, "name" => "WR - I MPPT6",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 780],
             ["address" => 35351, "name" => "WR - I MPPT7",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 790],
             ["address" => 35352, "name" => "WR - I MPPT8",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 800],
-            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ","scale" => 1,   "pos" => 810],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ",  "scale" => 1,   "pos" => 810],
         ];
     }
 }
