@@ -114,7 +114,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 Version 2.11 (09.04.2026)
 - Codeanpassung da das Einfügen von zusätzlichen Registern fehlerhafte Variablen anzeigte.
-- Erweitern der Positionen im Objektbaum, bei Bedarf ist einen Neuanordung  erforderlich.
+- Erweitern der Positionen im Objektbaum, bei Bedarf ist eine Neuanordung  erforderlich.
 - Anzeigemöglichkeit einer 2. Batterie hinzugefügt (allenfalls noch nicht alle Register vollständig).
 
 Version 2.10 (02.01.2026)
