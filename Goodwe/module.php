@@ -1540,7 +1540,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35350, "name" => "WR - I MPPT6",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 780],
             ["address" => 35351, "name" => "WR - I MPPT7",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 790],
             ["address" => 35352, "name" => "WR - I MPPT8",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 800],
-            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ",  "scale" => 1,   "pos" => 810],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ",  "scale" => 0.1,   "pos" => 810],
         ];
     }
 }
