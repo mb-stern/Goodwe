@@ -114,8 +114,8 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 Version 2.12 (11.04.2026)
 - Isolationswiderstand wurde um den Faktor 10 zu hoch berechnet.
-- Erweiterung der Istwerte der Batterie 2 um maximale Lade- und Entlade Strom und Spannung
-- Erweiterung der Werte berechnen um maximale Lade- und Entladeleistung
+- Erweiterung der Istwerte für Batterie 2 um maximale Lade- und Entlade-Strom/Spannung
+- Erweiterung für Werteberechnung um maximale Lade- und Entladeleistung für Batterie 2
 
 Version 2.11 (09.04.2026)
 - Codeanpassung da das Einfügen von zusätzlichen Registern fehlerhafte Variablen anzeigte.
