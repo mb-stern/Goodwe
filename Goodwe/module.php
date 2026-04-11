@@ -1509,6 +1509,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47512, "name" => "BAT - EMSPowerSet",       "type" => "U16", "unit" => "watt_ems","scale" => 1,"pos" => 180],
             ["address" => 47902, "name" => "BAT - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 190],
             ["address" => 47903, "name" => "BAT - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 200],
+            ["address" => 39512, "name" => "BAT - Laden Leistung max",   "type" => "S16", "unit" => "A",  "scale" => 1, "pos" => 205],
             ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 210],
             ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 220],
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 230],
