@@ -1572,11 +1572,11 @@ class Goodwe extends IPSModuleStrict
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",           "type" => "S32", "unit" => "W",   "scale" => 1,   "pos" => 300],
             ["address" => 35266, "name" => "BAT2 - Mode",               "type" => "U16", "unit" => "mode","scale" => 1,   "pos" => 310],
-
+            // Laden- und Entladen scheint es nur für BAT1 zu geben
             ["address" => 39001, "name" => "BAT2 - Temperatur",        "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 340],
             ["address" => 45381, "name" => "BAT2 - Min SOC online",     "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 350],
             ["address" => 45383, "name" => "BAT2 - Min SOC offline",    "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 360],
-
+            // EMSPower scheint es nur für BAT 1 zu geben            
             ["address" => 47920, "name" => "BAT2 - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 390],
             ["address" => 47921, "name" => "BAT2 - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 400],
             ["address" => 47922, "name" => "BAT2 - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 410],
