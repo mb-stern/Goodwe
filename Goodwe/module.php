@@ -6,8 +6,6 @@ class Goodwe extends IPSModuleStrict
     {
         $this->RegisterPropertyString("SelectedRegisters", "[]");
 
-        $this->RegisterPropertyBoolean("Entladen_Max", false);
-        $this->RegisterPropertyBoolean("Laden_Max", false);
         $this->RegisterPropertyString("WallboxUser", "");
         $this->RegisterPropertyString("WallboxPassword", "");
         $this->RegisterPropertyString("WallboxSerial", "");
@@ -16,6 +14,11 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterPropertyInteger("ChargePowerOffset", 0);
 
         $this->RegisterAttributeString("WallboxVariableMapping", "[]");
+
+        $this->RegisterPropertyBoolean("Entladen_Max", false);
+        $this->RegisterPropertyBoolean("Laden_Max", false);
+        $this->RegisterPropertyBoolean("Entladen_Max_2", false);
+        $this->RegisterPropertyBoolean("Laden_Max_2", false);
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
@@ -255,9 +258,10 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
+        //Berechnung für Batterie 1
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
-                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
+                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 225);
             }
         } else {
             if (@$this->GetIDForIdent("MaxEntladen") !== false) {
@@ -268,12 +272,35 @@ class Goodwe extends IPSModuleStrict
 
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
-                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
+                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 205);
             }
         } else {
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
                 $this->UnregisterVariable("MaxLaden");
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            }
+        }
+
+        //Berechnung für Batterie 2
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxEntladen2")) {
+                $this->RegisterVariableInteger("MaxEntladen2", "BAT2 - Entladen Leistung max", "Goodwe.Watt", 425);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
+                $this->UnregisterVariable("MaxEntladen2");
+                $this->SendDebug("ApplyChanges", "MaxEntladen-Bat2-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxLaden2")) {
+                $this->RegisterVariableInteger("MaxLaden2", "BAT2 - Laden Leistung max", "Goodwe.Watt", 405);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxLaden2") !== false) {
+                $this->UnregisterVariable("MaxLaden2");
+                $this->SendDebug("ApplyChanges", "MaxLaden-Bat2-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
     }
@@ -1097,6 +1124,32 @@ class Goodwe extends IPSModuleStrict
                 }
             }
         }
+
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen2");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47922, 0.1);
+                $strom    = $this->ReadRegisterValue(47923, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden2");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47920, 0.1);
+                $strom    = $this->ReadRegisterValue(47921, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
     }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
@@ -1231,8 +1284,10 @@ class Goodwe extends IPSModuleStrict
                     "type"    => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
                     "items"   => [
-                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 1 berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 1 berechnen" ],
+                         [ "type" => "CheckBox", "name" => "Entladen_Max_2", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 2 berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max_2",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 2 berechnen" ]
                     ]
                 ]
             ],
@@ -1241,6 +1296,24 @@ class Goodwe extends IPSModuleStrict
                     "type"    => "Button",
                     "caption" => "Werte lesen",
                     "onClick" => 'Goodwe_FetchAll($id);'
+                ],
+                [
+                    "type" => "Label",
+                    "caption" => "Sag danke und unterstütze den Modulentwickler:"
+                ],
+                [
+                    "type" => "RowLayout",
+                    "items" => [
+                        [
+                            "type" => "Image",
+                            "onClick" => "echo 'https://paypal.me/mbstern';",
+                           "image" => "data:image/jpeg;base64,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"
+                        ],
+                        [
+                            "type" => "Label",
+                            "caption" => ""
+                        ]
+                    ]
                 ]
             ]
         ]);
@@ -1496,13 +1569,18 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47907, "name" => "BAT - Strom",             "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 240],
             ["address" => 47908, "name" => "BAT - SOC",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 250],
             ["address" => 47909, "name" => "BAT - SOH",               "type" => "S16", "unit" => "%",  "scale" => 1,   "pos" => 260],
-            //Batterie 2
+            // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",           "type" => "S32", "unit" => "W",   "scale" => 1,   "pos" => 300],
             ["address" => 35266, "name" => "BAT2 - Mode",               "type" => "U16", "unit" => "mode","scale" => 1,   "pos" => 310],
-
+            // Laden- und Entladen scheint es nur für BAT1 zu geben
+            ["address" => 39001, "name" => "BAT2 - Temperatur",        "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 340],
             ["address" => 45381, "name" => "BAT2 - Min SOC online",     "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 350],
             ["address" => 45383, "name" => "BAT2 - Min SOC offline",    "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 360],
-
+            // EMSPower scheint es nur für BAT 1 zu geben            
+            ["address" => 47920, "name" => "BAT2 - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 390],
+            ["address" => 47921, "name" => "BAT2 - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 400],
+            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 410],
+            ["address" => 47923, "name" => "BAT2 - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 420],
             ["address" => 47924, "name" => "BAT2 - Spannung",           "type" => "S16", "unit" => "V",   "scale" => 0.1, "pos" => 430],
             ["address" => 47925, "name" => "BAT2 - Strom",              "type" => "S16", "unit" => "A",   "scale" => 0.1, "pos" => 440],
             ["address" => 47926, "name" => "BAT2 - SOC",                "type" => "S16", "unit" => "%",   "scale" => 1,   "pos" => 450],
@@ -1540,7 +1618,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35350, "name" => "WR - I MPPT6",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 780],
             ["address" => 35351, "name" => "WR - I MPPT7",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 790],
             ["address" => 35352, "name" => "WR - I MPPT8",            "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 800],
-            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ","scale" => 1,   "pos" => 810],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand","type" => "U16","unit" => "KΩ",  "scale" => 0.1,   "pos" => 810],
         ];
     }
 }
