@@ -17,6 +17,8 @@ class Goodwe extends IPSModuleStrict
 
         $this->RegisterPropertyBoolean("Entladen_Max", false);
         $this->RegisterPropertyBoolean("Laden_Max", false);
+        $this->RegisterPropertyBoolean("Entladen_Max_2", false);
+        $this->RegisterPropertyBoolean("Laden_Max_2", false);
 
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
         $this->RegisterTimer('TimerWB', 0, 'Goodwe_FetchWallboxData($_IPS[\'TARGET\']);');
@@ -256,6 +258,7 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
+        //Berechnung für Batterie 1
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
@@ -275,6 +278,29 @@ class Goodwe extends IPSModuleStrict
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
                 $this->UnregisterVariable("MaxLaden");
                 $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            }
+        }
+
+        //Berechnung für Batterie 2
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxEntladen2")) {
+                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 152);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
+                $this->UnregisterVariable("MaxEntladen2");
+                $this->SendDebug("ApplyChanges", "MaxEntladen-Bat2-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxLaden2")) {
+                $this->RegisterVariableInteger("MaxLaden2", "BAT - Laden Leistung max", "Goodwe.Watt", 142);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxLaden2") !== false) {
+                $this->UnregisterVariable("MaxLaden2");
+                $this->SendDebug("ApplyChanges", "MaxLaden-Bat2-Variable entfernt, da Laden_Max deaktiviert.", 0);
             }
         }
     }
@@ -1098,6 +1124,32 @@ class Goodwe extends IPSModuleStrict
                 }
             }
         }
+
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen2");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47904, 0.1);
+                $strom    = $this->ReadRegisterValue(47905, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden2");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47902, 0.1);
+                $strom    = $this->ReadRegisterValue(47903, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
     }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
@@ -1232,8 +1284,10 @@ class Goodwe extends IPSModuleStrict
                     "type"    => "ExpansionPanel",
                     "caption" => "Zusätzliche Werte berechnen",
                     "items"   => [
-                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers berechnen" ],
-                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers berechnen" ]
+                        [ "type" => "CheckBox", "name" => "Entladen_Max", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 1 berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 1 berechnen" ],
+                         [ "type" => "CheckBox", "name" => "Entladen_Max_2", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 2 berechnen" ],
+                        [ "type" => "CheckBox", "name" => "Laden_Max_2",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 2 berechnen" ]
                     ]
                 ]
             ],
@@ -1509,7 +1563,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47512, "name" => "BAT - EMSPowerSet",       "type" => "U16", "unit" => "watt_ems","scale" => 1,"pos" => 180],
             ["address" => 47902, "name" => "BAT - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 190],
             ["address" => 47903, "name" => "BAT - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 200],
-            ["address" => 51007, "name" => "BAT - Laden Leistung max",   "type" => "S16", "unit" => "A",  "scale" => 1, "pos" => 205],
             ["address" => 47904, "name" => "BAT - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 210],
             ["address" => 47905, "name" => "BAT - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 220],
             ["address" => 47906, "name" => "BAT - Spannung",          "type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 230],
