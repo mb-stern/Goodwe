@@ -1573,6 +1573,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35264, "name" => "BAT2 - Leistung",           "type" => "S32", "unit" => "W",   "scale" => 1,   "pos" => 300],
             ["address" => 35266, "name" => "BAT2 - Mode",               "type" => "U16", "unit" => "mode","scale" => 1,   "pos" => 310],
 
+            ["address" => 39001, "name" => "BAT2 - Temperatur",        "type" => "U16", "unit" => "°C", "scale" => 0.1, "pos" => 340],
             ["address" => 45381, "name" => "BAT2 - Min SOC online",     "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 350],
             ["address" => 45383, "name" => "BAT2 - Min SOC offline",    "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 360],
 
