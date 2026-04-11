@@ -112,6 +112,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 2.12 (10.04.2026)
+- Isolationswiderstand wurde um den Faktor 10 zu hoch angezeigt.
+
 Version 2.11 (09.04.2026)
 - Codeanpassung da das Einfügen von zusätzlichen Registern fehlerhafte Variablen anzeigte.
 - Erweitern der Positionen im Objektbaum, bei Bedarf ist eine Neuanordung  erforderlich.
