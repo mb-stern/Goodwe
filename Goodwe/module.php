@@ -1128,8 +1128,8 @@ class Goodwe extends IPSModuleStrict
         if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen2");
             if ($entladenID !== false) {
-                $spannung = $this->ReadRegisterValue(47904, 0.1);
-                $strom    = $this->ReadRegisterValue(47905, 0.1);
+                $spannung = $this->ReadRegisterValue(47922, 0.1);
+                $strom    = $this->ReadRegisterValue(47923, 0.1);
                 if ($spannung !== null && $strom !== null) {
                     $leistung = (int)($spannung * $strom);
                     $this->SetValueIfChanged("MaxEntladen", $leistung);
@@ -1141,8 +1141,8 @@ class Goodwe extends IPSModuleStrict
         if ($this->ReadPropertyBoolean("Laden_Max_2")) {
             $ladenID = @$this->GetIDForIdent("MaxLaden2");
             if ($ladenID !== false) {
-                $spannung = $this->ReadRegisterValue(47902, 0.1);
-                $strom    = $this->ReadRegisterValue(47903, 0.1);
+                $spannung = $this->ReadRegisterValue(47920, 0.1);
+                $strom    = $this->ReadRegisterValue(47921, 0.1);
                 if ($spannung !== null && $strom !== null) {
                     $leistung = (int)($spannung * $strom);
                     $this->SetValueIfChanged("MaxLaden", $leistung);
@@ -1576,6 +1576,10 @@ class Goodwe extends IPSModuleStrict
             ["address" => 45381, "name" => "BAT2 - Min SOC online",     "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 350],
             ["address" => 45383, "name" => "BAT2 - Min SOC offline",    "type" => "U16", "unit" => "%",   "scale" => 1,   "pos" => 360],
 
+            ["address" => 47920, "name" => "BAT2 - Laden Spannung max","type" => "S16", "unit" => "V",  "scale" => 0.1, "pos" => 390],
+            ["address" => 47921, "name" => "BAT2 - Laden Strom max",   "type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 400],
+            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max","type" => "S16","unit" => "V","scale" => 0.1, "pos" => 410],
+            ["address" => 47923, "name" => "BAT2 - Entladen Strom max","type" => "S16", "unit" => "A",  "scale" => 0.1, "pos" => 420],
             ["address" => 47924, "name" => "BAT2 - Spannung",           "type" => "S16", "unit" => "V",   "scale" => 0.1, "pos" => 430],
             ["address" => 47925, "name" => "BAT2 - Strom",              "type" => "S16", "unit" => "A",   "scale" => 0.1, "pos" => 440],
             ["address" => 47926, "name" => "BAT2 - SOC",                "type" => "S16", "unit" => "%",   "scale" => 1,   "pos" => 450],
