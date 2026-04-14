@@ -1598,6 +1598,12 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35115, "name" => "WR - Spannung String 4",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 590],
             ["address" => 35116, "name" => "WR - Strom String 4",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 600],
             ["address" => 35117, "name" => "WR - Leistung String 4",  "type" => "U32", "unit" => "W",  "scale" => 1,   "pos" => 610],
+            ["address" => 35304, "name" => "WR - Spannung String 5",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 611],
+            ["address" => 35305, "name" => "WR - Strom String 5",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 612],
+            //Register für Leistung String 5 nicht gefunden
+            ["address" => 35306, "name" => "WR - Spannung String 6",  "type" => "U16", "unit" => "V",  "scale" => 0.1, "pos" => 614],
+            ["address" => 35307, "name" => "WR - Strom String 6",     "type" => "U16", "unit" => "A",  "scale" => 0.1, "pos" => 615],
+            //Register für Leistung String 6 nicht gefunden
             ["address" => 35174, "name" => "WR - Temperatur",         "type" => "S16", "unit" => "°C", "scale" => 0.1, "pos" => 620],
             ["address" => 35191, "name" => "WR - Erzeugung Gesamt",   "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 630],
             ["address" => 35193, "name" => "WR - Erzeugung Tag",      "type" => "U32", "unit" => "kWh","scale" => 0.1, "pos" => 640],
