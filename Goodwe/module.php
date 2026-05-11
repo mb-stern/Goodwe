@@ -466,51 +466,31 @@ class Goodwe extends IPSModuleStrict
         }
     }
 
-    private function ReadRegisterValue(int $address, float $factor = 1.0): ?float
+    private function ReadRegisterValue(int $address, float $scale = 1.0)
     {
-        try {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING) {
-                return null;
-            }
+        $quantity = 1;
 
-            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-            if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
-                return null;
-            }
+        $response = $this->SendDataToParent(json_encode([
+            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+            "Function" => 3,
+            "Address"  => $address,
+            "Quantity" => $quantity,
+            "Data"     => ""
+        ]));
 
-            if (IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
-                return null;
-            }
-
-            $response = $this->SendDataToParent(json_encode([
-                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-                "Function" => 3,
-                "Address"  => $address,
-                "Quantity" => 1,
-                "Data"     => ""
-            ]));
-
-            if ($response === false || strlen($response) < 4) {
-                return null;
-            }
-
-            $data = unpack("n*", substr($response, 2));
-            if (!isset($data[1])) {
-                return null;
-            }
-
-            // S16 wie bei deinen Registern 47902-47905 / 47920-47923
-            $raw = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
-
-            return $raw * $factor;
-
-        } catch (Throwable $e) {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] != IS_DELETING) {
-                $this->SendDebug("ReadRegisterValue", "Fehler bei Register $address: " . $e->getMessage(), 0);
-            }
-
+        if ($response === false || strlen($response) < 4) {
+            $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
             return null;
         }
+
+        $data  = unpack("n*", substr($response, 2));
+        $value = $data[1];
+
+        if ($value & 0x8000) {
+            $value = -((~$value & 0xFFFF) + 1);
+        }
+
+        return $value * $scale;
     }
 
     public function GetConfigurationForm(): string
