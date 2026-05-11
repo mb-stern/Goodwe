@@ -413,6 +413,9 @@ class Goodwe extends IPSModuleStrict
 
     public function CalculateMaxPower()
     {
+        if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+             break;
+    
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
             if ($entladenID !== false) {
