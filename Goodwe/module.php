@@ -290,6 +290,8 @@ class Goodwe extends IPSModuleStrict
             $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
             try {
+                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+                    break;
                 $response = $this->SendDataToParent(json_encode([
                     "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                     "Function" => 3,
