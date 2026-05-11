@@ -414,8 +414,6 @@ class Goodwe extends IPSModuleStrict
     public function CalculateMaxPower()
     {
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
-                break;
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
             if ($entladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47904, 0.1);
@@ -429,8 +427,6 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Laden_Max")) {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
-                break;
             $ladenID = @$this->GetIDForIdent("MaxLaden");
             if ($ladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47902, 0.1);
@@ -444,8 +440,6 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
-                break;
             $entladenID = @$this->GetIDForIdent("MaxEntladen2");
             if ($entladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47922, 0.1);
@@ -459,8 +453,6 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Laden_Max_2")) {
-            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
-                break;
             $ladenID = @$this->GetIDForIdent("MaxLaden2");
             if ($ladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47920, 0.1);
@@ -474,31 +466,46 @@ class Goodwe extends IPSModuleStrict
         }
     }
 
-    private function ReadRegisterValue(int $address, float $scale = 1.0)
+    private function ReadRegisterValue(int $address, float $factor = 1.0): ?float
     {
-        $quantity = 1;
+        try {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING) {
+                return null;
+            }
 
-        $response = $this->SendDataToParent(json_encode([
-            "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
-            "Function" => 3,
-            "Address"  => $address,
-            "Quantity" => $quantity,
-            "Data"     => ""
-        ]));
+            $response = $this->SendDataToParent(json_encode([
+                "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                "Function" => 3,
+                "Address"  => $address,
+                "Quantity" => 1,
+                "Data"     => ""
+            ]));
 
-        if ($response === false || strlen($response) < 4) {
-            $this->SendDebug("ReadRegisterValue", "Keine Antwort oder zu kurze Antwort für Register $address", 0);
+            if ($response === false || $response === '') {
+                return null;
+            }
+
+            $data = @json_decode($response, true);
+            if (!is_array($data) || !isset($data['Data'])) {
+                return null;
+            }
+
+            // je nach deiner bisherigen Auswertung hier anpassen
+            $value = $data['Data'][0] ?? null;
+
+            if ($value === null) {
+                return null;
+            }
+
+            return $value * $factor;
+
+        } catch (Throwable $e) {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] != IS_DELETING) {
+                $this->SendDebug("ReadRegisterValue", "Fehler bei Register $address: " . $e->getMessage(), 0);
+            }
+
             return null;
         }
-
-        $data  = unpack("n*", substr($response, 2));
-        $value = $data[1];
-
-        if ($value & 0x8000) {
-            $value = -((~$value & 0xFFFF) + 1);
-        }
-
-        return $value * $scale;
     }
 
     public function GetConfigurationForm(): string
