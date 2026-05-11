@@ -473,6 +473,15 @@ class Goodwe extends IPSModuleStrict
                 return null;
             }
 
+            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+            if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
+                return null;
+            }
+
+            if (IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
+                return null;
+            }
+
             $response = $this->SendDataToParent(json_encode([
                 "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
                 "Function" => 3,
@@ -481,23 +490,19 @@ class Goodwe extends IPSModuleStrict
                 "Data"     => ""
             ]));
 
-            if ($response === false || $response === '') {
+            if ($response === false || strlen($response) < 4) {
                 return null;
             }
 
-            $data = @json_decode($response, true);
-            if (!is_array($data) || !isset($data['Data'])) {
+            $data = unpack("n*", substr($response, 2));
+            if (!isset($data[1])) {
                 return null;
             }
 
-            // je nach deiner bisherigen Auswertung hier anpassen
-            $value = $data['Data'][0] ?? null;
+            // S16 wie bei deinen Registern 47902-47905 / 47920-47923
+            $raw = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
 
-            if ($value === null) {
-                return null;
-            }
-
-            return $value * $factor;
+            return $raw * $factor;
 
         } catch (Throwable $e) {
             if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] != IS_DELETING) {
