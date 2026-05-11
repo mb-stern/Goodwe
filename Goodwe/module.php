@@ -413,10 +413,9 @@ class Goodwe extends IPSModuleStrict
 
     public function CalculateMaxPower()
     {
-        if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
-             break;
-    
         if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+                break;
             $entladenID = @$this->GetIDForIdent("MaxEntladen");
             if ($entladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47904, 0.1);
@@ -430,6 +429,8 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Laden_Max")) {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+                break;
             $ladenID = @$this->GetIDForIdent("MaxLaden");
             if ($ladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47902, 0.1);
@@ -443,6 +444,8 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+                break;
             $entladenID = @$this->GetIDForIdent("MaxEntladen2");
             if ($entladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47922, 0.1);
@@ -456,6 +459,8 @@ class Goodwe extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
+                break;
             $ladenID = @$this->GetIDForIdent("MaxLaden2");
             if ($ladenID !== false) {
                 $spannung = $this->ReadRegisterValue(47920, 0.1);
