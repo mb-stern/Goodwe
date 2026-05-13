@@ -97,7 +97,7 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
-Version 2.13 (19.04.2026)
+Version 2.13 (13.05.2026)
 - Codeanpassung, um Fehlermeldungen beim Update oder neu laden des Moduls zu verhindern.
 
 Version 2.12 (19.04.2026)
