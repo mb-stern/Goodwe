@@ -97,6 +97,9 @@ Goodwe_FetchInverterData(12345);|   Datenpunkte des Wechselrichters akualisieren
 
 ### 8. Versionen
 
+Version 2.14 (12.07.2026)
+- Integration der Wallbox GoodWe HCA G2 .
+
 Version 2.13 (13.05.2026)
 - Codeanpassung, um Fehlermeldungen beim Update oder neu laden des Moduls zu verhindern.
 
