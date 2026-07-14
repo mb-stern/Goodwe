@@ -274,10 +274,16 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
+        // Write-only-Aktionen (z. B. WR-Neustart) werden nicht zurückgelesen.
+        // Die Aktionsvariable springt nach erfolgreichem Schreiben sofort wieder auf false.
+        if (!empty($register['writeOnly'])) {
+            $displayValue = false;
+        }
+
         $this->SetValueIfChanged($Ident, $displayValue);
         $this->SendDebug(
             "RequestAction",
-            "Register $address erfolgreich geschrieben: Anzeige=" . json_encode($displayValue) . ", Rohwert=$rawValue",
+            "Register $address erfolgreich geschrieben: Anzeige=" . json_encode($displayValue) . ", Rohwert=$rawValue" . (!empty($register['writeOnly']) ? ' (Write-only)' : ''),
             0
         );
     }
@@ -322,7 +328,7 @@ class Goodwe extends IPSModuleStrict
             $registers = [];
             $allRegisters = $this->GetRegisters();
             foreach ($allRegisters as $register) {
-                if (isset($selectedMap[(string)$register['address']])) {
+                if (isset($selectedMap[(string)$register['address']]) && empty($register['writeOnly'])) {
                     $registers[] = $register;
                 }
             }
@@ -997,8 +1003,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 820],
 
             // Zusätzliche GoodWe Mess- und Steuerregister
-            ["address" => 32000, "name" => "WR - Warncode",                    "type" => "U32", "unit" => "raw",         "scale" => 1],
-            ["address" => 32002, "name" => "WR - Fehlercode",                  "type" => "U32", "unit" => "raw",         "scale" => 1],
             ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1],
             ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1],
             ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
@@ -1043,7 +1047,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
             ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
             ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
             ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1],
             ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 5],
             ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 1],
@@ -1077,10 +1081,36 @@ class Goodwe extends IPSModuleStrict
             ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 1080],
         ];
 
-        // Positionen werden ausschliesslich aus der Listenreihenfolge erzeugt.
-        // Dadurch bleibt die Nummerierung nach oben offen und neue Register benötigen keine manuelle Positionspflege.
-        foreach ($registers as $index => &$register) {
-            $register['pos'] = ($index + 1) * 10;
+        // Offene Positionslogik nach Funktionsgruppen. Neue Register können innerhalb
+        // einer Gruppe beliebig ergänzt werden.
+        // Bestehende Benutzerpositionen werden nicht überschrieben; die Position gilt nur
+        // beim erstmaligen Anlegen einer Variablen.
+        $groupCounters = [];
+        foreach ($registers as &$register) {
+            $name = (string)$register['name'];
+
+            if (!empty($register['writeOnly'])) {
+                $groupBase = 9000; // reine Aktionen ganz am Ende
+            } elseif (str_starts_with($name, 'Backup -')) {
+                $groupBase = 8000; // Backup klar hinter normalen WR-/Netz-/Steuerwerten
+            } elseif (str_starts_with($name, 'WB -')) {
+                $groupBase = 7000;
+            } elseif (!empty($register['writable'])) {
+                $groupBase = 6000; // Steuerregister gesammelt
+            } elseif (str_starts_with($name, 'SM -')) {
+                $groupBase = 5000;
+            } elseif (str_starts_with($name, 'WR -')) {
+                $groupBase = 4000;
+            } elseif (str_starts_with($name, 'BAT2 -')) {
+                $groupBase = 3000;
+            } elseif (str_starts_with($name, 'BAT -')) {
+                $groupBase = 2000;
+            } else {
+                $groupBase = 1000;
+            }
+
+            $groupCounters[$groupBase] = ($groupCounters[$groupBase] ?? 0) + 1;
+            $register['pos'] = $groupBase + ($groupCounters[$groupBase] * 10);
         }
         unset($register);
 
