@@ -15,9 +15,6 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterPropertyBoolean("Entladen_Max_2", false);
         $this->RegisterPropertyBoolean("Laden_Max_2", false);
 
-        $this->RegisterAttributeString("LastRawRegisters", "{}");
-        $this->RegisterAttributeInteger("LastPollStarted", 0);
-
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
     }
 
@@ -30,9 +27,6 @@ class Goodwe extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
-
-        // Während der Neukonfiguration keine neue Abfrage starten.
-        $this->SetTimerInterval('TimerWR', 0);
 
         $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($rawSelected)) {
@@ -274,222 +268,174 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
-        // Write-only-Aktionen (z. B. WR-Neustart) werden nicht zurückgelesen.
-        // Die Aktionsvariable springt nach erfolgreichem Schreiben sofort wieder auf false.
-        if (!empty($register['writeOnly'])) {
-            $displayValue = false;
-        }
-
         $this->SetValueIfChanged($Ident, $displayValue);
         $this->SendDebug(
             "RequestAction",
-            "Register $address erfolgreich geschrieben: Anzeige=" . json_encode($displayValue) . ", Rohwert=$rawValue" . (!empty($register['writeOnly']) ? ' (Write-only)' : ''),
+            "Register $address erfolgreich geschrieben: Anzeige=" . json_encode($displayValue) . ", Rohwert=$rawValue",
             0
         );
     }
 
-    public function FetchInverterData(): void
+    public function FetchInverterData()
     {
-        $lockName = 'GoodwePoll_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lockName, 1)) {
-            $started = $this->ReadAttributeInteger('LastPollStarted');
-            $age = $started > 0 ? time() - $started : 0;
-            $this->SendDebug('FetchInverterData', "Abfrage läuft bereits seit {$age} s – Timeraufruf übersprungen.", 0);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("FetchInverterData", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
 
-        $startedAt = microtime(true);
-        $this->WriteAttributeInteger('LastPollStarted', time());
-
-        try {
-            $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
-            if (!is_array($selectedRegisters)) {
-                $this->SendDebug('FetchInverterData', 'SelectedRegisters ist keine gültige Liste', 0);
-                return;
+        $selectedMap = [];
+        foreach ($selectedRegisters as $r) {
+            if (!is_array($r)) {
+                continue;
             }
 
-            $selectedMap = [];
-            foreach ($selectedRegisters as $r) {
-                if (is_array($r) && !empty($r['selected']) && isset($r['addr'])) {
-                    $selectedMap[(string)$r['addr']] = true;
-                }
-            }
-            if ($selectedMap === []) {
-                $this->SendDebug('FetchInverterData', 'Keine Register ausgewählt.', 0);
-                return;
+            $addr = isset($r['addr']) ? (string)$r['addr'] : null;
+            if ($addr === null || $addr === '') {
+                continue;
             }
 
-            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-            if ($parentID === 0 || !IPS_InstanceExists($parentID) || IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
-                $this->SendDebug('FetchInverterData', 'Keine aktive Parent-Instanz verbunden.', 0);
-                return;
+            if (!empty($r['selected'])) {
+                $selectedMap[$addr] = true;
+            }
+        }
+
+        if (count($selectedMap) === 0) {
+            $this->SendDebug("FetchInverterData", "Keine Register ausgewählt.", 0);
+            return;
+        }
+
+        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+        if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
+            $this->SendDebug("FetchInverterData", "Keine gültige Parent-Instanz verbunden.", 0);
+            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. FetchInverterData abgebrochen.");
+            return;
+        }
+        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
+        if ($parentStatus !== IS_ACTIVE) {
+            $this->SendDebug("FetchInverterData", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. FetchInverterData abgebrochen.");
+            return;
+        }
+
+        $values = [];
+
+        foreach ($this->GetRegisters() as $r) {
+            $addrKey = (string)$r['address'];
+
+            if (!isset($selectedMap[$addrKey])) {
+                continue;
             }
 
-            $registers = [];
-            $allRegisters = $this->GetRegisters();
-            foreach ($allRegisters as $register) {
-                if (isset($selectedMap[(string)$register['address']]) && empty($register['writeOnly'])) {
-                    $registers[] = $register;
-                }
-            }
-
-            // Für die Leistungsberechnungen benötigte BMS-Register immer im selben Block mitlesen.
-            $dependencies = [];
-            if ($this->ReadPropertyBoolean('Laden_Max'))      $dependencies = array_merge($dependencies, [47902, 47903]);
-            if ($this->ReadPropertyBoolean('Entladen_Max'))   $dependencies = array_merge($dependencies, [47904, 47905]);
-            if ($this->ReadPropertyBoolean('Laden_Max_2'))    $dependencies = array_merge($dependencies, [47920, 47921]);
-            if ($this->ReadPropertyBoolean('Entladen_Max_2')) $dependencies = array_merge($dependencies, [47922, 47923]);
-            $present = array_column($registers, 'address');
-            foreach (array_unique($dependencies) as $dependency) {
-                if (!in_array($dependency, $present, true)) {
-                    foreach ($allRegisters as $candidate) {
-                        if ((int)$candidate['address'] === $dependency) {
-                            $registers[] = $candidate;
-                            break;
-                        }
-                    }
+            foreach (['address', 'type', 'scale'] as $need) {
+                if (!array_key_exists($need, $r)) {
+                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                    continue 2;
                 }
             }
 
-            $blocks = $this->BuildReadBlocks($registers, 4, 100);
-            $rawRegisters = [];
-            $successfulBlocks = 0;
+            $ident    = "Addr" . $addrKey;
+            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
-            foreach ($blocks as $block) {
-                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] === IS_DELETING) {
+            try {
+                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
                     break;
-                }
+                $response = $this->SendDataToParent(json_encode([
+                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                    "Function" => 3,
+                    "Address"  => (int)$r['address'],
+                    "Quantity" => $quantity,
+                    "Data"     => ""
+                ]));
 
-                $response = $this->ReadRegisterBlock($block['start'], $block['count']);
-                if ($response === null) {
-                    $this->SendDebug('FetchInverterData', "Block {$block['start']}–" . ($block['start'] + $block['count'] - 1) . ' konnte nicht gelesen werden.', 0);
+                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
                     continue;
                 }
 
-                $successfulBlocks++;
-                foreach ($response as $offset => $word) {
-                    $rawRegisters[$block['start'] + $offset] = $word;
-                }
-            }
+                $data  = unpack("n*", substr($response, 2));
+                $value = 0;
 
-            $values = [];
-            foreach ($registers as $register) {
-                $address = (int)$register['address'];
-                $rawValue = $this->DecodeRegisterValue($register, $rawRegisters);
-                if ($rawValue === null) {
+                switch ($r['type']) {
+                    case "U16":
+                        $value = $data[1];
+                        break;
+                    case "S16":
+                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                        break;
+                    case "U32":
+                        $value = ($data[1] << 16) | $data[2];
+                        break;
+                    case "S32":
+                        $combined = ($data[1] << 16) | $data[2];
+                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                        break;
+                    default:
+                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        continue 2;
+                }
+
+                $scale = (float)$r['scale'];
+                if ($scale == 0.0) {
+                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
-                $scaledValue = $rawValue * (float)$register['scale'];
-                $ident = 'Addr' . $address;
+                $scaledValue = $value * $scale;
+
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
+                    $this->SendDebug("FetchInverterData", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
 
                 $var = IPS_GetVariable($varID);
-                if ($var['VariableType'] === VARIABLETYPE_FLOAT) {
-                    $scaleStr = rtrim(rtrim(number_format((float)$register['scale'], 10, '.', ''), '0'), '.');
-                    $dotPos = strpos($scaleStr, '.');
-                    $decimals = $dotPos === false ? 0 : strlen($scaleStr) - $dotPos - 1;
-                    $finalValue = round((float)$scaledValue, $decimals);
-                } elseif ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
-                    $finalValue = ((int)round($scaledValue)) !== 0;
-                } elseif ($var['VariableType'] === VARIABLETYPE_STRING) {
-                    $finalValue = (string)$scaledValue;
-                } else {
-                    $finalValue = (int)round($scaledValue);
+                switch ($var['VariableType']) {
+                    case VARIABLETYPE_INTEGER:
+                        $finalValue = (int)round($scaledValue);
+                        break;
+
+                    case VARIABLETYPE_FLOAT:
+                        $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
+                        $dotPos   = strpos($scaleStr, '.');
+                        $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
+                        $finalValue = round((float)$scaledValue, $decimals);
+                        break;
+
+                    case VARIABLETYPE_STRING:
+                        $finalValue = (string)$scaledValue;
+                        break;
+
+                    case VARIABLETYPE_BOOLEAN:
+                        $finalValue = ((int)round($scaledValue)) !== 0;
+                        break;
+
+                    default:
+                        $finalValue = $scaledValue;
+                        break;
                 }
 
                 $this->SetValueIfChanged($ident, $finalValue);
                 $values[$ident] = $finalValue;
-            }
 
-            $this->WriteAttributeString('LastRawRegisters', json_encode($rawRegisters));
-            $this->CalculateMaxPowerFromRaw($rawRegisters);
-
-            $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
-            $this->SendDebug('FetchInverterData', json_encode([
-                'source' => 'WR_Modbus_BlockRead',
-                'selectedRegisters' => count($registers),
-                'blocks' => count($blocks),
-                'successfulBlocks' => $successfulBlocks,
-                'durationMs' => $durationMs,
-                'values' => $values
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        } catch (Throwable $e) {
-            $this->SendDebug('FetchInverterData', 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe', 'Fehler bei Blockabfrage: ' . $e->getMessage());
-        } finally {
-            $this->WriteAttributeInteger('LastPollStarted', 0);
-            IPS_SemaphoreLeave($lockName);
-        }
-    }
-
-    private function BuildReadBlocks(array $registers, int $maxGap = 4, int $maxCount = 100): array
-    {
-        $ranges = [];
-        foreach ($registers as $register) {
-            $start = (int)$register['address'];
-            $length = in_array($register['type'], ['U32', 'S32'], true) ? 2 : 1;
-            $ranges[] = ['start' => $start, 'end' => $start + $length - 1];
-        }
-        usort($ranges, fn($a, $b) => $a['start'] <=> $b['start']);
-
-        $blocks = [];
-        foreach ($ranges as $range) {
-            if ($blocks === []) {
-                $blocks[] = $range;
-                continue;
-            }
-            $last = count($blocks) - 1;
-            $newEnd = max($blocks[$last]['end'], $range['end']);
-            $gap = $range['start'] - $blocks[$last]['end'] - 1;
-            $count = $newEnd - $blocks[$last]['start'] + 1;
-            if ($gap <= $maxGap && $count <= $maxCount) {
-                $blocks[$last]['end'] = $newEnd;
-            } else {
-                $blocks[] = $range;
+            } catch (Exception $e) {
+                $this->SendDebug("FetchInverterData", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
+                $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
 
-        return array_map(fn($b) => ['start' => $b['start'], 'count' => $b['end'] - $b['start'] + 1], $blocks);
-    }
+        ksort($values);
+        $log = [
+            'source' => 'WR_Modbus',
+            'values' => $values
+        ];
+        $this->SendDebug(
+            "FetchInverterData",
+            json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
 
-    private function ReadRegisterBlock(int $start, int $count): ?array
-    {
-        $response = $this->SendDataToParent(json_encode([
-            'DataID' => '{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',
-            'Function' => 3,
-            'Address' => $start,
-            'Quantity' => $count,
-            'Data' => ''
-        ]));
-        if ($response === false || strlen($response) < ($count * 2 + 2)) {
-            return null;
-        }
-        $words = array_values(unpack('n*', substr($response, 2)) ?: []);
-        return count($words) >= $count ? array_slice($words, 0, $count) : null;
-    }
-
-    private function DecodeRegisterValue(array $register, array $rawRegisters): ?int
-    {
-        $address = (int)$register['address'];
-        if (!array_key_exists($address, $rawRegisters)) {
-            return null;
-        }
-        $word1 = $rawRegisters[$address] & 0xFFFF;
-        switch ($register['type']) {
-            case 'U16': return $word1;
-            case 'S16': return $word1 > 32767 ? $word1 - 65536 : $word1;
-            case 'U32':
-            case 'S32':
-                if (!array_key_exists($address + 1, $rawRegisters)) return null;
-                $combined = (($word1 << 16) | ($rawRegisters[$address + 1] & 0xFFFF));
-                if ($register['type'] === 'S32' && $combined > 2147483647) $combined -= 4294967296;
-                return $combined;
-        }
-        return null;
+        $this->CalculateMaxPower();
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -513,34 +459,59 @@ class Goodwe extends IPSModuleStrict
         return true;
     }
 
-    public function CalculateMaxPower(): void
+    public function CalculateMaxPower()
     {
-        $raw = json_decode($this->ReadAttributeString('LastRawRegisters'), true);
-        $this->CalculateMaxPowerFromRaw(is_array($raw) ? array_map('intval', $raw) : []);
-    }
-
-    private function CalculateMaxPowerFromRaw(array $raw): void
-    {
-        $calculations = [
-            ['property' => 'Entladen_Max',   'ident' => 'MaxEntladen',  'v' => 47904, 'a' => 47905, 'caption' => 'Entladen Max'],
-            ['property' => 'Laden_Max',      'ident' => 'MaxLaden',     'v' => 47902, 'a' => 47903, 'caption' => 'Laden Max'],
-            ['property' => 'Entladen_Max_2', 'ident' => 'MaxEntladen2', 'v' => 47922, 'a' => 47923, 'caption' => 'Entladen Max BAT2'],
-            ['property' => 'Laden_Max_2',    'ident' => 'MaxLaden2',    'v' => 47920, 'a' => 47921, 'caption' => 'Laden Max BAT2'],
-        ];
-        foreach ($calculations as $calc) {
-            if (!$this->ReadPropertyBoolean($calc['property']) || !isset($raw[$calc['v']], $raw[$calc['a']])) continue;
-            $voltage = $this->Signed16((int)$raw[$calc['v']]) * 0.1;
-            $current = $this->Signed16((int)$raw[$calc['a']]) * 0.1;
-            $power = (int)round($voltage * $current);
-            $this->SetValueIfChanged($calc['ident'], $power);
-            $this->SendDebug('CalculateMaxPower', "{$calc['caption']}: {$voltage} V × {$current} A = {$power} W", 0);
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47904, 0.1);
+                $strom    = $this->ReadRegisterValue(47905, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
         }
-    }
 
-    private function Signed16(int $value): int
-    {
-        $value &= 0xFFFF;
-        return $value > 32767 ? $value - 65536 : $value;
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47902, 0.1);
+                $strom    = $this->ReadRegisterValue(47903, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen2");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47922, 0.1);
+                $strom    = $this->ReadRegisterValue(47923, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden2");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47920, 0.1);
+                $strom    = $this->ReadRegisterValue(47921, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
     }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
@@ -745,16 +716,6 @@ class Goodwe extends IPSModuleStrict
                 return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
             case "W":
                 return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
-            case "Hz":
-                return ["profile" => "~Hertz", "type" => VARIABLETYPE_FLOAT];
-            case "bool":
-                return ["profile" => "~Switch", "type" => VARIABLETYPE_BOOLEAN];
-            case "work_mode":
-                return ["profile" => "Goodwe.WorkMode", "type" => VARIABLETYPE_INTEGER];
-            case "grid_mode":
-                return ["profile" => "Goodwe.GridMode", "type" => VARIABLETYPE_INTEGER];
-            case "raw":
-                return ["profile" => "", "type" => VARIABLETYPE_INTEGER];
             case "dur":
                 return ["profile" => "~Duration", "type" => VARIABLETYPE_INTEGER];
             case "kWh":
@@ -854,9 +815,6 @@ class Goodwe extends IPSModuleStrict
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
         }
 
-        $this->CreateAssociationProfile('Goodwe.WorkMode', [0 => 'Selbstverbrauch', 1 => 'Inselbetrieb', 2 => 'Backup', 3 => 'Wirtschaftlich', 4 => 'Peak-Shaving', 5 => 'Erw. Selbstverbrauch']);
-        $this->CreateAssociationProfile('Goodwe.GridMode', [0 => 'Warten', 1 => 'Einspeisung', 2 => 'Einspeisung begrenzt', 3 => 'Entsättigung', 4 => 'PV-Limit', 5 => 'Reaktiv', 6 => 'Blindleistung', 7 => 'Abgeschaltet', 8 => 'PV-Optimierung', 9 => 'ECO', 10 => 'HW-Schutz', 11 => 'Fehler', 17 => 'Bypass', 18 => 'Inselbetrieb']);
-
         $this->CreateAssociationProfile('Goodwe.WallboxStatus', [
             0 => 'Frei (nicht verbunden)',
             1 => 'Frei (verbunden)',
@@ -922,7 +880,7 @@ class Goodwe extends IPSModuleStrict
 
     private function GetRegisters()
     {
-        $registers = [
+        return [
             // Smartmeter
             ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 15],
             ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 20],
@@ -1002,63 +960,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 810],
             ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 820],
 
-            // Zusätzliche GoodWe Mess- und Steuerregister
-            ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35124, "name" => "WR - Netzleistung L1",             "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35126, "name" => "WR - Netzspannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35127, "name" => "WR - Netzstrom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35128, "name" => "WR - Netzfrequenz L2",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35129, "name" => "WR - Netzleistung L2",             "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35131, "name" => "WR - Netzspannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35132, "name" => "WR - Netzstrom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35133, "name" => "WR - Netzfrequenz L3",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35134, "name" => "WR - Netzleistung L3",             "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35136, "name" => "WR - Netzmodus",                   "type" => "U16", "unit" => "grid_mode", "scale" => 1],
-            ["address" => 35137, "name" => "WR - Inverter Gesamtleistung",     "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35139, "name" => "WR - AC Wirkleistung",             "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35147, "name" => "Backup - Frequenz L1",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35149, "name" => "Backup - Leistung L1",              "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35151, "name" => "Backup - Spannung L2",              "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35152, "name" => "Backup - Strom L2",                 "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35153, "name" => "Backup - Frequenz L2",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35155, "name" => "Backup - Leistung L2",              "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35157, "name" => "Backup - Spannung L3",              "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 35158, "name" => "Backup - Strom L3",                 "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 35159, "name" => "Backup - Frequenz L3",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 35161, "name" => "Backup - Leistung L3",              "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1],
-            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1],
-            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1],
-            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1],
-            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1],
-            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1],
-            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 5],
-            ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "U16", "unit" => "W",         "scale" => 1, "writable" => true, "rawMin" => 0, "rawMax" => 34500],
-            ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1],
-            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U16", "unit" => "raw",         "scale" => 1],
-            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U16", "unit" => "raw",         "scale" => 1],
-            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1],
-
             // Wallbox GoodWe HCA G2 – wichtigste Mess- und Steuerwerte
             ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 900],
             ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 910],
@@ -1080,40 +981,5 @@ class Goodwe extends IPSModuleStrict
             ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 1070],
             ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 1080],
         ];
-
-        // Offene Positionslogik nach Funktionsgruppen. Neue Register können innerhalb
-        // einer Gruppe beliebig ergänzt werden.
-        // Bestehende Benutzerpositionen werden nicht überschrieben; die Position gilt nur
-        // beim erstmaligen Anlegen einer Variablen.
-        $groupCounters = [];
-        foreach ($registers as &$register) {
-            $name = (string)$register['name'];
-
-            if (!empty($register['writeOnly'])) {
-                $groupBase = 9000; // reine Aktionen ganz am Ende
-            } elseif (str_starts_with($name, 'Backup -')) {
-                $groupBase = 8000; // Backup klar hinter normalen WR-/Netz-/Steuerwerten
-            } elseif (str_starts_with($name, 'WB -')) {
-                $groupBase = 7000;
-            } elseif (!empty($register['writable'])) {
-                $groupBase = 6000; // Steuerregister gesammelt
-            } elseif (str_starts_with($name, 'SM -')) {
-                $groupBase = 5000;
-            } elseif (str_starts_with($name, 'WR -')) {
-                $groupBase = 4000;
-            } elseif (str_starts_with($name, 'BAT2 -')) {
-                $groupBase = 3000;
-            } elseif (str_starts_with($name, 'BAT -')) {
-                $groupBase = 2000;
-            } else {
-                $groupBase = 1000;
-            }
-
-            $groupCounters[$groupBase] = ($groupCounters[$groupBase] ?? 0) + 1;
-            $register['pos'] = $groupBase + ($groupCounters[$groupBase] * 10);
-        }
-        unset($register);
-
-        return $registers;
     }
 }
