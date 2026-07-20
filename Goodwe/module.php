@@ -34,11 +34,6 @@ class Goodwe extends IPSModuleStrict
         // Während der Neukonfiguration keine neue Abfrage starten.
         $this->SetTimerInterval('TimerWR', 0);
 
-        // Bestehende Variablen sofort auf die aktuell im Modul definierten Positionen setzen.
-        // Dies läuft bewusst vor jeder Normalisierung/Return-Logik, damit ein Modul-Update
-        // die neue Gruppenstruktur zuverlässig übernimmt.
-        $this->UpdateExistingVariablePositions();
-
         $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($rawSelected)) {
             $rawSelected = [];
@@ -157,13 +152,6 @@ class Goodwe extends IPSModuleStrict
 
                 $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
             }
-
-            // Position bei jedem ApplyChanges aktualisieren, damit neue Modulversionen
-            // die aktuelle Gruppenstruktur auch für bereits vorhandene Variablen übernehmen.
-            $variableID = @$this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$r['pos']);
-            }
         }
 
         foreach ($this->GetRegisters() as $r) {
@@ -190,11 +178,6 @@ class Goodwe extends IPSModuleStrict
             if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 224);
             }
-
-            $calculatedID = @$this->GetIDForIdent("MaxEntladen");
-            if ($calculatedID !== false) {
-                IPS_SetPosition($calculatedID, 224);
-            }
         } else {
             if (@$this->GetIDForIdent("MaxEntladen") !== false) {
                 $this->UnregisterVariable("MaxEntladen");
@@ -205,11 +188,6 @@ class Goodwe extends IPSModuleStrict
         if ($this->ReadPropertyBoolean("Laden_Max")) {
             if (!@$this->GetIDForIdent("MaxLaden")) {
                 $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 223);
-            }
-
-            $calculatedID = @$this->GetIDForIdent("MaxLaden");
-            if ($calculatedID !== false) {
-                IPS_SetPosition($calculatedID, 223);
             }
         } else {
             if (@$this->GetIDForIdent("MaxLaden") !== false) {
@@ -223,11 +201,6 @@ class Goodwe extends IPSModuleStrict
             if (!@$this->GetIDForIdent("MaxEntladen2")) {
                 $this->RegisterVariableInteger("MaxEntladen2", "BAT2 - Entladen Leistung max", "Goodwe.Watt", 315);
             }
-
-            $calculatedID = @$this->GetIDForIdent("MaxEntladen2");
-            if ($calculatedID !== false) {
-                IPS_SetPosition($calculatedID, 315);
-            }
         } else {
             if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
                 $this->UnregisterVariable("MaxEntladen2");
@@ -239,44 +212,10 @@ class Goodwe extends IPSModuleStrict
             if (!@$this->GetIDForIdent("MaxLaden2")) {
                 $this->RegisterVariableInteger("MaxLaden2", "BAT2 - Laden Leistung max", "Goodwe.Watt", 314);
             }
-
-            $calculatedID = @$this->GetIDForIdent("MaxLaden2");
-            if ($calculatedID !== false) {
-                IPS_SetPosition($calculatedID, 314);
-            }
         } else {
             if (@$this->GetIDForIdent("MaxLaden2") !== false) {
                 $this->UnregisterVariable("MaxLaden2");
                 $this->SendDebug("ApplyChanges", "MaxLaden-Bat2-Variable entfernt, da Laden_Max deaktiviert.", 0);
-            }
-        }
-    }
-
-    private function UpdateExistingVariablePositions(): void
-    {
-        foreach ($this->GetRegisters() as $register) {
-            if (!isset($register['address'], $register['pos'])) {
-                continue;
-            }
-
-            $ident = 'Addr' . (string)$register['address'];
-            $variableID = @$this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$register['pos']);
-            }
-        }
-
-        $calculatedPositions = [
-            'MaxLaden'     => 223,
-            'MaxEntladen'  => 224,
-            'MaxLaden2'    => 314,
-            'MaxEntladen2' => 315
-        ];
-
-        foreach ($calculatedPositions as $ident => $position) {
-            $variableID = @$this->GetIDForIdent($ident);
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, $position);
             }
         }
     }
@@ -1088,8 +1027,8 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35206, "name" => "BAT - Laden",                  "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 202],
             ["address" => 35209, "name" => "BAT - Entladen",               "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 203],
             ["address" => 37003, "name" => "BAT - Temperatur",             "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 204],
-            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 205, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 206, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 205, "writable" => true, "rawMin" => 0, "rawMax" => 100],
+            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 206, "writable" => true, "rawMin" => 0, "rawMax" => 100],
             ["address" => 47511, "name" => "BAT - EMSPowerMode",           "type" => "U16", "unit" => "ems",      "scale" => 1,   "pos" => 207, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
             ["address" => 47512, "name" => "BAT - EMSPowerSet",            "type" => "U16", "unit" => "watt_ems", "scale" => 1,   "pos" => 208, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
             ["address" => 47902, "name" => "BAT - Laden Spannung max",     "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 209],
