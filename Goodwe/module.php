@@ -1121,6 +1121,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
             ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
             ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
+            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 464, "writable" => true, "rawMin" => 0, "rawMax" => 1],
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
@@ -1203,8 +1204,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47017, "name" => "WR - Modbus TCP ohne Internet",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 461, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: Bedeutung Modbus TCP Without Internet (0=aus, 1=ein).
             ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 462, "writable" => true, "rawMin" => 0, "rawMax" => 1],
             ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "S16", "unit" => "W",         "scale" => 1, "pos" => 463, "writable" => true, "rawMin" => -30000, "rawMax" => 30000], // GEÄNDERT: GoodWe ARM: Feed Power Parameter ist S16, Bereich -30000..30000.
-            ["address" => 47505, "name" => "WR - Manufacturer Code",         "type" => "U16", "unit" => "raw",      "scale" => 1, "pos" => 464, "writable" => true, "rawMin" => 0, "rawMax" => 65535], // GEÄNDERT: GoodWe ARM: 47505 ist Manufacturer Code; für EMS laut Hinweis Wert 2 setzen.
-
+            
             // Backup
             ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 500],
             ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 501],
