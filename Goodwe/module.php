@@ -31,16 +31,23 @@ class Goodwe extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
-        // Während der Neukonfiguration keine neue Abfrage starten.
         $this->SetTimerInterval('TimerWR', 0);
 
-        $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($rawSelected)) {
-            $rawSelected = [];
+        $this->CreateProfile();
+
+        $selectedRegisters = json_decode(
+            $this->ReadPropertyString('SelectedRegisters'),
+            true
+        );
+
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
         }
 
         $selectedMap = [];
-        foreach ($rawSelected as $r) {
+
+        foreach ($selectedRegisters as $r) {
+            // Kompatibilität mit eventuell älteren gespeicherten Formaten.
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
                 if (is_array($tmp)) {
@@ -55,6 +62,7 @@ class Goodwe extends IPSModuleStrict
             }
 
             $addr = null;
+
             if (isset($r['addr'])) {
                 $addr = (string)$r['addr'];
             } elseif (isset($r['address'])) {
@@ -65,51 +73,25 @@ class Goodwe extends IPSModuleStrict
                 continue;
             }
 
-            $selectedMap[$addr] = (bool)($r['selected'] ?? false);
-        }
-
-        $normalized = [];
-        foreach ($this->GetRegisters() as $r) {
-            $addr = (string)$r['address'];
-            $normalized[] = [
-                'addr'     => $addr,
-                'selected' => $selectedMap[$addr] ?? false
-            ];
-        }
-
-        $currentJson = json_encode($rawSelected);
-        $normalizedJson = json_encode($normalized);
-
-        if ($currentJson !== $normalizedJson) {
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", $normalizedJson);
-            IPS_ApplyChanges($this->InstanceID);
-            return;
-        }
-
-        $this->CreateProfile();
-
-        $this->SetTimerInterval('TimerWR', $this->ReadPropertyInteger('PollIntervalWR') * 1000);
-
-        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        $registerCurrentIdents = [];
-        $selectedMap = [];
-
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $r) {
-                if (!is_array($r)) {
-                    continue;
-                }
-
-                $addr = isset($r['addr']) ? (string)$r['addr'] : null;
-                if ($addr === null || $addr === '') {
-                    continue;
-                }
-
-                if (!empty($r['selected'])) {
-                    $selectedMap[$addr] = true;
-                }
+            if (!empty($r['selected'])) {
+                $selectedMap[$addr] = true;
             }
         }
+
+        foreach ($this->GetRegisters() as $r) {
+            if (!isset($r['address'], $r['pos'])) {
+                continue;
+            }
+
+            $ident = 'Addr' . (string)$r['address'];
+            $variableID = @$this->GetIDForIdent($ident);
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, (int)$r['pos']);
+            }
+        }
+
+        $registerCurrentIdents = [];
 
         foreach ($this->GetRegisters() as $r) {
             $addrKey = (string)$r['address'];
@@ -120,104 +102,250 @@ class Goodwe extends IPSModuleStrict
 
             foreach (['address', 'name', 'type', 'unit', 'scale', 'pos'] as $need) {
                 if (!array_key_exists($need, $r)) {
-                    $this->SendDebug("ApplyChanges", "Fehlendes Feld '$need' für $addrKey", 0);
+                    $this->SendDebug(
+                        'ApplyChanges',
+                        "Fehlendes Feld '$need' für Register $addrKey",
+                        0
+                    );
                     continue 2;
                 }
             }
 
             $details = $this->GetVariableDetails((string)$r['unit']);
+
             if ($details === null) {
-                $this->SendDebug("ApplyChanges", "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).", 0);
+                $this->SendDebug(
+                    'ApplyChanges',
+                    "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).",
+                    0
+                );
                 continue;
             }
 
-            $ident = "Addr" . $addrKey;
+            $ident = 'Addr' . $addrKey;
             $registerCurrentIdents[] = $ident;
 
-            if (!@$this->GetIDForIdent($ident)) {
+            $variableID = @$this->GetIDForIdent($ident);
+
+            if ($variableID === false) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        $this->RegisterVariableInteger(
+                            $ident,
+                            $r['name'],
+                            $details['profile'],
+                            (int)$r['pos']
+                        );
                         break;
+
                     case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        $this->RegisterVariableFloat(
+                            $ident,
+                            $r['name'],
+                            $details['profile'],
+                            (int)$r['pos']
+                        );
                         break;
+
                     case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        $this->RegisterVariableString(
+                            $ident,
+                            $r['name'],
+                            $details['profile'],
+                            (int)$r['pos']
+                        );
                         break;
+
                     case VARIABLETYPE_BOOLEAN:
-                        $this->RegisterVariableBoolean($ident, $r['name'], $details['profile'], (int)$r['pos']);
+                        $this->RegisterVariableBoolean(
+                            $ident,
+                            $r['name'],
+                            $details['profile'],
+                            (int)$r['pos']
+                        );
                         break;
                 }
 
-                $this->SendDebug("ApplyChanges", "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}", 0);
+                $this->SendDebug(
+                    'ApplyChanges',
+                    "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}",
+                    0
+                );
+            }
+
+            // Position auch bei bereits bestehenden Variablen aktualisieren.
+            $variableID = @$this->GetIDForIdent($ident);
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, (int)$r['pos']);
             }
         }
 
+        /*
+        * Aktionen für schreibbare Register aktivieren.
+        */
         foreach ($this->GetRegisters() as $r) {
             if (empty($r['writable'])) {
                 continue;
             }
 
             $writeIdent = 'Addr' . (string)$r['address'];
-            if (@$this->GetIDForIdent($writeIdent)) {
+            $variableID = @$this->GetIDForIdent($writeIdent);
+
+            if ($variableID !== false) {
                 $this->EnableAction($writeIdent);
             }
         }
 
+        /*
+        * Nicht mehr ausgewählte Registervariablen entfernen.
+        */
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $obj = IPS_GetObject($childID);
-            if (strpos($obj['ObjectIdent'], 'Addr') === 0 && !in_array($obj['ObjectIdent'], $registerCurrentIdents)) {
+
+            if (
+                strpos($obj['ObjectIdent'], 'Addr') === 0
+                && !in_array(
+                    $obj['ObjectIdent'],
+                    $registerCurrentIdents,
+                    true
+                )
+            ) {
                 $this->UnregisterVariable($obj['ObjectIdent']);
-                $this->SendDebug("ApplyChanges", "Register-Variable entfernt: {$obj['ObjectIdent']}", 0);
+
+                $this->SendDebug(
+                    'ApplyChanges',
+                    "Register-Variable entfernt: {$obj['ObjectIdent']}",
+                    0
+                );
             }
         }
 
-        // Berechnung für Batterie 1
-        if ($this->ReadPropertyBoolean("Entladen_Max")) {
-            if (!@$this->GetIDForIdent("MaxEntladen")) {
-                $this->RegisterVariableInteger("MaxEntladen", "BAT - Entladen Leistung max", "Goodwe.Watt", 224);
+        /*
+        * Berechnete Werte Batterie 1
+        */
+
+        if ($this->ReadPropertyBoolean('Laden_Max')) {
+            if (!@$this->GetIDForIdent('MaxLaden')) {
+                $this->RegisterVariableInteger(
+                    'MaxLaden',
+                    'BAT - Laden Leistung max',
+                    'Goodwe.Watt',
+                    223
+                );
+            }
+
+            $variableID = @$this->GetIDForIdent('MaxLaden');
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, 223);
             }
         } else {
-            if (@$this->GetIDForIdent("MaxEntladen") !== false) {
-                $this->UnregisterVariable("MaxEntladen");
-                $this->SendDebug("ApplyChanges", "MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            if (@$this->GetIDForIdent('MaxLaden') !== false) {
+                $this->UnregisterVariable('MaxLaden');
+
+                $this->SendDebug(
+                    'ApplyChanges',
+                    'MaxLaden-Variable entfernt, da Laden_Max deaktiviert.',
+                    0
+                );
             }
         }
 
-        if ($this->ReadPropertyBoolean("Laden_Max")) {
-            if (!@$this->GetIDForIdent("MaxLaden")) {
-                $this->RegisterVariableInteger("MaxLaden", "BAT - Laden Leistung max", "Goodwe.Watt", 223);
+        if ($this->ReadPropertyBoolean('Entladen_Max')) {
+            if (!@$this->GetIDForIdent('MaxEntladen')) {
+                $this->RegisterVariableInteger(
+                    'MaxEntladen',
+                    'BAT - Entladen Leistung max',
+                    'Goodwe.Watt',
+                    224
+                );
+            }
+
+            $variableID = @$this->GetIDForIdent('MaxEntladen');
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, 224);
             }
         } else {
-            if (@$this->GetIDForIdent("MaxLaden") !== false) {
-                $this->UnregisterVariable("MaxLaden");
-                $this->SendDebug("ApplyChanges", "MaxLaden-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            if (@$this->GetIDForIdent('MaxEntladen') !== false) {
+                $this->UnregisterVariable('MaxEntladen');
+
+                $this->SendDebug(
+                    'ApplyChanges',
+                    'MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.',
+                    0
+                );
             }
         }
 
-        // Berechnung für Batterie 2
-        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
-            if (!@$this->GetIDForIdent("MaxEntladen2")) {
-                $this->RegisterVariableInteger("MaxEntladen2", "BAT2 - Entladen Leistung max", "Goodwe.Watt", 315);
+        /*
+        * Berechnete Werte Batterie 2
+        */
+
+        if ($this->ReadPropertyBoolean('Laden_Max_2')) {
+            if (!@$this->GetIDForIdent('MaxLaden2')) {
+                $this->RegisterVariableInteger(
+                    'MaxLaden2',
+                    'BAT2 - Laden Leistung max',
+                    'Goodwe.Watt',
+                    314
+                );
+            }
+
+            $variableID = @$this->GetIDForIdent('MaxLaden2');
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, 314);
             }
         } else {
-            if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
-                $this->UnregisterVariable("MaxEntladen2");
-                $this->SendDebug("ApplyChanges", "MaxEntladen-Bat2-Variable entfernt, da Entladen_Max deaktiviert.", 0);
+            if (@$this->GetIDForIdent('MaxLaden2') !== false) {
+                $this->UnregisterVariable('MaxLaden2');
+
+                $this->SendDebug(
+                    'ApplyChanges',
+                    'MaxLaden-Bat2-Variable entfernt, da Laden_Max_2 deaktiviert.',
+                    0
+                );
             }
         }
 
-        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
-            if (!@$this->GetIDForIdent("MaxLaden2")) {
-                $this->RegisterVariableInteger("MaxLaden2", "BAT2 - Laden Leistung max", "Goodwe.Watt", 314);
+        if ($this->ReadPropertyBoolean('Entladen_Max_2')) {
+            if (!@$this->GetIDForIdent('MaxEntladen2')) {
+                $this->RegisterVariableInteger(
+                    'MaxEntladen2',
+                    'BAT2 - Entladen Leistung max',
+                    'Goodwe.Watt',
+                    315
+                );
+            }
+
+            $variableID = @$this->GetIDForIdent('MaxEntladen2');
+
+            if ($variableID !== false) {
+                IPS_SetPosition($variableID, 315);
             }
         } else {
-            if (@$this->GetIDForIdent("MaxLaden2") !== false) {
-                $this->UnregisterVariable("MaxLaden2");
-                $this->SendDebug("ApplyChanges", "MaxLaden-Bat2-Variable entfernt, da Laden_Max deaktiviert.", 0);
+            if (@$this->GetIDForIdent('MaxEntladen2') !== false) {
+                $this->UnregisterVariable('MaxEntladen2');
+
+                $this->SendDebug(
+                    'ApplyChanges',
+                    'MaxEntladen-Bat2-Variable entfernt, da Entladen_Max_2 deaktiviert.',
+                    0
+                );
             }
         }
+
+        $pollInterval = max(
+            1,
+            $this->ReadPropertyInteger('PollIntervalWR')
+        );
+
+        $this->SetTimerInterval(
+            'TimerWR',
+            $pollInterval * 1000
+        );
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
