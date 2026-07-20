@@ -955,46 +955,6 @@ class Goodwe extends IPSModuleStrict
     private function GetRegisters()
     {
         $registers = [
-            // Smartmeter
-            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
-            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
-            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
-            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
-
-            // Batterie 1
-            ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
-            ["address" => 35184, "name" => "BAT - Mode",                   "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 201],
-            ["address" => 35206, "name" => "BAT - Laden",                  "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 202],
-            ["address" => 35209, "name" => "BAT - Entladen",               "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 203],
-            ["address" => 37003, "name" => "BAT - Temperatur",             "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 204],
-            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 205, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 206, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47511, "name" => "BAT - EMSPowerMode",           "type" => "U16", "unit" => "ems",      "scale" => 1,   "pos" => 207, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47512, "name" => "BAT - EMSPowerSet",            "type" => "U16", "unit" => "watt_ems", "scale" => 1,   "pos" => 208, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47902, "name" => "BAT - Laden Spannung max",     "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 209],
-            ["address" => 47903, "name" => "BAT - Laden Strom max",        "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 210],
-            ["address" => 47904, "name" => "BAT - Entladen Spannung max",  "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 211],
-            ["address" => 47905, "name" => "BAT - Entladen Strom max",     "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 212],
-            ["address" => 47906, "name" => "BAT - Spannung",               "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 213],
-            ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 214],
-            ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 215],
-            ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
-
-            // Batterie 2
-            ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
-            ["address" => 35266, "name" => "BAT2 - Mode",                  "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 301],
-            ["address" => 39001, "name" => "BAT2 - Temperatur",            "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 302],
-            ["address" => 45381, "name" => "BAT2 - Min SOC online",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 303, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 45383, "name" => "BAT2 - Min SOC offline",       "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 304, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47920, "name" => "BAT2 - Laden Spannung max",    "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 305],
-            ["address" => 47921, "name" => "BAT2 - Laden Strom max",       "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 306],
-            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max", "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 307],
-            ["address" => 47923, "name" => "BAT2 - Entladen Strom max",    "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 308],
-            ["address" => 47924, "name" => "BAT2 - Spannung",              "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 309],
-            ["address" => 47925, "name" => "BAT2 - Strom",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 310],
-            ["address" => 47926, "name" => "BAT2 - SOC",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 311],
-            ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 312],
-
             // Wechselrichter
             ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 400],
             ["address" => 35104, "name" => "WR - Strom String 1",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 401],
@@ -1033,8 +993,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35351, "name" => "WR - I MPPT7",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 434],
             ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 435],
             ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 436],
-
-            // Zusätzliche GoodWe Mess- und Steuerregister
             ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 437],
             ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 438],
             ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 439],
@@ -1050,6 +1008,61 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35136, "name" => "WR - Netzmodus",                   "type" => "U16", "unit" => "grid_mode", "scale" => 1, "pos" => 449],
             ["address" => 35137, "name" => "WR - Inverter Gesamtleistung",     "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 450],
             ["address" => 35139, "name" => "WR - AC Wirkleistung",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 451],
+            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 452],
+            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 453],
+            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1, "pos" => 454],
+            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 455],
+            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 456],
+            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 457],
+            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 458],
+            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 459, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 460, "writable" => true, "rawMin" => 0, "rawMax" => 5],
+            ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 461, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 462, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "U16", "unit" => "W",         "scale" => 1, "pos" => 463, "writable" => true, "rawMin" => 0, "rawMax" => 34500],
+
+            // Batterie 1
+            ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
+            ["address" => 35184, "name" => "BAT - Mode",                   "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 201],
+            ["address" => 35206, "name" => "BAT - Laden",                  "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 202],
+            ["address" => 35209, "name" => "BAT - Entladen",               "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 203],
+            ["address" => 37003, "name" => "BAT - Temperatur",             "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 204],
+            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 205, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 206, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 47511, "name" => "BAT - EMSPowerMode",           "type" => "U16", "unit" => "ems",      "scale" => 1,   "pos" => 207, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 47512, "name" => "BAT - EMSPowerSet",            "type" => "U16", "unit" => "watt_ems", "scale" => 1,   "pos" => 208, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 47902, "name" => "BAT - Laden Spannung max",     "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 209],
+            ["address" => 47903, "name" => "BAT - Laden Strom max",        "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 210],
+            ["address" => 47904, "name" => "BAT - Entladen Spannung max",  "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 211],
+            ["address" => 47905, "name" => "BAT - Entladen Strom max",     "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 212],
+            ["address" => 47906, "name" => "BAT - Spannung",               "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 213],
+            ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 214],
+            ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 215],
+            ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
+            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 217],
+            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 218],
+            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 219, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
+            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 221],
+            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 222],
+
+            // Batterie 2
+            ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
+            ["address" => 35266, "name" => "BAT2 - Mode",                  "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 301],
+            ["address" => 39001, "name" => "BAT2 - Temperatur",            "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 302],
+            ["address" => 45381, "name" => "BAT2 - Min SOC online",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 303, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 45383, "name" => "BAT2 - Min SOC offline",       "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 304, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
+            ["address" => 47920, "name" => "BAT2 - Laden Spannung max",    "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 305],
+            ["address" => 47921, "name" => "BAT2 - Laden Strom max",       "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 306],
+            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max", "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 307],
+            ["address" => 47923, "name" => "BAT2 - Entladen Strom max",    "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 308],
+            ["address" => 47924, "name" => "BAT2 - Spannung",              "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 309],
+            ["address" => 47925, "name" => "BAT2 - Strom",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 310],
+            ["address" => 47926, "name" => "BAT2 - SOC",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 311],
+            ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 312],
+            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 313],
+
+            // Backup
             ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 500],
             ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 501],
             ["address" => 35147, "name" => "Backup - Frequenz L1",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 502],
@@ -1063,35 +1076,9 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35159, "name" => "Backup - Frequenz L3",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 510],
             ["address" => 35161, "name" => "Backup - Leistung L3",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 511],
             ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 512],
-            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 452],
-            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 453],
-            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1, "pos" => 454],
-            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 455],
-            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 456],
-            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 457],
-            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 458],
-            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 217],
-            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 218],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
-            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 459, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
             ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 513],
-            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 460, "writable" => true, "rawMin" => 0, "rawMax" => 5],
-            ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 461, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 219, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 462, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "U16", "unit" => "W",         "scale" => 1, "pos" => 463, "writable" => true, "rawMin" => 0, "rawMax" => 34500],
-            ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
-            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 221],
-            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 222],
-            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 313],
 
-            // Wallbox GoodWe HCA G2 – wichtigste Mess- und Steuerwerte
+            // Wallbox
             ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 600],
             ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 601],
             ["address" => 10011, "name" => "WB - Spannung L3",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 602],
@@ -1111,40 +1098,20 @@ class Goodwe extends IPSModuleStrict
             ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
             ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
             ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
+
+            // Smartmeter
+            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
+            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
+            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
+            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
+            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
+            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
+            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
+            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
+            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
+            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
+            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
         ];
-
-        // Offene Positionslogik nach Funktionsgruppen. Neue Register können innerhalb
-        // einer Gruppe beliebig ergänzt werden.
-        // Bestehende Benutzerpositionen werden nicht überschrieben; die Position gilt nur
-        // beim erstmaligen Anlegen einer Variablen.
-        $groupCounters = [];
-        foreach ($registers as &$register) {
-            $name = (string)$register['name'];
-
-            if (!empty($register['writeOnly'])) {
-                $groupBase = 9000; // reine Aktionen ganz am Ende
-            } elseif (str_starts_with($name, 'Backup -')) {
-                $groupBase = 8000; // Backup klar hinter normalen WR-/Netz-/Steuerwerten
-            } elseif (str_starts_with($name, 'WB -')) {
-                $groupBase = 7000;
-            } elseif (!empty($register['writable'])) {
-                $groupBase = 6000; // Steuerregister gesammelt
-            } elseif (str_starts_with($name, 'SM -')) {
-                $groupBase = 5000;
-            } elseif (str_starts_with($name, 'WR -')) {
-                $groupBase = 4000;
-            } elseif (str_starts_with($name, 'BAT2 -')) {
-                $groupBase = 3000;
-            } elseif (str_starts_with($name, 'BAT -')) {
-                $groupBase = 2000;
-            } else {
-                $groupBase = 1000;
-            }
-
-            $groupCounters[$groupBase] = ($groupCounters[$groupBase] ?? 0) + 1;
-            $register['pos'] = $groupBase + ($groupCounters[$groupBase] * 10);
-        }
-        unset($register);
 
         return $registers;
     }
