@@ -1239,7 +1239,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 608],
             ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 609],
             ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 610],
-            ["address" => 36057, "name" => "Test",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 611],
         ];
 
         return $registers;
