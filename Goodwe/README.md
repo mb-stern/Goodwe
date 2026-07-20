@@ -101,6 +101,7 @@ Version 2.14 (20.07.2026)
 - Testweise Integration der Wallbox GoodWe HCA G2.
 - Mehr Parameter können abgefragt werden.
 - Schneller dank blockweise Abfrage der Register.
+- Hänger beim Update des Moduls behoben
 
 Version 2.13 (13.05.2026)
 - Codeanpassung, um Fehlermeldungen beim Update oder neu laden des Moduls zu verhindern.
