@@ -1142,7 +1142,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 155],
             ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 156],
             ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 157],
-            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 158],
+            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 158],
             ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 159, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
             ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 160, "writable" => true, "rawMin" => 0, "rawMax" => 5],
             ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 161, "writable" => true, "rawMin" => 0, "rawMax" => 1],
