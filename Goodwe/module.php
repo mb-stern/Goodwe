@@ -31,23 +31,18 @@ class Goodwe extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
+        // Während der Neukonfiguration / beim Modulupdate keine neue Abfrage starten.
+        // Das verhindert, dass alter und neuer Timer parallel laufen.
         $this->SetTimerInterval('TimerWR', 0);
 
-        $this->CreateProfile();
-
-        $selectedRegisters = json_decode(
-            $this->ReadPropertyString('SelectedRegisters'),
-            true
-        );
-
-        if (!is_array($selectedRegisters)) {
-            $selectedRegisters = [];
+        $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($rawSelected)) {
+            $rawSelected = [];
         }
 
+        // Bestehende Auswahl in Map übernehmen.
         $selectedMap = [];
-
-        foreach ($selectedRegisters as $r) {
-            // Kompatibilität mit eventuell älteren gespeicherten Formaten.
+        foreach ($rawSelected as $r) {
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
                 if (is_array($tmp)) {
@@ -62,7 +57,6 @@ class Goodwe extends IPSModuleStrict
             }
 
             $addr = null;
-
             if (isset($r['addr'])) {
                 $addr = (string)$r['addr'];
             } elseif (isset($r['address'])) {
@@ -73,28 +67,84 @@ class Goodwe extends IPSModuleStrict
                 continue;
             }
 
-            if (!empty($r['selected'])) {
-                $selectedMap[$addr] = true;
-            }
+            $selectedMap[$addr] = (bool)($r['selected'] ?? false);
         }
 
+        /*
+        * SelectedRegisters wieder vollständig normalisieren.
+        * Dadurch enthält die Property für JEDES aktuelle Register genau einen Eintrag.
+        * Neue Register erscheinen nach einem Modulupdate automatisch als nicht ausgewählt.
+        */
+        $normalized = [];
         foreach ($this->GetRegisters() as $r) {
-            if (!isset($r['address'], $r['pos'])) {
-                continue;
-            }
+            $addr = (string)$r['address'];
 
-            $ident = 'Addr' . (string)$r['address'];
-            $variableID = @$this->GetIDForIdent($ident);
-
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$r['pos']);
-            }
+            $normalized[] = [
+                'addr'     => $addr,
+                'selected' => $selectedMap[$addr] ?? false
+            ];
         }
+
+        $currentJson    = json_encode($rawSelected);
+        $normalizedJson = json_encode($normalized);
+
+        if ($currentJson !== $normalizedJson) {
+            IPS_SetProperty($this->InstanceID, "SelectedRegisters", $normalizedJson);
+
+            /*
+            * Wie in deiner alten Version:
+            * ApplyChanges erneut ausführen, damit die neue normalisierte Liste
+            * sofort als Konfiguration übernommen wird.
+            *
+            * Timer ist zu diesem Zeitpunkt bereits auf 0 gesetzt.
+            */
+            IPS_ApplyChanges($this->InstanceID);
+            return;
+        }
+
+        $this->CreateProfile();
+
+        // Aktuell ausgewählte Register erneut einlesen.
+        $selectedRegisters = json_decode(
+            $this->ReadPropertyString("SelectedRegisters"),
+            true
+        );
 
         $registerCurrentIdents = [];
+        $selectedMap = [];
 
+        if (is_array($selectedRegisters)) {
+            foreach ($selectedRegisters as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+
+                $addr = isset($r['addr']) ? (string)$r['addr'] : null;
+
+                if ($addr === null || $addr === '') {
+                    continue;
+                }
+
+                if (!empty($r['selected'])) {
+                    $selectedMap[$addr] = true;
+                }
+            }
+        }
+
+        /*
+        * Vorhandene Variablen positionieren und ausgewählte Variablen anlegen.
+        */
         foreach ($this->GetRegisters() as $r) {
             $addrKey = (string)$r['address'];
+            $ident   = 'Addr' . $addrKey;
+
+            // Position bestehender Variablen bei jedem ApplyChanges aktualisieren.
+            if (isset($r['pos'])) {
+                $existingID = @$this->GetIDForIdent($ident);
+                if ($existingID !== false) {
+                    IPS_SetPosition($existingID, (int)$r['pos']);
+                }
+            }
 
             if (!isset($selectedMap[$addrKey])) {
                 continue;
@@ -103,8 +153,8 @@ class Goodwe extends IPSModuleStrict
             foreach (['address', 'name', 'type', 'unit', 'scale', 'pos'] as $need) {
                 if (!array_key_exists($need, $r)) {
                     $this->SendDebug(
-                        'ApplyChanges',
-                        "Fehlendes Feld '$need' für Register $addrKey",
+                        "ApplyChanges",
+                        "Fehlendes Feld '$need' für $addrKey",
                         0
                     );
                     continue 2;
@@ -115,19 +165,16 @@ class Goodwe extends IPSModuleStrict
 
             if ($details === null) {
                 $this->SendDebug(
-                    'ApplyChanges',
+                    "ApplyChanges",
                     "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).",
                     0
                 );
                 continue;
             }
 
-            $ident = 'Addr' . $addrKey;
             $registerCurrentIdents[] = $ident;
 
-            $variableID = @$this->GetIDForIdent($ident);
-
-            if ($variableID === false) {
+            if (!@$this->GetIDForIdent($ident)) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
                         $this->RegisterVariableInteger(
@@ -167,184 +214,136 @@ class Goodwe extends IPSModuleStrict
                 }
 
                 $this->SendDebug(
-                    'ApplyChanges',
+                    "ApplyChanges",
                     "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}",
                     0
                 );
             }
 
-            // Position auch bei bereits bestehenden Variablen aktualisieren.
+            // Position auch nach Neuanlage sicher setzen.
             $variableID = @$this->GetIDForIdent($ident);
-
             if ($variableID !== false) {
                 IPS_SetPosition($variableID, (int)$r['pos']);
             }
         }
 
-        /*
-        * Aktionen für schreibbare Register aktivieren.
-        */
+        // Aktionen für schreibbare Register aktivieren.
         foreach ($this->GetRegisters() as $r) {
             if (empty($r['writable'])) {
                 continue;
             }
 
             $writeIdent = 'Addr' . (string)$r['address'];
-            $variableID = @$this->GetIDForIdent($writeIdent);
 
-            if ($variableID !== false) {
+            if (@$this->GetIDForIdent($writeIdent)) {
                 $this->EnableAction($writeIdent);
             }
         }
 
-        /*
-        * Nicht mehr ausgewählte Registervariablen entfernen.
-        */
+        // Nicht mehr ausgewählte Registervariablen entfernen.
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $obj = IPS_GetObject($childID);
 
             if (
-                strpos($obj['ObjectIdent'], 'Addr') === 0
-                && !in_array(
-                    $obj['ObjectIdent'],
-                    $registerCurrentIdents,
-                    true
-                )
+                strpos($obj['ObjectIdent'], 'Addr') === 0 &&
+                !in_array($obj['ObjectIdent'], $registerCurrentIdents, true)
             ) {
                 $this->UnregisterVariable($obj['ObjectIdent']);
 
                 $this->SendDebug(
-                    'ApplyChanges',
+                    "ApplyChanges",
                     "Register-Variable entfernt: {$obj['ObjectIdent']}",
                     0
                 );
             }
         }
 
-        /*
-        * Berechnete Werte Batterie 1
-        */
-
-        if ($this->ReadPropertyBoolean('Laden_Max')) {
-            if (!@$this->GetIDForIdent('MaxLaden')) {
+        // Berechnung Batterie 1
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            if (!@$this->GetIDForIdent("MaxEntladen")) {
                 $this->RegisterVariableInteger(
-                    'MaxLaden',
-                    'BAT - Laden Leistung max',
-                    'Goodwe.Watt',
-                    223
-                );
-            }
-
-            $variableID = @$this->GetIDForIdent('MaxLaden');
-
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, 223);
-            }
-        } else {
-            if (@$this->GetIDForIdent('MaxLaden') !== false) {
-                $this->UnregisterVariable('MaxLaden');
-
-                $this->SendDebug(
-                    'ApplyChanges',
-                    'MaxLaden-Variable entfernt, da Laden_Max deaktiviert.',
-                    0
-                );
-            }
-        }
-
-        if ($this->ReadPropertyBoolean('Entladen_Max')) {
-            if (!@$this->GetIDForIdent('MaxEntladen')) {
-                $this->RegisterVariableInteger(
-                    'MaxEntladen',
-                    'BAT - Entladen Leistung max',
-                    'Goodwe.Watt',
+                    "MaxEntladen",
+                    "BAT - Entladen Leistung max",
+                    "Goodwe.Watt",
                     224
                 );
             }
 
-            $variableID = @$this->GetIDForIdent('MaxEntladen');
-
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, 224);
+            $id = @$this->GetIDForIdent("MaxEntladen");
+            if ($id !== false) {
+                IPS_SetPosition($id, 224);
             }
         } else {
-            if (@$this->GetIDForIdent('MaxEntladen') !== false) {
-                $this->UnregisterVariable('MaxEntladen');
-
-                $this->SendDebug(
-                    'ApplyChanges',
-                    'MaxEntladen-Variable entfernt, da Entladen_Max deaktiviert.',
-                    0
-                );
+            if (@$this->GetIDForIdent("MaxEntladen") !== false) {
+                $this->UnregisterVariable("MaxEntladen");
             }
         }
 
-        /*
-        * Berechnete Werte Batterie 2
-        */
-
-        if ($this->ReadPropertyBoolean('Laden_Max_2')) {
-            if (!@$this->GetIDForIdent('MaxLaden2')) {
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            if (!@$this->GetIDForIdent("MaxLaden")) {
                 $this->RegisterVariableInteger(
-                    'MaxLaden2',
-                    'BAT2 - Laden Leistung max',
-                    'Goodwe.Watt',
-                    314
+                    "MaxLaden",
+                    "BAT - Laden Leistung max",
+                    "Goodwe.Watt",
+                    223
                 );
             }
 
-            $variableID = @$this->GetIDForIdent('MaxLaden2');
-
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, 314);
+            $id = @$this->GetIDForIdent("MaxLaden");
+            if ($id !== false) {
+                IPS_SetPosition($id, 223);
             }
         } else {
-            if (@$this->GetIDForIdent('MaxLaden2') !== false) {
-                $this->UnregisterVariable('MaxLaden2');
-
-                $this->SendDebug(
-                    'ApplyChanges',
-                    'MaxLaden-Bat2-Variable entfernt, da Laden_Max_2 deaktiviert.',
-                    0
-                );
+            if (@$this->GetIDForIdent("MaxLaden") !== false) {
+                $this->UnregisterVariable("MaxLaden");
             }
         }
 
-        if ($this->ReadPropertyBoolean('Entladen_Max_2')) {
-            if (!@$this->GetIDForIdent('MaxEntladen2')) {
+        // Berechnung Batterie 2
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxEntladen2")) {
                 $this->RegisterVariableInteger(
-                    'MaxEntladen2',
-                    'BAT2 - Entladen Leistung max',
-                    'Goodwe.Watt',
+                    "MaxEntladen2",
+                    "BAT2 - Entladen Leistung max",
+                    "Goodwe.Watt",
                     315
                 );
             }
 
-            $variableID = @$this->GetIDForIdent('MaxEntladen2');
-
-            if ($variableID !== false) {
-                IPS_SetPosition($variableID, 315);
+            $id = @$this->GetIDForIdent("MaxEntladen2");
+            if ($id !== false) {
+                IPS_SetPosition($id, 315);
             }
         } else {
-            if (@$this->GetIDForIdent('MaxEntladen2') !== false) {
-                $this->UnregisterVariable('MaxEntladen2');
-
-                $this->SendDebug(
-                    'ApplyChanges',
-                    'MaxEntladen-Bat2-Variable entfernt, da Entladen_Max_2 deaktiviert.',
-                    0
-                );
+            if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
+                $this->UnregisterVariable("MaxEntladen2");
             }
         }
 
-        $pollInterval = max(
-            1,
-            $this->ReadPropertyInteger('PollIntervalWR')
-        );
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            if (!@$this->GetIDForIdent("MaxLaden2")) {
+                $this->RegisterVariableInteger(
+                    "MaxLaden2",
+                    "BAT2 - Laden Leistung max",
+                    "Goodwe.Watt",
+                    314
+                );
+            }
 
+            $id = @$this->GetIDForIdent("MaxLaden2");
+            if ($id !== false) {
+                IPS_SetPosition($id, 314);
+            }
+        } else {
+            if (@$this->GetIDForIdent("MaxLaden2") !== false) {
+                $this->UnregisterVariable("MaxLaden2");
+            }
+        }
+
+        // Timer erst am Ende wieder aktivieren.
         $this->SetTimerInterval(
             'TimerWR',
-            $pollInterval * 1000
+            $this->ReadPropertyInteger('PollIntervalWR') * 1000
         );
     }
 
@@ -1080,75 +1079,25 @@ class Goodwe extends IPSModuleStrict
         return null;
     }
 
-    private function GetRegisters()
+        private function GetRegisters()
     {
+        // Gegen GoodWe ARM 745 (24.04.2024) und HCA G2 Modbus V1.0.15 geprüft.
+        // Eindeutig bestätigte Änderungen sind mit "GEÄNDERT" markiert.
+        // Unsichere BMS-Skalierungen 479xx bleiben unverändert.
         $registers = [
-            // Wechselrichter
-            ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 100],
-            ["address" => 35104, "name" => "WR - Strom String 1",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 101],
-            ["address" => 35105, "name" => "WR - Leistung String 1",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 102],
-            ["address" => 35107, "name" => "WR - Spannung String 2",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 103],
-            ["address" => 35108, "name" => "WR - Strom String 2",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 104],
-            ["address" => 35109, "name" => "WR - Leistung String 2",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 105],
-            ["address" => 35111, "name" => "WR - Spannung String 3",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 106],
-            ["address" => 35112, "name" => "WR - Strom String 3",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 107],
-            ["address" => 35113, "name" => "WR - Leistung String 3",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 108],
-            ["address" => 35115, "name" => "WR - Spannung String 4",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 109],
-            ["address" => 35116, "name" => "WR - Strom String 4",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 110],
-            ["address" => 35117, "name" => "WR - Leistung String 4",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 111],
-            ["address" => 35304, "name" => "WR - Spannung String 5",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 112],
-            ["address" => 35305, "name" => "WR - Strom String 5",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 113],
-            ["address" => 35306, "name" => "WR - Spannung String 6",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 114],
-            ["address" => 35307, "name" => "WR - Strom String 6",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 115],
-            ["address" => 35174, "name" => "WR - Temperatur",              "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 116],
-            ["address" => 35191, "name" => "WR - Erzeugung Gesamt",        "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 117],
-            ["address" => 35193, "name" => "WR - Erzeugung Tag",           "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 118],
-            ["address" => 35301, "name" => "WR - Leistung Gesamt",         "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 119],
-            ["address" => 35337, "name" => "WR - P MPPT1",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 120],
-            ["address" => 35338, "name" => "WR - P MPPT2",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 121],
-            ["address" => 35339, "name" => "WR - P MPPT3",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 122],
-            ["address" => 35340, "name" => "WR - P MPPT4",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 123],
-            ["address" => 35341, "name" => "WR - P MPPT5",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 124],
-            ["address" => 35342, "name" => "WR - P MPPT6",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 125],
-            ["address" => 35343, "name" => "WR - P MPPT7",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 126],
-            ["address" => 35344, "name" => "WR - P MPPT8",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 127],
-            ["address" => 35345, "name" => "WR - I MPPT1",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 128],
-            ["address" => 35346, "name" => "WR - I MPPT2",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 129],
-            ["address" => 35347, "name" => "WR - I MPPT3",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 130],
-            ["address" => 35348, "name" => "WR - I MPPT4",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 131],
-            ["address" => 35349, "name" => "WR - I MPPT5",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 132],
-            ["address" => 35350, "name" => "WR - I MPPT6",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 133],
-            ["address" => 35351, "name" => "WR - I MPPT7",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 134],
-            ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 135],
-            ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 136],
-            ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 137],
-            ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 138],
-            ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 139],
-            ["address" => 35124, "name" => "WR - Netzleistung L1",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 140],
-            ["address" => 35126, "name" => "WR - Netzspannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 141],
-            ["address" => 35127, "name" => "WR - Netzstrom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 142],
-            ["address" => 35128, "name" => "WR - Netzfrequenz L2",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 143],
-            ["address" => 35129, "name" => "WR - Netzleistung L2",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 144],
-            ["address" => 35131, "name" => "WR - Netzspannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 145],
-            ["address" => 35132, "name" => "WR - Netzstrom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 146],
-            ["address" => 35133, "name" => "WR - Netzfrequenz L3",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 147],
-            ["address" => 35134, "name" => "WR - Netzleistung L3",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 148],
-            ["address" => 35136, "name" => "WR - Netzmodus",                   "type" => "U16", "unit" => "grid_mode", "scale" => 1, "pos" => 149],
-            ["address" => 35137, "name" => "WR - Inverter Gesamtleistung",     "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 150],
-            ["address" => 35139, "name" => "WR - AC Wirkleistung",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 151],
-            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 152],
-            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 153],
-            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1, "pos" => 154],
-            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 155],
-            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 156],
-            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 157],
-            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 158],
-            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 159, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 160, "writable" => true, "rawMin" => 0, "rawMax" => 5],
-            ["address" => 47017, "name" => "WR - Cloud-Verbindung Rohwert",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 161, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 162, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "U16", "unit" => "W",         "scale" => 1, "pos" => 163, "writable" => true, "rawMin" => 0, "rawMax" => 34500],
-
+            // Smartmeter
+            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
+            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
+            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
+            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
+            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
+            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
+            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
+            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
+            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
+            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
+            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
+        
             // Batterie 1
             ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
             ["address" => 35184, "name" => "BAT - Mode",                   "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 201],
@@ -1167,12 +1116,11 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 214],
             ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 215],
             ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
-            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 217],
-            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 218],
-            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 219, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
+            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
             ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
-            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 221],
-            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U16", "unit" => "raw",         "scale" => 1, "pos" => 222],
+            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
+            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
@@ -1190,57 +1138,112 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 312],
             ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 313],
 
+            // Wechselrichter
+            ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 400],
+            ["address" => 35104, "name" => "WR - Strom String 1",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 401],
+            ["address" => 35105, "name" => "WR - Leistung String 1",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 402],
+            ["address" => 35107, "name" => "WR - Spannung String 2",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 403],
+            ["address" => 35108, "name" => "WR - Strom String 2",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 404],
+            ["address" => 35109, "name" => "WR - Leistung String 2",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 405],
+            ["address" => 35111, "name" => "WR - Spannung String 3",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 406],
+            ["address" => 35112, "name" => "WR - Strom String 3",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 407],
+            ["address" => 35113, "name" => "WR - Leistung String 3",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 408],
+            ["address" => 35115, "name" => "WR - Spannung String 4",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 409],
+            ["address" => 35116, "name" => "WR - Strom String 4",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 410],
+            ["address" => 35117, "name" => "WR - Leistung String 4",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 411],
+            ["address" => 35304, "name" => "WR - Spannung String 5",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 412],
+            ["address" => 35305, "name" => "WR - Strom String 5",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 413],
+            ["address" => 35306, "name" => "WR - Spannung String 6",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 414],
+            ["address" => 35307, "name" => "WR - Strom String 6",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 415],
+            ["address" => 35174, "name" => "WR - Temperatur",              "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 416],
+            ["address" => 35191, "name" => "WR - Erzeugung Gesamt",        "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 417],
+            ["address" => 35193, "name" => "WR - Erzeugung Tag",           "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 418],
+            ["address" => 35301, "name" => "WR - Leistung Gesamt",         "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 419],
+            ["address" => 35337, "name" => "WR - P MPPT1",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 420],
+            ["address" => 35338, "name" => "WR - P MPPT2",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 421],
+            ["address" => 35339, "name" => "WR - P MPPT3",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 422],
+            ["address" => 35340, "name" => "WR - P MPPT4",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 423],
+            ["address" => 35341, "name" => "WR - P MPPT5",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 424],
+            ["address" => 35342, "name" => "WR - P MPPT6",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 425],
+            ["address" => 35343, "name" => "WR - P MPPT7",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 426],
+            ["address" => 35344, "name" => "WR - P MPPT8",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 427],
+            ["address" => 35345, "name" => "WR - I MPPT1",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 428],
+            ["address" => 35346, "name" => "WR - I MPPT2",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 429],
+            ["address" => 35347, "name" => "WR - I MPPT3",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 430],
+            ["address" => 35348, "name" => "WR - I MPPT4",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 431],
+            ["address" => 35349, "name" => "WR - I MPPT5",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 432],
+            ["address" => 35350, "name" => "WR - I MPPT6",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 433],
+            ["address" => 35351, "name" => "WR - I MPPT7",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 434],
+            ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 435],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 436],
+            ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 437],
+            ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 438],
+            ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 439],
+            ["address" => 35124, "name" => "WR - Netzleistung L1",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 440],
+            ["address" => 35126, "name" => "WR - Netzspannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 441],
+            ["address" => 35127, "name" => "WR - Netzstrom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 442],
+            ["address" => 35128, "name" => "WR - Netzfrequenz L2",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 443],
+            ["address" => 35129, "name" => "WR - Netzleistung L2",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 444],
+            ["address" => 35131, "name" => "WR - Netzspannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 445],
+            ["address" => 35132, "name" => "WR - Netzstrom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 446],
+            ["address" => 35133, "name" => "WR - Netzfrequenz L3",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 447],
+            ["address" => 35134, "name" => "WR - Netzleistung L3",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 448],
+            ["address" => 35136, "name" => "WR - Netzmodus",                   "type" => "U16", "unit" => "grid_mode", "scale" => 1, "pos" => 449],
+            ["address" => 35137, "name" => "WR - Inverter Gesamtleistung",     "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 450],
+            ["address" => 35139, "name" => "WR - AC Wirkleistung",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 451],
+            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 452],
+            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 453],
+            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1, "pos" => 454],
+            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 455], // GEÄNDERT: GoodWe ARM: Energy-Day-Sell ist U16 (1 Register), SF 10.
+            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 456], // GEÄNDERT: GoodWe ARM: Energy-Day-Buy ist U16 (1 Register), SF 10.
+            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 457],
+            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 458], // GEÄNDERT: GoodWe ARM: Energy-Load-Day ist U16; 35206 beginnt Batterie-Laden-Gesamt.
+            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 459, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 460, "writable" => true, "rawMin" => 0, "rawMax" => 5],
+            ["address" => 47017, "name" => "WR - Modbus TCP ohne Internet",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 461, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: Bedeutung Modbus TCP Without Internet (0=aus, 1=ein).
+            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 462, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "S16", "unit" => "W",         "scale" => 1, "pos" => 463, "writable" => true, "rawMin" => -30000, "rawMax" => 30000], // GEÄNDERT: GoodWe ARM: Feed Power Parameter ist S16, Bereich -30000..30000.
+            ["address" => 47505, "name" => "WR - Manufacturer Code",         "type" => "U16", "unit" => "raw",      "scale" => 1, "pos" => 464, "writable" => true, "rawMin" => 0, "rawMax" => 65535], // GEÄNDERT: GoodWe ARM: 47505 ist Manufacturer Code; für EMS laut Hinweis Wert 2 setzen.
+
             // Backup
-            ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 400],
-            ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 401],
-            ["address" => 35147, "name" => "Backup - Frequenz L1",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 402],
-            ["address" => 35149, "name" => "Backup - Leistung L1",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 403],
-            ["address" => 35151, "name" => "Backup - Spannung L2",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 404],
-            ["address" => 35152, "name" => "Backup - Strom L2",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 405],
-            ["address" => 35153, "name" => "Backup - Frequenz L2",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 406],
-            ["address" => 35155, "name" => "Backup - Leistung L2",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 407],
-            ["address" => 35157, "name" => "Backup - Spannung L3",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 408],
-            ["address" => 35158, "name" => "Backup - Strom L3",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 409],
-            ["address" => 35159, "name" => "Backup - Frequenz L3",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 410],
-            ["address" => 35161, "name" => "Backup - Leistung L3",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 411],
-            ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 412],
-            ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 413],
+            ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 500],
+            ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 501],
+            ["address" => 35147, "name" => "Backup - Frequenz L1",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 502],
+            ["address" => 35149, "name" => "Backup - Leistung L1",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 503],
+            ["address" => 35151, "name" => "Backup - Spannung L2",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 504],
+            ["address" => 35152, "name" => "Backup - Strom L2",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 505],
+            ["address" => 35153, "name" => "Backup - Frequenz L2",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 506],
+            ["address" => 35155, "name" => "Backup - Leistung L2",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 507],
+            ["address" => 35157, "name" => "Backup - Spannung L3",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 508],
+            ["address" => 35158, "name" => "Backup - Strom L3",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 509],
+            ["address" => 35159, "name" => "Backup - Frequenz L3",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 510],
+            ["address" => 35161, "name" => "Backup - Leistung L3",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 511],
+            ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 512],
+            ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 513, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: BackUp Enable ist RW U16, Bereich 0..1.
 
             // Wallbox
-            ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 500],
-            ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 501],
-            ["address" => 10011, "name" => "WB - Spannung L3",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 502],
-            ["address" => 10012, "name" => "WB - Strom L1",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 503],
-            ["address" => 10013, "name" => "WB - Strom L2",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 504],
-            ["address" => 10014, "name" => "WB - Strom L3",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 505],
-            ["address" => 10015, "name" => "WB - Ladeleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 506],
-            ["address" => 10016, "name" => "WB - Energie aktuelle Ladung",         "type" => "U16", "unit" => "kWh",            "scale" => 0.1,   "pos" => 507],
-            ["address" => 10017, "name" => "WB - Status",                         "type" => "U16", "unit" => "wb_status",      "scale" => 1,     "pos" => 508],
-            ["address" => 10023, "name" => "WB - Automatische Phasenumschaltung",  "type" => "U16", "unit" => "wb_phase",       "scale" => 1,     "pos" => 509,  "writable" => true, "rawMin" => 0,  "rawMax" => 1],
-            ["address" => 10029, "name" => "WB - Sollleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 510, "writable" => true, "rawMin" => 14, "rawMax" => 220],
-            ["address" => 10030, "name" => "WB - Batterie Entladegrenze",          "type" => "U16", "unit" => "%",              "scale" => 1,     "pos" => 511, "writable" => true, "rawMin" => 0,  "rawMax" => 100],
-            ["address" => 10032, "name" => "WB - Lademodus",                      "type" => "U16", "unit" => "wb_charge_mode", "scale" => 1,     "pos" => 512, "writable" => true, "rawMin" => 0,  "rawMax" => 2],
-            ["address" => 10058, "name" => "WB - Leistungsklasse",                 "type" => "U16", "unit" => "wb_power_spec",  "scale" => 1,     "pos" => 513],
-            ["address" => 10059, "name" => "WB - Ausführung",                     "type" => "U16", "unit" => "wb_type",        "scale" => 1,     "pos" => 514],
-            ["address" => 10060, "name" => "WB - Laden Ein/Aus",                   "type" => "U16", "unit" => "wb_onoff",       "scale" => 1,     "pos" => 515, "writable" => true, "rawMin" => 1,  "rawMax" => 2],
-            ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 516],
-            ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 517],
-            ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 518],
-
-            // Smartmeter
-            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 600],
-            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 601],
-            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 602],
-            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 603],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 604],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 605],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 606],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 607],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 608],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 609],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 610],
+            ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 600],
+            ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 601],
+            ["address" => 10011, "name" => "WB - Spannung L3",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 602],
+            ["address" => 10012, "name" => "WB - Strom L1",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 603],
+            ["address" => 10013, "name" => "WB - Strom L2",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 604],
+            ["address" => 10014, "name" => "WB - Strom L3",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 605],
+            ["address" => 10015, "name" => "WB - Ladeleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 606],
+            ["address" => 10016, "name" => "WB - Energie aktuelle Ladung",         "type" => "U16", "unit" => "kWh",            "scale" => 0.1,   "pos" => 607],
+            ["address" => 10017, "name" => "WB - Status",                         "type" => "U16", "unit" => "wb_status",      "scale" => 1,     "pos" => 608],
+            ["address" => 10023, "name" => "WB - Automatische Phasenumschaltung",  "type" => "U16", "unit" => "wb_phase",       "scale" => 1,     "pos" => 609,  "writable" => true, "rawMin" => 0,  "rawMax" => 1],
+            ["address" => 10029, "name" => "WB - Sollleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 610, "writable" => true, "rawMin" => 14, "rawMax" => 220],
+            ["address" => 10030, "name" => "WB - Batterie Entladegrenze",          "type" => "U16", "unit" => "%",              "scale" => 1,     "pos" => 611, "writable" => true, "rawMin" => 0,  "rawMax" => 100],
+            ["address" => 10032, "name" => "WB - Lademodus",                      "type" => "U16", "unit" => "wb_charge_mode", "scale" => 1,     "pos" => 612, "writable" => true, "rawMin" => 0,  "rawMax" => 2],
+            ["address" => 10058, "name" => "WB - Leistungsklasse",                 "type" => "U16", "unit" => "wb_power_spec",  "scale" => 1,     "pos" => 613],
+            ["address" => 10059, "name" => "WB - Ausführung",                     "type" => "U16", "unit" => "wb_type",        "scale" => 1,     "pos" => 614],
+            ["address" => 10060, "name" => "WB - Laden Ein/Aus",                   "type" => "U16", "unit" => "wb_onoff",       "scale" => 1,     "pos" => 615, "writable" => true, "rawMin" => 1,  "rawMax" => 2],
+            ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
+            ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
+            ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
         ];
 
         return $registers;
     }
+
 }
