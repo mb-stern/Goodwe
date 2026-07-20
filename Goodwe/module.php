@@ -1245,5 +1245,4 @@ class Goodwe extends IPSModuleStrict
 
         return $registers;
     }
-
 }
