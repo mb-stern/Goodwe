@@ -1121,7 +1121,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
             ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
             ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
-            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 464, "writable" => true, "rawMin" => 0, "rawMax" => 1],
+            ["address" => 47505, "name" => "BAT - EMS-Steuerung aktiv",         "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 223, "writable" => true, "rawMin" => 0, "rawMax" => 1],
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
