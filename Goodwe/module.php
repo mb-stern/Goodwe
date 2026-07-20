@@ -15,9 +15,6 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterPropertyBoolean("Entladen_Max_2", false);
         $this->RegisterPropertyBoolean("Laden_Max_2", false);
 
-        $this->RegisterAttributeString("LastRawRegisters", "{}");
-        $this->RegisterAttributeInteger("LastPollStarted", 0);
-
         $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
     }
 
@@ -27,7 +24,7 @@ class Goodwe extends IPSModuleStrict
         return '{"type": "connect", "moduleIDs": ["{A5F663AB-C400-4FE5-B207-4D67CC030564}"]}';
     }
 
-        public function ApplyChanges(): void
+    public function ApplyChanges(): void
     {
         parent::ApplyChanges();
 
@@ -151,12 +148,7 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
-        foreach ($this->GetRegisters() as $r) {
-            if (empty($r['writable'])) {
-                continue;
-            }
-
-            $writeIdent = 'Addr' . (string)$r['address'];
+        foreach (['Addr45358', 'Addr45356', 'Addr47511', 'Addr47512', 'Addr45381', 'Addr45383'] as $writeIdent) {
             if (@$this->GetIDForIdent($writeIdent)) {
                 $this->EnableAction($writeIdent);
             }
@@ -217,309 +209,185 @@ class Goodwe extends IPSModuleStrict
         }
     }
 
-
     public function RequestAction(string $Ident, mixed $Value): void
     {
         $this->SendDebug("RequestAction", "Aktion gestartet für Ident: $Ident, Wert: " . json_encode($Value), 0);
 
-        if (strpos($Ident, 'Addr') !== 0) {
-            throw new Exception("Ungültiger Ident: $Ident");
-        }
+        if (strpos($Ident, 'Addr') === 0) {
+            $address = (int)substr($Ident, 4);
 
-        $address = (int)substr($Ident, 4);
-        $register = $this->GetRegisterByAddress($address);
-
-        if ($register === null || empty($register['writable'])) {
-            throw new Exception("Register $address ist nicht schreibbar");
-        }
-
-        $scale = (float)($register['scale'] ?? 1.0);
-        if ($scale == 0.0) {
-            throw new Exception("Ungültige Skalierung für Register $address");
-        }
-
-        // Die IPS-Variable enthält den physikalischen Wert. Modbus erwartet den Rohwert.
-        $rawValue = (int)round(((float)$Value) / $scale);
-
-        if (isset($register['rawMin']) && $rawValue < (int)$register['rawMin']) {
-            throw new Exception("Wert für Register $address ist zu klein");
-        }
-        if (isset($register['rawMax']) && $rawValue > (int)$register['rawMax']) {
-            throw new Exception("Wert für Register $address ist zu gross");
-        }
-
-        if (!$this->WriteRegister($address, $rawValue)) {
-            $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: Rohwert $rawValue", 0);
+            if ($this->WriteRegister($address, (int)$Value)) {
+                $this->SetValueIfChanged($Ident, (int)$Value);
+                $this->SendDebug("RequestAction", "Register $address erfolgreich geschrieben: $Value", 0);
+            } else {
+                $this->SendDebug("RequestAction", "Fehler beim Schreiben von Register $address: $Value", 0);
+            }
             return;
         }
 
-        $details = $this->GetVariableDetails((string)$register['unit']);
-        $displayValue = $Value;
-        if ($details !== null) {
-            switch ($details['type']) {
-                case VARIABLETYPE_INTEGER:
-                    $displayValue = (int)round((float)$Value);
-                    break;
-                case VARIABLETYPE_FLOAT:
-                    $displayValue = (float)$Value;
-                    break;
-                case VARIABLETYPE_BOOLEAN:
-                    $displayValue = (bool)$Value;
-                    break;
-                case VARIABLETYPE_STRING:
-                    $displayValue = (string)$Value;
-                    break;
-            }
-        }
-
-        // Write-only-Aktionen (z. B. WR-Neustart) werden nicht zurückgelesen.
-        // Die Aktionsvariable springt nach erfolgreichem Schreiben sofort wieder auf false.
-        if (!empty($register['writeOnly'])) {
-            $displayValue = false;
-        }
-
-        $this->SetValueIfChanged($Ident, $displayValue);
-        $this->SendDebug(
-            "RequestAction",
-            "Register $address erfolgreich geschrieben: Anzeige=" . json_encode($displayValue) . ", Rohwert=$rawValue" . (!empty($register['writeOnly']) ? ' (Write-only)' : ''),
-            0
-        );
+        throw new Exception("Ungültiger Ident: $Ident");
     }
 
-    public function FetchInverterData(): void
+    public function FetchInverterData()
     {
-        $lockName = 'GoodwePoll_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lockName, 1)) {
-            $started = $this->ReadAttributeInteger('LastPollStarted');
-            $age = $started > 0 ? time() - $started : 0;
-            $this->SendDebug('FetchInverterData', "Abfrage läuft bereits seit {$age} s – Timeraufruf übersprungen.", 0);
+        $selectedRegisters = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug("FetchInverterData", "SelectedRegisters ist keine gültige Liste", 0);
             return;
         }
 
-        $startedAt = microtime(true);
-        $this->WriteAttributeInteger('LastPollStarted', time());
-
-        try {
-            $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
-            if (!is_array($selectedRegisters)) {
-                $this->SendDebug('FetchInverterData', 'SelectedRegisters ist keine gültige Liste', 0);
-                return;
+        $selectedMap = [];
+        foreach ($selectedRegisters as $r) {
+            if (!is_array($r)) {
+                continue;
             }
 
-            $selectedMap = [];
-            foreach ($selectedRegisters as $r) {
-                if (is_array($r) && !empty($r['selected']) && isset($r['addr'])) {
-                    $selectedMap[(string)$r['addr']] = true;
-                }
-            }
-            if ($selectedMap === []) {
-                $this->SendDebug('FetchInverterData', 'Keine Register ausgewählt.', 0);
-                return;
+            $addr = isset($r['addr']) ? (string)$r['addr'] : null;
+            if ($addr === null || $addr === '') {
+                continue;
             }
 
-            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-            if ($parentID === 0 || !IPS_InstanceExists($parentID) || IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
-                $this->SendDebug('FetchInverterData', 'Keine aktive Parent-Instanz verbunden.', 0);
-                return;
+            if (!empty($r['selected'])) {
+                $selectedMap[$addr] = true;
+            }
+        }
+
+        if (count($selectedMap) === 0) {
+            $this->SendDebug("FetchInverterData", "Keine Register ausgewählt.", 0);
+            return;
+        }
+
+        $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
+        if ($parentID === 0 || !IPS_InstanceExists($parentID)) {
+            $this->SendDebug("FetchInverterData", "Keine gültige Parent-Instanz verbunden.", 0);
+            $this->LogMessage("Goodwe", "Keine gültige Parent-Instanz verbunden. FetchInverterData abgebrochen.");
+            return;
+        }
+        $parentStatus = IPS_GetInstance($parentID)['InstanceStatus'];
+        if ($parentStatus !== IS_ACTIVE) {
+            $this->SendDebug("FetchInverterData", "Parent-Instanz ist nicht aktiv. Status: $parentStatus", 0);
+            $this->LogMessage("Goodwe", "Parent-Instanz ist nicht aktiv. FetchInverterData abgebrochen.");
+            return;
+        }
+
+        $values = [];
+
+        foreach ($this->GetRegisters() as $r) {
+            $addrKey = (string)$r['address'];
+
+            if (!isset($selectedMap[$addrKey])) {
+                continue;
             }
 
-            $registers = [];
-            $allRegisters = $this->GetRegisters();
-            foreach ($allRegisters as $register) {
-                if (isset($selectedMap[(string)$register['address']]) && empty($register['writeOnly'])) {
-                    $registers[] = $register;
-                }
-            }
-
-            // Für die Leistungsberechnungen benötigte BMS-Register immer im selben Block mitlesen.
-            $dependencies = [];
-            if ($this->ReadPropertyBoolean('Laden_Max'))      $dependencies = array_merge($dependencies, [47902, 47903]);
-            if ($this->ReadPropertyBoolean('Entladen_Max'))   $dependencies = array_merge($dependencies, [47904, 47905]);
-            if ($this->ReadPropertyBoolean('Laden_Max_2'))    $dependencies = array_merge($dependencies, [47920, 47921]);
-            if ($this->ReadPropertyBoolean('Entladen_Max_2')) $dependencies = array_merge($dependencies, [47922, 47923]);
-            $present = array_column($registers, 'address');
-            foreach (array_unique($dependencies) as $dependency) {
-                if (!in_array($dependency, $present, true)) {
-                    foreach ($allRegisters as $candidate) {
-                        if ((int)$candidate['address'] === $dependency) {
-                            $registers[] = $candidate;
-                            break;
-                        }
-                    }
+            foreach (['address', 'type', 'scale'] as $need) {
+                if (!array_key_exists($need, $r)) {
+                    $this->SendDebug("FetchInverterData", "Ungültiger Registereintrag (fehlend: $need): " . json_encode($r), 0);
+                    continue 2;
                 }
             }
 
-            $blocks = $this->BuildReadBlocks($registers, 4, 100);
-            $rawRegisters = [];
-            $successfulBlocks = 0;
+            $ident    = "Addr" . $addrKey;
+            $quantity = (in_array($r['type'], ["U32", "S32"], true)) ? 2 : 1;
 
-            foreach ($blocks as $block) {
-                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] === IS_DELETING) {
+            try {
+                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] == IS_DELETING)
                     break;
-                }
+                $response = $this->SendDataToParent(json_encode([
+                    "DataID"   => "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}",
+                    "Function" => 3,
+                    "Address"  => (int)$r['address'],
+                    "Quantity" => $quantity,
+                    "Data"     => ""
+                ]));
 
-                $response = $this->ReadRegisterBlock($block['start'], $block['count']);
-                if ($response === null) {
-                    $this->SendDebug('FetchInverterData', "Block {$block['start']}–" . ($block['start'] + $block['count'] - 1) . ' konnte nicht gelesen werden.', 0);
+                if ($response === false || strlen($response) < (2 * $quantity + 2)) {
+                    $this->SendDebug("FetchInverterData", "Keine/zu kurze Antwort für Register {$r['address']}", 0);
                     continue;
                 }
 
-                $successfulBlocks++;
-                foreach ($response as $offset => $word) {
-                    $rawRegisters[$block['start'] + $offset] = $word;
-                }
-            }
+                $data  = unpack("n*", substr($response, 2));
+                $value = 0;
 
-            $values = [];
-            foreach ($registers as $register) {
-                $address = (int)$register['address'];
-                $rawValue = $this->DecodeRegisterValue($register, $rawRegisters);
-                if ($rawValue === null) {
+                switch ($r['type']) {
+                    case "U16":
+                        $value = $data[1];
+                        break;
+                    case "S16":
+                        $value = ($data[1] & 0x8000) ? -((~$data[1] & 0xFFFF) + 1) : $data[1];
+                        break;
+                    case "U32":
+                        $value = ($data[1] << 16) | $data[2];
+                        break;
+                    case "S32":
+                        $combined = ($data[1] << 16) | $data[2];
+                        $value = ($data[1] & 0x8000) ? -((~$combined & 0xFFFFFFFF) + 1) : $combined;
+                        break;
+                    default:
+                        $this->SendDebug("FetchInverterData", "Unbekannter Typ '{$r['type']}' für {$r['address']}", 0);
+                        continue 2;
+                }
+
+                $scale = (float)$r['scale'];
+                if ($scale == 0.0) {
+                    $this->SendDebug("FetchInverterData", "Scale = 0 (keine Skalierung möglich) für {$r['address']}", 0);
                     continue;
                 }
 
-                $scaledValue = $rawValue * (float)$register['scale'];
-                $ident = 'Addr' . $address;
+                $scaledValue = $value * $scale;
+
                 $varID = @$this->GetIDForIdent($ident);
                 if ($varID === false) {
+                    $this->SendDebug("FetchInverterData", "Variable mit Ident $ident nicht gefunden.", 0);
                     continue;
                 }
 
                 $var = IPS_GetVariable($varID);
-                if ($var['VariableType'] === VARIABLETYPE_FLOAT) {
-                    $scaleStr = rtrim(rtrim(number_format((float)$register['scale'], 10, '.', ''), '0'), '.');
-                    $dotPos = strpos($scaleStr, '.');
-                    $decimals = $dotPos === false ? 0 : strlen($scaleStr) - $dotPos - 1;
-                    $finalValue = round((float)$scaledValue, $decimals);
-                } elseif ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
-                    $finalValue = ((int)round($scaledValue)) !== 0;
-                } elseif ($var['VariableType'] === VARIABLETYPE_STRING) {
-                    $finalValue = (string)$scaledValue;
-                } else {
-                    $finalValue = (int)round($scaledValue);
+                switch ($var['VariableType']) {
+                    case VARIABLETYPE_INTEGER:
+                        $finalValue = (int)round($scaledValue);
+                        break;
+
+                    case VARIABLETYPE_FLOAT:
+                        $scaleStr = rtrim(rtrim(number_format($scale, 10, '.', ''), '0'), '.');
+                        $dotPos   = strpos($scaleStr, '.');
+                        $decimals = ($dotPos === false) ? 0 : (strlen($scaleStr) - $dotPos - 1);
+                        $finalValue = round((float)$scaledValue, $decimals);
+                        break;
+
+                    case VARIABLETYPE_STRING:
+                        $finalValue = (string)$scaledValue;
+                        break;
+
+                    case VARIABLETYPE_BOOLEAN:
+                        $finalValue = ((int)round($scaledValue)) !== 0;
+                        break;
+
+                    default:
+                        $finalValue = $scaledValue;
+                        break;
                 }
 
                 $this->SetValueIfChanged($ident, $finalValue);
                 $values[$ident] = $finalValue;
-            }
 
-            $this->WriteAttributeString('LastRawRegisters', json_encode($rawRegisters));
-            $this->CalculateMaxPowerFromRaw($rawRegisters);
-
-            $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
-            $this->SendDebug('FetchInverterData', json_encode([
-                'source' => 'WR_Modbus_BlockRead',
-                'selectedRegisters' => count($registers),
-                'blocks' => count($blocks),
-                'successfulBlocks' => $successfulBlocks,
-                'durationMs' => $durationMs,
-                'values' => $values
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        } catch (Throwable $e) {
-            $this->SendDebug('FetchInverterData', 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe', 'Fehler bei Blockabfrage: ' . $e->getMessage());
-        } finally {
-            $this->WriteAttributeInteger('LastPollStarted', 0);
-            IPS_SemaphoreLeave($lockName);
-        }
-    }
-
-    private function BuildReadBlocks(array $registers, int $maxGap = 4, int $maxCount = 100): array
-    {
-        $ranges = [];
-        foreach ($registers as $register) {
-            $start = (int)$register['address'];
-            $length = in_array($register['type'], ['U32', 'S32'], true) ? 2 : 1;
-            $ranges[] = ['start' => $start, 'end' => $start + $length - 1];
-        }
-        usort($ranges, fn($a, $b) => $a['start'] <=> $b['start']);
-
-        $blocks = [];
-        foreach ($ranges as $range) {
-            if ($blocks === []) {
-                $blocks[] = $range;
-                continue;
-            }
-            $last = count($blocks) - 1;
-            $newEnd = max($blocks[$last]['end'], $range['end']);
-            $gap = $range['start'] - $blocks[$last]['end'] - 1;
-            $count = $newEnd - $blocks[$last]['start'] + 1;
-            if ($gap <= $maxGap && $count <= $maxCount) {
-                $blocks[$last]['end'] = $newEnd;
-            } else {
-                $blocks[] = $range;
+            } catch (Exception $e) {
+                $this->SendDebug("FetchInverterData", "Fehler Parent-Kommunikation: " . $e->getMessage(), 0);
+                $this->LogMessage("Goodwe", "Fehler Parent: " . $e->getMessage());
             }
         }
 
-        return array_map(fn($b) => ['start' => $b['start'], 'count' => $b['end'] - $b['start'] + 1], $blocks);
-    }
+        ksort($values);
+        $log = [
+            'source' => 'WR_Modbus',
+            'values' => $values
+        ];
+        $this->SendDebug(
+            "FetchInverterData",
+            json_encode($log, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
 
-    private function ReadRegisterBlock(int $start, int $count): ?array
-    {
-        $maxAttempts = 2;
-
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            $requestStartedAt = microtime(true);
-
-            $response = $this->SendDataToParent(json_encode([
-                'DataID' => '{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',
-                'Function' => 3,
-                'Address' => $start,
-                'Quantity' => $count,
-                'Data' => ''
-            ]));
-
-            $durationMs = (int)round((microtime(true) - $requestStartedAt) * 1000);
-            $validLength = $response !== false && strlen($response) >= ($count * 2 + 2);
-
-            if ($validLength) {
-                $words = array_values(unpack('n*', substr($response, 2)) ?: []);
-                if (count($words) >= $count) {
-                    if ($attempt > 1) {
-                        $this->SendDebug(
-                            'ReadRegisterBlock',
-                            "Block {$start}–" . ($start + $count - 1) . " beim {$attempt}. Versuch erfolgreich ({$durationMs} ms).",
-                            0
-                        );
-                    }
-
-                    return array_slice($words, 0, $count);
-                }
-            }
-
-            $responseLength = $response === false ? 0 : strlen($response);
-            $this->SendDebug(
-                'ReadRegisterBlock',
-                "Block {$start}–" . ($start + $count - 1) . " Versuch {$attempt}/{$maxAttempts} fehlgeschlagen ({$durationMs} ms, Antwortlänge {$responseLength} Byte).",
-                0
-            );
-
-            if ($attempt < $maxAttempts) {
-                IPS_Sleep(150);
-            }
-        }
-
-        return null;
-    }
-
-    private function DecodeRegisterValue(array $register, array $rawRegisters): ?int
-    {
-        $address = (int)$register['address'];
-        if (!array_key_exists($address, $rawRegisters)) {
-            return null;
-        }
-        $word1 = $rawRegisters[$address] & 0xFFFF;
-        switch ($register['type']) {
-            case 'U16': return $word1;
-            case 'S16': return $word1 > 32767 ? $word1 - 65536 : $word1;
-            case 'U32':
-            case 'S32':
-                if (!array_key_exists($address + 1, $rawRegisters)) return null;
-                $combined = (($word1 << 16) | ($rawRegisters[$address + 1] & 0xFFFF));
-                if ($register['type'] === 'S32' && $combined > 2147483647) $combined -= 4294967296;
-                return $combined;
-        }
-        return null;
+        $this->CalculateMaxPower();
     }
 
     private function WriteRegister(int $address, int $value): bool
@@ -543,34 +411,59 @@ class Goodwe extends IPSModuleStrict
         return true;
     }
 
-    public function CalculateMaxPower(): void
+    public function CalculateMaxPower()
     {
-        $raw = json_decode($this->ReadAttributeString('LastRawRegisters'), true);
-        $this->CalculateMaxPowerFromRaw(is_array($raw) ? array_map('intval', $raw) : []);
-    }
-
-    private function CalculateMaxPowerFromRaw(array $raw): void
-    {
-        $calculations = [
-            ['property' => 'Entladen_Max',   'ident' => 'MaxEntladen',  'v' => 47904, 'a' => 47905, 'caption' => 'Entladen Max'],
-            ['property' => 'Laden_Max',      'ident' => 'MaxLaden',     'v' => 47902, 'a' => 47903, 'caption' => 'Laden Max'],
-            ['property' => 'Entladen_Max_2', 'ident' => 'MaxEntladen2', 'v' => 47922, 'a' => 47923, 'caption' => 'Entladen Max BAT2'],
-            ['property' => 'Laden_Max_2',    'ident' => 'MaxLaden2',    'v' => 47920, 'a' => 47921, 'caption' => 'Laden Max BAT2'],
-        ];
-        foreach ($calculations as $calc) {
-            if (!$this->ReadPropertyBoolean($calc['property']) || !isset($raw[$calc['v']], $raw[$calc['a']])) continue;
-            $voltage = $this->Signed16((int)$raw[$calc['v']]) * 0.1;
-            $current = $this->Signed16((int)$raw[$calc['a']]) * 0.1;
-            $power = (int)round($voltage * $current);
-            $this->SetValueIfChanged($calc['ident'], $power);
-            $this->SendDebug('CalculateMaxPower', "{$calc['caption']}: {$voltage} V × {$current} A = {$power} W", 0);
+        if ($this->ReadPropertyBoolean("Entladen_Max")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47904, 0.1);
+                $strom    = $this->ReadRegisterValue(47905, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
         }
-    }
 
-    private function Signed16(int $value): int
-    {
-        $value &= 0xFFFF;
-        return $value > 32767 ? $value - 65536 : $value;
+        if ($this->ReadPropertyBoolean("Laden_Max")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47902, 0.1);
+                $strom    = $this->ReadRegisterValue(47903, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden", $leistung);
+                    $this->SendDebug("CalculateMaxPower", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
+            $entladenID = @$this->GetIDForIdent("MaxEntladen2");
+            if ($entladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47922, 0.1);
+                $strom    = $this->ReadRegisterValue(47923, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxEntladen2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Entladen Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
+
+        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
+            $ladenID = @$this->GetIDForIdent("MaxLaden2");
+            if ($ladenID !== false) {
+                $spannung = $this->ReadRegisterValue(47920, 0.1);
+                $strom    = $this->ReadRegisterValue(47921, 0.1);
+                if ($spannung !== null && $strom !== null) {
+                    $leistung = (int)($spannung * $strom);
+                    $this->SetValueIfChanged("MaxLaden2", $leistung);
+                    $this->SendDebug("CalculateMaxPower_BAT2", "Laden Max: $spannung V * $strom A = $leistung W", 0);
+                }
+            }
+        }
     }
 
     private function ReadRegisterValue(int $address, float $scale = 1.0)
@@ -775,16 +668,6 @@ class Goodwe extends IPSModuleStrict
                 return ["profile" => "~Ampere", "type" => VARIABLETYPE_FLOAT];
             case "W":
                 return ["profile" => "Goodwe.Watt", "type" => VARIABLETYPE_INTEGER];
-            case "Hz":
-                return ["profile" => "~Hertz", "type" => VARIABLETYPE_FLOAT];
-            case "bool":
-                return ["profile" => "~Switch", "type" => VARIABLETYPE_BOOLEAN];
-            case "work_mode":
-                return ["profile" => "Goodwe.WorkMode", "type" => VARIABLETYPE_INTEGER];
-            case "grid_mode":
-                return ["profile" => "Goodwe.GridMode", "type" => VARIABLETYPE_INTEGER];
-            case "raw":
-                return ["profile" => "", "type" => VARIABLETYPE_INTEGER];
             case "dur":
                 return ["profile" => "~Duration", "type" => VARIABLETYPE_INTEGER];
             case "kWh":
@@ -803,22 +686,6 @@ class Goodwe extends IPSModuleStrict
                 return ["profile" => "Goodwe.WattEMS", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_status":
-                return ["profile" => "Goodwe.WallboxStatus", "type" => VARIABLETYPE_INTEGER];
-            case "wb_phase":
-                return ["profile" => "Goodwe.WallboxPhaseSwitch", "type" => VARIABLETYPE_INTEGER];
-            case "wb_charge_mode":
-                return ["profile" => "Goodwe.WallboxChargeMode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_onoff":
-                return ["profile" => "Goodwe.WallboxOnOff", "type" => VARIABLETYPE_INTEGER];
-            case "wb_connection":
-                return ["profile" => "Goodwe.WallboxConnection", "type" => VARIABLETYPE_INTEGER];
-            case "wb_power_spec":
-                return ["profile" => "Goodwe.WallboxPowerSpec", "type" => VARIABLETYPE_INTEGER];
-            case "wb_type":
-                return ["profile" => "Goodwe.WallboxType", "type" => VARIABLETYPE_INTEGER];
-            case "wb_source":
-                return ["profile" => "Goodwe.WallboxEnergySource", "type" => VARIABLETYPE_INTEGER];
             case "String":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
@@ -883,237 +750,89 @@ class Goodwe extends IPSModuleStrict
             IPS_SetVariableProfileValues('Goodwe.kOhm', 0, 0, 1);
             $this->SendDebug('CreateProfile', 'Profil erstellt: Goodwe.kOhm', 0);
         }
-
-        $this->CreateAssociationProfile('Goodwe.WorkMode', [0 => 'Selbstverbrauch', 1 => 'Inselbetrieb', 2 => 'Backup', 3 => 'Wirtschaftlich', 4 => 'Peak-Shaving', 5 => 'Erw. Selbstverbrauch']);
-        $this->CreateAssociationProfile('Goodwe.GridMode', [0 => 'Warten', 1 => 'Einspeisung', 2 => 'Einspeisung begrenzt', 3 => 'Entsättigung', 4 => 'PV-Limit', 5 => 'Reaktiv', 6 => 'Blindleistung', 7 => 'Abgeschaltet', 8 => 'PV-Optimierung', 9 => 'ECO', 10 => 'HW-Schutz', 11 => 'Fehler', 17 => 'Bypass', 18 => 'Inselbetrieb']);
-
-        $this->CreateAssociationProfile('Goodwe.WallboxStatus', [
-            0 => 'Frei (nicht verbunden)',
-            1 => 'Frei (verbunden)',
-            2 => 'Fahrzeug-Handschlag',
-            3 => 'Lädt',
-            4 => 'Laden beendet',
-            5 => 'Störung',
-            6 => 'Zeitplan startet',
-            7 => 'Wartung',
-            8 => 'Start fehlgeschlagen',
-            9 => 'Systemupdate',
-            10 => 'Unterbrochen: zu wenig PV/Batterie'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxPhaseSwitch', [0 => 'Aus', 1 => 'Ein']);
-        $this->CreateAssociationProfile('Goodwe.WallboxChargeMode', [
-            0 => 'Sofortladen',
-            1 => 'PV-Überschussladen',
-            2 => 'PV + Batterie'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxOnOff', [1 => 'Laden aus', 2 => 'Laden ein']);
-        $this->CreateAssociationProfile('Goodwe.WallboxConnection', [
-            0 => 'Getrennt',
-            1 => 'Teilweise verbunden',
-            2 => 'Verbunden'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxPowerSpec', [0 => '7 kW', 1 => '11 kW', 2 => '22 kW']);
-        $this->CreateAssociationProfile('Goodwe.WallboxType', [0 => 'Dreiphasig', 1 => 'Einphasig']);
-        $this->CreateAssociationProfile('Goodwe.WallboxEnergySource', [
-            0 => 'Keine',
-            1 => 'Netz',
-            2 => 'PV',
-            3 => 'Netz + PV',
-            4 => 'Batterie',
-            5 => 'Netz + Batterie',
-            6 => 'PV + Batterie',
-            7 => 'Netz + PV + Batterie'
-        ]);
     }
 
-    private function CreateAssociationProfile(string $name, array $associations): void
+    private function GetRegisters()
     {
-        if (IPS_VariableProfileExists($name)) {
-            return;
-        }
-
-        IPS_CreateVariableProfile($name, VARIABLETYPE_INTEGER);
-        foreach ($associations as $value => $caption) {
-            IPS_SetVariableProfileAssociation($name, (int)$value, (string)$caption, '', -1);
-        }
-        $this->SendDebug('CreateProfile', 'Profil erstellt: ' . $name, 0);
-    }
-
-    private function GetRegisterByAddress(int $address): ?array
-    {
-        foreach ($this->GetRegisters() as $register) {
-            if ((int)$register['address'] === $address) {
-                return $register;
-            }
-        }
-
-        return null;
-    }
-
-        private function GetRegisters()
-    {
-        // Gegen GoodWe ARM 745 (24.04.2024) und HCA G2 Modbus V1.0.15 geprüft.
-        // Eindeutig bestätigte Änderungen sind mit "GEÄNDERT" markiert.
-        // Unsichere BMS-Skalierungen 479xx bleiben unverändert.
-        $registers = [
+        return [
             // Smartmeter
-            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
-            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
-            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
-            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
-        
+            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 15],
+            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 20],
+            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 30],
+            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 40],
+
             // Batterie 1
-            ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
-            ["address" => 35184, "name" => "BAT - Mode",                   "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 201],
-            ["address" => 35206, "name" => "BAT - Laden",                  "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 202],
-            ["address" => 35209, "name" => "BAT - Entladen",               "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 203],
-            ["address" => 37003, "name" => "BAT - Temperatur",             "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 204],
-            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 205, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 206, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47511, "name" => "BAT - EMSPowerMode",           "type" => "U16", "unit" => "ems",      "scale" => 1,   "pos" => 207, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47512, "name" => "BAT - EMSPowerSet",            "type" => "U16", "unit" => "watt_ems", "scale" => 1,   "pos" => 208, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47902, "name" => "BAT - Laden Spannung max",     "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 209],
-            ["address" => 47903, "name" => "BAT - Laden Strom max",        "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 210],
-            ["address" => 47904, "name" => "BAT - Entladen Spannung max",  "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 211],
-            ["address" => 47905, "name" => "BAT - Entladen Strom max",     "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 212],
-            ["address" => 47906, "name" => "BAT - Spannung",               "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 213],
-            ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 214],
-            ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 215],
-            ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
-            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
-            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
-            ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
-            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
-            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
+            ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
+            ["address" => 35184, "name" => "BAT - Mode",                   "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 110],
+            ["address" => 35206, "name" => "BAT - Laden",                  "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 120],
+            ["address" => 35209, "name" => "BAT - Entladen",               "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 130],
+            ["address" => 37003, "name" => "BAT - Temperatur",             "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 140],
+            ["address" => 45356, "name" => "BAT - Min SOC online",         "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 150],
+            ["address" => 45358, "name" => "BAT - Min SOC offline",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 160],
+            ["address" => 47511, "name" => "BAT - EMSPowerMode",           "type" => "U16", "unit" => "ems",      "scale" => 1,   "pos" => 170],
+            ["address" => 47512, "name" => "BAT - EMSPowerSet",            "type" => "U16", "unit" => "watt_ems", "scale" => 1,   "pos" => 180],
+            ["address" => 47902, "name" => "BAT - Laden Spannung max",     "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 190],
+            ["address" => 47903, "name" => "BAT - Laden Strom max",        "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 200],
+            ["address" => 47904, "name" => "BAT - Entladen Spannung max",  "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 210],
+            ["address" => 47905, "name" => "BAT - Entladen Strom max",     "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 220],
+            ["address" => 47906, "name" => "BAT - Spannung",               "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 230],
+            ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 240],
+            ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 250],
+            ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 260],
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
-            ["address" => 35266, "name" => "BAT2 - Mode",                  "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 301],
-            ["address" => 39001, "name" => "BAT2 - Temperatur",            "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 302],
-            ["address" => 45381, "name" => "BAT2 - Min SOC online",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 303, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 45383, "name" => "BAT2 - Min SOC offline",       "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 304, "writable" => true, "rawMin" => 0, "rawMax" => 65535],
-            ["address" => 47920, "name" => "BAT2 - Laden Spannung max",    "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 305],
-            ["address" => 47921, "name" => "BAT2 - Laden Strom max",       "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 306],
-            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max", "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 307],
-            ["address" => 47923, "name" => "BAT2 - Entladen Strom max",    "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 308],
-            ["address" => 47924, "name" => "BAT2 - Spannung",              "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 309],
-            ["address" => 47925, "name" => "BAT2 - Strom",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 310],
-            ["address" => 47926, "name" => "BAT2 - SOC",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 311],
-            ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 312],
-            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 313],
+            ["address" => 35266, "name" => "BAT2 - Mode",                  "type" => "U16", "unit" => "mode",     "scale" => 1,   "pos" => 310],
+            ["address" => 39001, "name" => "BAT2 - Temperatur",            "type" => "U16", "unit" => "°C",       "scale" => 0.1, "pos" => 340],
+            ["address" => 45381, "name" => "BAT2 - Min SOC online",        "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 350],
+            ["address" => 45383, "name" => "BAT2 - Min SOC offline",       "type" => "U16", "unit" => "%",        "scale" => 1,   "pos" => 360],
+            ["address" => 47920, "name" => "BAT2 - Laden Spannung max",    "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 390],
+            ["address" => 47921, "name" => "BAT2 - Laden Strom max",       "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 400],
+            ["address" => 47922, "name" => "BAT2 - Entladen Spannung max", "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 410],
+            ["address" => 47923, "name" => "BAT2 - Entladen Strom max",    "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 420],
+            ["address" => 47924, "name" => "BAT2 - Spannung",              "type" => "S16", "unit" => "V",        "scale" => 0.1, "pos" => 430],
+            ["address" => 47925, "name" => "BAT2 - Strom",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 440],
+            ["address" => 47926, "name" => "BAT2 - SOC",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 450],
+            ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 460],
 
             // Wechselrichter
-            ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 400],
-            ["address" => 35104, "name" => "WR - Strom String 1",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 401],
-            ["address" => 35105, "name" => "WR - Leistung String 1",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 402],
-            ["address" => 35107, "name" => "WR - Spannung String 2",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 403],
-            ["address" => 35108, "name" => "WR - Strom String 2",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 404],
-            ["address" => 35109, "name" => "WR - Leistung String 2",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 405],
-            ["address" => 35111, "name" => "WR - Spannung String 3",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 406],
-            ["address" => 35112, "name" => "WR - Strom String 3",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 407],
-            ["address" => 35113, "name" => "WR - Leistung String 3",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 408],
-            ["address" => 35115, "name" => "WR - Spannung String 4",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 409],
-            ["address" => 35116, "name" => "WR - Strom String 4",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 410],
-            ["address" => 35117, "name" => "WR - Leistung String 4",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 411],
-            ["address" => 35304, "name" => "WR - Spannung String 5",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 412],
-            ["address" => 35305, "name" => "WR - Strom String 5",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 413],
-            ["address" => 35306, "name" => "WR - Spannung String 6",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 414],
-            ["address" => 35307, "name" => "WR - Strom String 6",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 415],
-            ["address" => 35174, "name" => "WR - Temperatur",              "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 416],
-            ["address" => 35191, "name" => "WR - Erzeugung Gesamt",        "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 417],
-            ["address" => 35193, "name" => "WR - Erzeugung Tag",           "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 418],
-            ["address" => 35301, "name" => "WR - Leistung Gesamt",         "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 419],
-            ["address" => 35337, "name" => "WR - P MPPT1",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 420],
-            ["address" => 35338, "name" => "WR - P MPPT2",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 421],
-            ["address" => 35339, "name" => "WR - P MPPT3",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 422],
-            ["address" => 35340, "name" => "WR - P MPPT4",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 423],
-            ["address" => 35341, "name" => "WR - P MPPT5",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 424],
-            ["address" => 35342, "name" => "WR - P MPPT6",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 425],
-            ["address" => 35343, "name" => "WR - P MPPT7",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 426],
-            ["address" => 35344, "name" => "WR - P MPPT8",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 427],
-            ["address" => 35345, "name" => "WR - I MPPT1",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 428],
-            ["address" => 35346, "name" => "WR - I MPPT2",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 429],
-            ["address" => 35347, "name" => "WR - I MPPT3",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 430],
-            ["address" => 35348, "name" => "WR - I MPPT4",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 431],
-            ["address" => 35349, "name" => "WR - I MPPT5",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 432],
-            ["address" => 35350, "name" => "WR - I MPPT6",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 433],
-            ["address" => 35351, "name" => "WR - I MPPT7",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 434],
-            ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 435],
-            ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 436],
-            ["address" => 35121, "name" => "WR - Netzspannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 437],
-            ["address" => 35122, "name" => "WR - Netzstrom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 438],
-            ["address" => 35123, "name" => "WR - Netzfrequenz L1",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 439],
-            ["address" => 35124, "name" => "WR - Netzleistung L1",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 440],
-            ["address" => 35126, "name" => "WR - Netzspannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 441],
-            ["address" => 35127, "name" => "WR - Netzstrom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 442],
-            ["address" => 35128, "name" => "WR - Netzfrequenz L2",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 443],
-            ["address" => 35129, "name" => "WR - Netzleistung L2",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 444],
-            ["address" => 35131, "name" => "WR - Netzspannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 445],
-            ["address" => 35132, "name" => "WR - Netzstrom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 446],
-            ["address" => 35133, "name" => "WR - Netzfrequenz L3",             "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 447],
-            ["address" => 35134, "name" => "WR - Netzleistung L3",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 448],
-            ["address" => 35136, "name" => "WR - Netzmodus",                   "type" => "U16", "unit" => "grid_mode", "scale" => 1, "pos" => 449],
-            ["address" => 35137, "name" => "WR - Inverter Gesamtleistung",     "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 450],
-            ["address" => 35139, "name" => "WR - AC Wirkleistung",             "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 451],
-            ["address" => 35175, "name" => "WR - Modultemperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 452],
-            ["address" => 35176, "name" => "WR - Kühlkörpertemperatur",         "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 453],
-            ["address" => 35197, "name" => "WR - Betriebsstunden",              "type" => "U32", "unit" => "dur",       "scale" => 1, "pos" => 454],
-            ["address" => 35199, "name" => "WR - Einspeisung Tag",              "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 455], // GEÄNDERT: GoodWe ARM: Energy-Day-Sell ist U16 (1 Register), SF 10.
-            ["address" => 35202, "name" => "WR - Netzbezug Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 456], // GEÄNDERT: GoodWe ARM: Energy-Day-Buy ist U16 (1 Register), SF 10.
-            ["address" => 35203, "name" => "WR - Last Gesamt",                  "type" => "U32", "unit" => "kWh",       "scale" => 0.1, "pos" => 457],
-            ["address" => 35205, "name" => "WR - Last Tag",                     "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 458], // GEÄNDERT: GoodWe ARM: Energy-Load-Day ist U16; 35206 beginnt Batterie-Laden-Gesamt.
-            ["address" => 45220, "name" => "WR - Neustart",                     "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 459, "writable" => true, "writeOnly" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47000, "name" => "WR - Betriebsmodus",                "type" => "U16", "unit" => "work_mode", "scale" => 1, "pos" => 460, "writable" => true, "rawMin" => 0, "rawMax" => 5],
-            ["address" => 47017, "name" => "WR - Modbus TCP ohne Internet",      "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 461, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: Bedeutung Modbus TCP Without Internet (0=aus, 1=ein).
-            ["address" => 47509, "name" => "WR - Einspeisung aktiv",             "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 462, "writable" => true, "rawMin" => 0, "rawMax" => 1],
-            ["address" => 47510, "name" => "WR - Einspeisegrenze",               "type" => "S16", "unit" => "W",         "scale" => 1, "pos" => 463, "writable" => true, "rawMin" => -30000, "rawMax" => 30000], // GEÄNDERT: GoodWe ARM: Feed Power Parameter ist S16, Bereich -30000..30000.
-            ["address" => 47505, "name" => "WR - Manufacturer Code",         "type" => "U16", "unit" => "raw",      "scale" => 1, "pos" => 464, "writable" => true, "rawMin" => 0, "rawMax" => 65535], // GEÄNDERT: GoodWe ARM: 47505 ist Manufacturer Code; für EMS laut Hinweis Wert 2 setzen.
-
-            // Backup
-            ["address" => 35145, "name" => "Backup - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 500],
-            ["address" => 35146, "name" => "Backup - Strom L1",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 501],
-            ["address" => 35147, "name" => "Backup - Frequenz L1",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 502],
-            ["address" => 35149, "name" => "Backup - Leistung L1",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 503],
-            ["address" => 35151, "name" => "Backup - Spannung L2",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 504],
-            ["address" => 35152, "name" => "Backup - Strom L2",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 505],
-            ["address" => 35153, "name" => "Backup - Frequenz L2",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 506],
-            ["address" => 35155, "name" => "Backup - Leistung L2",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 507],
-            ["address" => 35157, "name" => "Backup - Spannung L3",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 508],
-            ["address" => 35158, "name" => "Backup - Strom L3",                 "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 509],
-            ["address" => 35159, "name" => "Backup - Frequenz L3",              "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 510],
-            ["address" => 35161, "name" => "Backup - Leistung L3",              "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 511],
-            ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 512],
-            ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 513, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: BackUp Enable ist RW U16, Bereich 0..1.
-
-            // Wallbox
-            ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 600],
-            ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 601],
-            ["address" => 10011, "name" => "WB - Spannung L3",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 602],
-            ["address" => 10012, "name" => "WB - Strom L1",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 603],
-            ["address" => 10013, "name" => "WB - Strom L2",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 604],
-            ["address" => 10014, "name" => "WB - Strom L3",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 605],
-            ["address" => 10015, "name" => "WB - Ladeleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 606],
-            ["address" => 10016, "name" => "WB - Energie aktuelle Ladung",         "type" => "U16", "unit" => "kWh",            "scale" => 0.1,   "pos" => 607],
-            ["address" => 10017, "name" => "WB - Status",                         "type" => "U16", "unit" => "wb_status",      "scale" => 1,     "pos" => 608],
-            ["address" => 10023, "name" => "WB - Automatische Phasenumschaltung",  "type" => "U16", "unit" => "wb_phase",       "scale" => 1,     "pos" => 609,  "writable" => true, "rawMin" => 0,  "rawMax" => 1],
-            ["address" => 10029, "name" => "WB - Sollleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 610, "writable" => true, "rawMin" => 14, "rawMax" => 220],
-            ["address" => 10030, "name" => "WB - Batterie Entladegrenze",          "type" => "U16", "unit" => "%",              "scale" => 1,     "pos" => 611, "writable" => true, "rawMin" => 0,  "rawMax" => 100],
-            ["address" => 10032, "name" => "WB - Lademodus",                      "type" => "U16", "unit" => "wb_charge_mode", "scale" => 1,     "pos" => 612, "writable" => true, "rawMin" => 0,  "rawMax" => 2],
-            ["address" => 10058, "name" => "WB - Leistungsklasse",                 "type" => "U16", "unit" => "wb_power_spec",  "scale" => 1,     "pos" => 613],
-            ["address" => 10059, "name" => "WB - Ausführung",                     "type" => "U16", "unit" => "wb_type",        "scale" => 1,     "pos" => 614],
-            ["address" => 10060, "name" => "WB - Laden Ein/Aus",                   "type" => "U16", "unit" => "wb_onoff",       "scale" => 1,     "pos" => 615, "writable" => true, "rawMin" => 1,  "rawMax" => 2],
-            ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
-            ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
-            ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
+            ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 500],
+            ["address" => 35104, "name" => "WR - Strom String 1",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 510],
+            ["address" => 35105, "name" => "WR - Leistung String 1",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 520],
+            ["address" => 35107, "name" => "WR - Spannung String 2",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 530],
+            ["address" => 35108, "name" => "WR - Strom String 2",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 540],
+            ["address" => 35109, "name" => "WR - Leistung String 2",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 550],
+            ["address" => 35111, "name" => "WR - Spannung String 3",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 560],
+            ["address" => 35112, "name" => "WR - Strom String 3",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 570],
+            ["address" => 35113, "name" => "WR - Leistung String 3",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 580],
+            ["address" => 35115, "name" => "WR - Spannung String 4",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 590],
+            ["address" => 35116, "name" => "WR - Strom String 4",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 600],
+            ["address" => 35117, "name" => "WR - Leistung String 4",       "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 610],
+            ["address" => 35304, "name" => "WR - Spannung String 5",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 611],
+            ["address" => 35305, "name" => "WR - Strom String 5",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 612],
+            ["address" => 35306, "name" => "WR - Spannung String 6",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 614],
+            ["address" => 35307, "name" => "WR - Strom String 6",          "type" => "U16", "unit" => "A",        "scale" => 0.1, "pos" => 615],
+            ["address" => 35174, "name" => "WR - Temperatur",              "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 620],
+            ["address" => 35191, "name" => "WR - Erzeugung Gesamt",        "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 630],
+            ["address" => 35193, "name" => "WR - Erzeugung Tag",           "type" => "U32", "unit" => "kWh",      "scale" => 0.1, "pos" => 640],
+            ["address" => 35301, "name" => "WR - Leistung Gesamt",         "type" => "U32", "unit" => "W",        "scale" => 1,   "pos" => 650],
+            ["address" => 35337, "name" => "WR - P MPPT1",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 660],
+            ["address" => 35338, "name" => "WR - P MPPT2",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 670],
+            ["address" => 35339, "name" => "WR - P MPPT3",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 680],
+            ["address" => 35340, "name" => "WR - P MPPT4",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 690],
+            ["address" => 35341, "name" => "WR - P MPPT5",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 700],
+            ["address" => 35342, "name" => "WR - P MPPT6",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 710],
+            ["address" => 35343, "name" => "WR - P MPPT7",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 720],
+            ["address" => 35344, "name" => "WR - P MPPT8",                 "type" => "S16", "unit" => "W",        "scale" => 1,   "pos" => 730],
+            ["address" => 35345, "name" => "WR - I MPPT1",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 740],
+            ["address" => 35346, "name" => "WR - I MPPT2",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 750],
+            ["address" => 35347, "name" => "WR - I MPPT3",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 760],
+            ["address" => 35348, "name" => "WR - I MPPT4",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 770],
+            ["address" => 35349, "name" => "WR - I MPPT5",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 780],
+            ["address" => 35350, "name" => "WR - I MPPT6",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 790],
+            ["address" => 35351, "name" => "WR - I MPPT7",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 800],
+            ["address" => 35352, "name" => "WR - I MPPT8",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 810],
+            ["address" => 35365, "name" => "WR - Isolationswiderstand",    "type" => "U16", "unit" => "KΩ",       "scale" => 0.1, "pos" => 820],
         ];
-
-        return $registers;
     }
 }
