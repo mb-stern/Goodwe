@@ -458,18 +458,50 @@ class Goodwe extends IPSModuleStrict
 
     private function ReadRegisterBlock(int $start, int $count): ?array
     {
-        $response = $this->SendDataToParent(json_encode([
-            'DataID' => '{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',
-            'Function' => 3,
-            'Address' => $start,
-            'Quantity' => $count,
-            'Data' => ''
-        ]));
-        if ($response === false || strlen($response) < ($count * 2 + 2)) {
-            return null;
+        $maxAttempts = 2;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $requestStartedAt = microtime(true);
+
+            $response = $this->SendDataToParent(json_encode([
+                'DataID' => '{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',
+                'Function' => 3,
+                'Address' => $start,
+                'Quantity' => $count,
+                'Data' => ''
+            ]));
+
+            $durationMs = (int)round((microtime(true) - $requestStartedAt) * 1000);
+            $validLength = $response !== false && strlen($response) >= ($count * 2 + 2);
+
+            if ($validLength) {
+                $words = array_values(unpack('n*', substr($response, 2)) ?: []);
+                if (count($words) >= $count) {
+                    if ($attempt > 1) {
+                        $this->SendDebug(
+                            'ReadRegisterBlock',
+                            "Block {$start}–" . ($start + $count - 1) . " beim {$attempt}. Versuch erfolgreich ({$durationMs} ms).",
+                            0
+                        );
+                    }
+
+                    return array_slice($words, 0, $count);
+                }
+            }
+
+            $responseLength = $response === false ? 0 : strlen($response);
+            $this->SendDebug(
+                'ReadRegisterBlock',
+                "Block {$start}–" . ($start + $count - 1) . " Versuch {$attempt}/{$maxAttempts} fehlgeschlagen ({$durationMs} ms, Antwortlänge {$responseLength} Byte).",
+                0
+            );
+
+            if ($attempt < $maxAttempts) {
+                IPS_Sleep(150);
+            }
         }
-        $words = array_values(unpack('n*', substr($response, 2)) ?: []);
-        return count($words) >= $count ? array_slice($words, 0, $count) : null;
+
+        return null;
     }
 
     private function DecodeRegisterValue(array $register, array $rawRegisters): ?int
