@@ -209,6 +209,20 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
+        // Lesbare Zusatzvariablen für die BMS-Bitmasken.
+        // Die bisherigen Raw-Variablen Addr47911 und Addr47913 bleiben unverändert.
+        if (isset($selectedMap['47911'])) {
+            $this->RegisterVariableString('BMSWarningText', 'BAT - BMS Warnung Text', '', 2211);
+        } elseif (@$this->GetIDForIdent('BMSWarningText') !== false) {
+            $this->UnregisterVariable('BMSWarningText');
+        }
+
+        if (isset($selectedMap['47913'])) {
+            $this->RegisterVariableString('BMSAlarmText', 'BAT - BMS Alarm Text', '', 2221);
+        } elseif (@$this->GetIDForIdent('BMSAlarmText') !== false) {
+            $this->UnregisterVariable('BMSAlarmText');
+        }
+
         // Aktionen für schreibbare Register aktivieren.
         foreach ($this->GetRegisters() as $r) {
             if (empty($r['writable'])) {
@@ -512,6 +526,18 @@ class Goodwe extends IPSModuleStrict
 
                 $this->SetValueIfChanged($ident, $finalValue);
                 $values[$ident] = $finalValue;
+
+                if ($address === 47911 && @$this->GetIDForIdent('BMSWarningText') !== false) {
+                    $warningText = $this->DecodeBMSCode((int)$rawValue, false);
+                    $this->SetValueIfChanged('BMSWarningText', $warningText);
+                    $values['BMSWarningText'] = $warningText;
+                }
+
+                if ($address === 47913 && @$this->GetIDForIdent('BMSAlarmText') !== false) {
+                    $alarmText = $this->DecodeBMSCode((int)$rawValue, true);
+                    $this->SetValueIfChanged('BMSAlarmText', $alarmText);
+                    $values['BMSAlarmText'] = $alarmText;
+                }
             }
 
             $this->WriteAttributeString('LastRawRegisters', json_encode($rawRegisters));
@@ -838,6 +864,51 @@ class Goodwe extends IPSModuleStrict
                 ]
             ]
         ]);
+    }
+
+    private function DecodeBMSCode(int $code, bool $alarm): string
+    {
+        if ($code === 0) {
+            return 'OK';
+        }
+
+        $code &= 0xFFFFFFFF;
+
+        $warningBits = [
+            0 => 'Systemtemperatur zu hoch',
+            1 => 'Systemneustart',
+            2 => 'Kommunikationswarnung',
+            3 => 'Entlade-Überstrom Stufe 1',
+            4 => 'Lade-Überstrom Stufe 1',
+            5 => 'Zelltemperatur zu niedrig Stufe 1'
+        ];
+
+        $alarmBits = [
+            0 => 'Ladeüberspannung Stufe 3',
+            1 => 'Entladefehler',
+            2 => 'Zelltemperatur zu hoch',
+            3 => 'Kommunikationsfehler Stufe 2',
+            4 => 'Fehler im Ladekreis',
+            5 => 'DC-Bus-Fehler',
+            6 => 'Vorladefehler',
+            7 => 'Fehler beim Entladen',
+            8 => 'Lade-Überstrom Stufe 2',
+            9 => 'Zelltemperatur zu niedrig Stufe 2'
+        ];
+
+        $map = $alarm ? $alarmBits : $warningBits;
+        $messages = [];
+
+        for ($bit = 0; $bit < 32; $bit++) {
+            if (($code & (1 << $bit)) === 0) {
+                continue;
+            }
+            $messages[] = $map[$bit] ?? ('Bit ' . $bit);
+        }
+
+        return $messages === []
+            ? ('Code ' . sprintf('0x%08X', $code))
+            : implode(' | ', $messages);
     }
 
     private function SetValueIfChanged(string $Ident, mixed $Value): void
