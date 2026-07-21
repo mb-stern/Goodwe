@@ -223,24 +223,6 @@ class Goodwe extends IPSModuleStrict
             $this->UnregisterVariable('BMSAlarmText');
         }
 
-        if ($addrKey === '47911') {
-            $this->RegisterVariableString(
-                'BMSWarningText',
-                'BAT - BMS Warnung Text',
-                '',
-                2211
-            );
-        }
-
-        if ($addrKey === '47913') {
-            $this->RegisterVariableString(
-                'BMSAlarmText',
-                'BAT - BMS Alarm Text',
-                '',
-                2221
-            );
-        }
-
         // Aktionen für schreibbare Register aktivieren.
         foreach ($this->GetRegisters() as $r) {
             if (empty($r['writable'])) {
