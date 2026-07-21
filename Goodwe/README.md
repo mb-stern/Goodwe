@@ -102,6 +102,7 @@ Version 2.14 (20.07.2026)
 - Mehr Parameter können abgefragt werden.
 - Schneller dank blockweise Abfrage der Register.
 - Anpassungen an den Variablenberechnungen.
+- Warnmeldungen vom BMS können in Textform angezeigt werden.
 
 Version 2.13 (13.05.2026)
 - Codeanpassung, um Fehlermeldungen beim Update oder neu laden des Moduls zu verhindern.
