@@ -29,18 +29,7 @@ class Goodwe extends IPSModuleStrict
 
     public function ApplyChanges(): void
     {
-         IPS_LogMessage(
-                'GoodWe ApplyChanges',
-                'START Instanz ' . $this->InstanceID
-            );
-
-            parent::ApplyChanges();
-
-            IPS_LogMessage(
-                'GoodWe ApplyChanges',
-                'Property nach parent::ApplyChanges(): ' .
-                $this->ReadPropertyString('SelectedRegisters')
-            );
+        parent::ApplyChanges();
 
         // Während der Neukonfiguration / beim Modulupdate keine neue Abfrage starten.
         // Das verhindert, dass alter und neuer Timer parallel laufen.
@@ -742,12 +731,6 @@ class Goodwe extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-
-        IPS_LogMessage(
-            'GoodWe GetConfigurationForm',
-            'Aufruf für Instanz ' . $this->InstanceID
-        );
-
         $all = $this->GetRegisters();
 
         $selected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
@@ -792,28 +775,6 @@ class Goodwe extends IPSModuleStrict
             ];
         }, $all);
 
-        $emptyRows = 0;
-
-                    foreach ($values as $value) {
-                        if (
-                            empty($value['addr']) ||
-                            empty($value['address_display']) ||
-                            empty($value['name'])
-                        ) {
-                            $emptyRows++;
-                        }
-                    }
-
-                    IPS_LogMessage(
-                        'GoodWe GetConfigurationForm',
-                        sprintf(
-                            'Instanz %d: values=%d, unvollständige Zeilen=%d',
-                            $this->InstanceID,
-                            count($values),
-                            $emptyRows
-                        )
-                    );
-
         return json_encode([
             "elements" => [
                 [
@@ -851,10 +812,6 @@ class Goodwe extends IPSModuleStrict
                         ]
                     ],
                     "values" => $values
-
-                    
-
-
                 ],
                 [
                     "type"    => "IntervalBox",
