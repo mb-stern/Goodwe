@@ -212,13 +212,13 @@ class Goodwe extends IPSModuleStrict
         // Lesbare Zusatzvariablen für die BMS-Bitmasken.
         // Die bisherigen Raw-Variablen Addr47911 und Addr47913 bleiben unverändert.
         if (isset($selectedMap['47911'])) {
-            $this->RegisterVariableString('BMSWarningText', 'BAT - BMS Warnung Text', '', 211);
+            $this->RegisterVariableString('BMSWarningText', 'BAT - BMS Warnung Text', '', 221);
         } elseif (@$this->GetIDForIdent('BMSWarningText') !== false) {
             $this->UnregisterVariable('BMSWarningText');
         }
 
         if (isset($selectedMap['47913'])) {
-            $this->RegisterVariableString('BMSAlarmText', 'BAT - BMS Alarm Text', '', 221);
+            $this->RegisterVariableString('BMSAlarmText', 'BAT - BMS Alarm Text', '', 222);
         } elseif (@$this->GetIDForIdent('BMSAlarmText') !== false) {
             $this->UnregisterVariable('BMSAlarmText');
         }
