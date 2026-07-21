@@ -689,55 +689,62 @@ public function FetchInverterData(): void
         $successfulBlocks = 0;
 
         foreach ($blocks as $block) {
-            if (
-                IPS_GetInstance(
-                    $this->InstanceID
-                )['InstanceStatus']
-                === IS_DELETING
-            ) {
-                $this->SendDebug(
-                    'FetchInverterData',
-                    "Run={$runID}: Instanz wird gelöscht, Abfrage beendet.",
-                    0
-                );
+    if (
+        IPS_GetInstance($this->InstanceID)['InstanceStatus']
+        === IS_DELETING
+    ) {
+        $this->SendDebug(
+            'FetchInverterData',
+            "Run={$runID}: Instanz wird gelöscht, Abfrage beendet.",
+            0
+        );
 
-                break;
-            }
+        break;
+    }
 
-            $response = $this->ReadRegisterBlock(
-                $block['start'],
-                $block['count']
-            );
+    $blockEnd = $block['start'] + $block['count'] - 1;
 
-            if ($response === null) {
-                $this->SendDebug(
-                    'FetchInverterData',
-                    "Run={$runID}: Block {$block['start']}–" .
-                    (
-                        $block['start']
-                        +
-                        $block['count']
-                        -
-                        1
-                    ) .
-                    ' konnte nicht gelesen werden.',
-                    0
-                );
+    $this->SendDebug(
+        'FetchInverterData',
+        "Run={$runID}: START Block {$block['start']}–{$blockEnd}, Quantity={$block['count']}",
+        0
+    );
 
-                continue;
-            }
+    $blockStarted = microtime(true);
 
-            $successfulBlocks++;
+    $response = $this->ReadRegisterBlock(
+        $block['start'],
+        $block['count']
+    );
 
-            foreach (
-                $response
-                as $offset => $word
-            ) {
-                $rawRegisters[
-                    $block['start'] + $offset
-                ] = $word;
-            }
-        }
+    $blockDuration = (int)round(
+        (microtime(true) - $blockStarted) * 1000
+    );
+
+    $this->SendDebug(
+        'FetchInverterData',
+        "Run={$runID}: ENDE Block {$block['start']}–{$blockEnd} nach {$blockDuration} ms",
+        0
+    );
+
+    if ($response === null) {
+        $this->SendDebug(
+            'FetchInverterData',
+            "Run={$runID}: Block {$block['start']}–{$blockEnd} konnte nicht gelesen werden.",
+            0
+        );
+
+        continue;
+    }
+
+    $successfulBlocks++;
+
+    foreach ($response as $offset => $word) {
+        $rawRegisters[
+            $block['start'] + $offset
+        ] = $word;
+    }
+}
 
         $values = [];
 
