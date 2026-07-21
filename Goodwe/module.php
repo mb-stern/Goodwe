@@ -31,10 +31,6 @@ class Goodwe extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
-        // Während der Neukonfiguration / beim Modulupdate keine neue Abfrage starten.
-        // Das verhindert, dass alter und neuer Timer parallel laufen.
-        $this->SetTimerInterval('TimerWR', 0);
-
         $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
         if (!is_array($rawSelected)) {
             $rawSelected = [];
@@ -68,38 +64,6 @@ class Goodwe extends IPSModuleStrict
             }
 
             $selectedMap[$addr] = (bool)($r['selected'] ?? false);
-        }
-
-        /*
-        * SelectedRegisters wieder vollständig normalisieren.
-        * Dadurch enthält die Property für JEDES aktuelle Register genau einen Eintrag.
-        * Neue Register erscheinen nach einem Modulupdate automatisch als nicht ausgewählt.
-        */
-        $normalized = [];
-        foreach ($this->GetRegisters() as $r) {
-            $addr = (string)$r['address'];
-
-            $normalized[] = [
-                'addr'     => $addr,
-                'selected' => $selectedMap[$addr] ?? false
-            ];
-        }
-
-        $currentJson    = json_encode($rawSelected);
-        $normalizedJson = json_encode($normalized);
-
-        if ($currentJson !== $normalizedJson) {
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", $normalizedJson);
-
-            /*
-            * Wie in deiner alten Version:
-            * ApplyChanges erneut ausführen, damit die neue normalisierte Liste
-            * sofort als Konfiguration übernommen wird.
-            *
-            * Timer ist zu diesem Zeitpunkt bereits auf 0 gesetzt.
-            */
-            IPS_ApplyChanges($this->InstanceID);
-            return;
         }
 
         $this->CreateProfile();
@@ -343,7 +307,7 @@ class Goodwe extends IPSModuleStrict
         // Timer erst am Ende wieder aktivieren.
         $this->SetTimerInterval(
             'TimerWR',
-            $this->ReadPropertyInteger('PollIntervalWR') * 1000
+            max(1, $this->ReadPropertyInteger('PollIntervalWR')) * 1000
         );
     }
 
