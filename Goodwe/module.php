@@ -31,20 +31,27 @@ class Goodwe extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
-        // Während der Neukonfiguration / beim Modulupdate keine neue Abfrage starten.
-        // Das verhindert, dass alter und neuer Timer parallel laufen.
-        $this->SetTimerInterval('TimerWR', 0);
+        $this->CreateProfile();
 
-        $rawSelected = json_decode($this->ReadPropertyString("SelectedRegisters"), true);
-        if (!is_array($rawSelected)) {
-            $rawSelected = [];
+        /*
+        * Bestehende Auswahl einlesen.
+        */
+        $selectedRegisters = json_decode(
+            $this->ReadPropertyString('SelectedRegisters'),
+            true
+        );
+
+        if (!is_array($selectedRegisters)) {
+            $selectedRegisters = [];
         }
 
-        // Bestehende Auswahl in Map übernehmen.
         $selectedMap = [];
-        foreach ($rawSelected as $r) {
+
+        foreach ($selectedRegisters as $r) {
+            // Kompatibilität mit älteren gespeicherten Formaten.
             if (is_string($r)) {
                 $tmp = json_decode($r, true);
+
                 if (is_array($tmp)) {
                     $r = $tmp;
                 } else {
@@ -57,6 +64,7 @@ class Goodwe extends IPSModuleStrict
             }
 
             $addr = null;
+
             if (isset($r['addr'])) {
                 $addr = (string)$r['addr'];
             } elseif (isset($r['address'])) {
@@ -67,114 +75,77 @@ class Goodwe extends IPSModuleStrict
                 continue;
             }
 
-            $selectedMap[$addr] = (bool)($r['selected'] ?? false);
-        }
-
-        /*
-        * SelectedRegisters wieder vollständig normalisieren.
-        * Dadurch enthält die Property für JEDES aktuelle Register genau einen Eintrag.
-        * Neue Register erscheinen nach einem Modulupdate automatisch als nicht ausgewählt.
-        */
-        $normalized = [];
-        foreach ($this->GetRegisters() as $r) {
-            $addr = (string)$r['address'];
-
-            $normalized[] = [
-                'addr'     => $addr,
-                'selected' => $selectedMap[$addr] ?? false
-            ];
-        }
-
-        $currentJson    = json_encode($rawSelected);
-        $normalizedJson = json_encode($normalized);
-
-        if ($currentJson !== $normalizedJson) {
-            IPS_SetProperty($this->InstanceID, "SelectedRegisters", $normalizedJson);
-
-            /*
-            * Wie in deiner alten Version:
-            * ApplyChanges erneut ausführen, damit die neue normalisierte Liste
-            * sofort als Konfiguration übernommen wird.
-            *
-            * Timer ist zu diesem Zeitpunkt bereits auf 0 gesetzt.
-            */
-            IPS_ApplyChanges($this->InstanceID);
-            return;
-        }
-
-        $this->CreateProfile();
-
-        // Aktuell ausgewählte Register erneut einlesen.
-        $selectedRegisters = json_decode(
-            $this->ReadPropertyString("SelectedRegisters"),
-            true
-        );
-
-        $registerCurrentIdents = [];
-        $selectedMap = [];
-
-        if (is_array($selectedRegisters)) {
-            foreach ($selectedRegisters as $r) {
-                if (!is_array($r)) {
-                    continue;
-                }
-
-                $addr = isset($r['addr']) ? (string)$r['addr'] : null;
-
-                if ($addr === null || $addr === '') {
-                    continue;
-                }
-
-                if (!empty($r['selected'])) {
-                    $selectedMap[$addr] = true;
-                }
+            if (!empty($r['selected'])) {
+                $selectedMap[$addr] = true;
             }
         }
 
         /*
-        * Vorhandene Variablen positionieren und ausgewählte Variablen anlegen.
+        * Bestehende Registervariablen positionieren.
         */
+        foreach ($this->GetRegisters() as $r) {
+            if (!isset($r['address'], $r['pos'])) {
+                continue;
+            }
+
+            $ident = 'Addr' . (string)$r['address'];
+            $variableID = @$this->GetIDForIdent($ident);
+
+            if ($variableID !== false) {
+                IPS_SetPosition(
+                    $variableID,
+                    (int)$r['pos']
+                );
+            }
+        }
+
+        /*
+        * Ausgewählte Registervariablen anlegen.
+        */
+        $registerCurrentIdents = [];
+
         foreach ($this->GetRegisters() as $r) {
             $addrKey = (string)$r['address'];
-            $ident   = 'Addr' . $addrKey;
-
-            // Position bestehender Variablen bei jedem ApplyChanges aktualisieren.
-            if (isset($r['pos'])) {
-                $existingID = @$this->GetIDForIdent($ident);
-                if ($existingID !== false) {
-                    IPS_SetPosition($existingID, (int)$r['pos']);
-                }
-            }
 
             if (!isset($selectedMap[$addrKey])) {
                 continue;
             }
 
-            foreach (['address', 'name', 'type', 'unit', 'scale', 'pos'] as $need) {
+            foreach (
+                ['address', 'name', 'type', 'unit', 'scale', 'pos']
+                as $need
+            ) {
                 if (!array_key_exists($need, $r)) {
                     $this->SendDebug(
-                        "ApplyChanges",
-                        "Fehlendes Feld '$need' für $addrKey",
+                        'ApplyChanges',
+                        "Fehlendes Feld '$need' für Register $addrKey",
                         0
                     );
+
                     continue 2;
                 }
             }
 
-            $details = $this->GetVariableDetails((string)$r['unit']);
+            $details = $this->GetVariableDetails(
+                (string)$r['unit']
+            );
 
             if ($details === null) {
                 $this->SendDebug(
-                    "ApplyChanges",
+                    'ApplyChanges',
                     "Keine Details/Profil für Einheit '{$r['unit']}' (Addr $addrKey).",
                     0
                 );
+
                 continue;
             }
 
+            $ident = 'Addr' . $addrKey;
             $registerCurrentIdents[] = $ident;
 
-            if (!@$this->GetIDForIdent($ident)) {
+            $variableID = @$this->GetIDForIdent($ident);
+
+            if ($variableID === false) {
                 switch ($details['type']) {
                     case VARIABLETYPE_INTEGER:
                         $this->RegisterVariableInteger(
@@ -214,136 +185,224 @@ class Goodwe extends IPSModuleStrict
                 }
 
                 $this->SendDebug(
-                    "ApplyChanges",
+                    'ApplyChanges',
                     "Register-Variable erstellt: $ident ({$r['name']}) Profil={$details['profile']}",
                     0
                 );
             }
 
-            // Position auch nach Neuanlage sicher setzen.
+            /*
+            * Position auch bei bestehenden Variablen aktualisieren.
+            */
             $variableID = @$this->GetIDForIdent($ident);
+
             if ($variableID !== false) {
-                IPS_SetPosition($variableID, (int)$r['pos']);
+                IPS_SetPosition(
+                    $variableID,
+                    (int)$r['pos']
+                );
             }
         }
 
-        // Aktionen für schreibbare Register aktivieren.
+        /*
+        * Aktionen für schreibbare Register aktivieren.
+        */
         foreach ($this->GetRegisters() as $r) {
             if (empty($r['writable'])) {
                 continue;
             }
 
             $writeIdent = 'Addr' . (string)$r['address'];
+            $variableID = @$this->GetIDForIdent($writeIdent);
 
-            if (@$this->GetIDForIdent($writeIdent)) {
+            if ($variableID !== false) {
                 $this->EnableAction($writeIdent);
             }
         }
 
-        // Nicht mehr ausgewählte Registervariablen entfernen.
+        /*
+        * Nicht mehr ausgewählte Registervariablen entfernen.
+        */
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $obj = IPS_GetObject($childID);
 
             if (
-                strpos($obj['ObjectIdent'], 'Addr') === 0 &&
-                !in_array($obj['ObjectIdent'], $registerCurrentIdents, true)
+                strpos(
+                    $obj['ObjectIdent'],
+                    'Addr'
+                ) === 0
+                &&
+                !in_array(
+                    $obj['ObjectIdent'],
+                    $registerCurrentIdents,
+                    true
+                )
             ) {
-                $this->UnregisterVariable($obj['ObjectIdent']);
+                $this->UnregisterVariable(
+                    $obj['ObjectIdent']
+                );
 
                 $this->SendDebug(
-                    "ApplyChanges",
+                    'ApplyChanges',
                     "Register-Variable entfernt: {$obj['ObjectIdent']}",
                     0
                 );
             }
         }
 
-        // Berechnung Batterie 1
-        if ($this->ReadPropertyBoolean("Entladen_Max")) {
-            if (!@$this->GetIDForIdent("MaxEntladen")) {
+        /*
+        * Batterie 1 - Laden max
+        */
+        if ($this->ReadPropertyBoolean('Laden_Max')) {
+            if (!@$this->GetIDForIdent('MaxLaden')) {
                 $this->RegisterVariableInteger(
-                    "MaxEntladen",
-                    "BAT - Entladen Leistung max",
-                    "Goodwe.Watt",
-                    224
-                );
-            }
-
-            $id = @$this->GetIDForIdent("MaxEntladen");
-            if ($id !== false) {
-                IPS_SetPosition($id, 224);
-            }
-        } else {
-            if (@$this->GetIDForIdent("MaxEntladen") !== false) {
-                $this->UnregisterVariable("MaxEntladen");
-            }
-        }
-
-        if ($this->ReadPropertyBoolean("Laden_Max")) {
-            if (!@$this->GetIDForIdent("MaxLaden")) {
-                $this->RegisterVariableInteger(
-                    "MaxLaden",
-                    "BAT - Laden Leistung max",
-                    "Goodwe.Watt",
+                    'MaxLaden',
+                    'BAT - Laden Leistung max',
+                    'Goodwe.Watt',
                     223
                 );
             }
 
-            $id = @$this->GetIDForIdent("MaxLaden");
-            if ($id !== false) {
-                IPS_SetPosition($id, 223);
+            $variableID = @$this->GetIDForIdent(
+                'MaxLaden'
+            );
+
+            if ($variableID !== false) {
+                IPS_SetPosition(
+                    $variableID,
+                    223
+                );
             }
         } else {
-            if (@$this->GetIDForIdent("MaxLaden") !== false) {
-                $this->UnregisterVariable("MaxLaden");
+            if (
+                @$this->GetIDForIdent(
+                    'MaxLaden'
+                ) !== false
+            ) {
+                $this->UnregisterVariable(
+                    'MaxLaden'
+                );
             }
         }
 
-        // Berechnung Batterie 2
-        if ($this->ReadPropertyBoolean("Entladen_Max_2")) {
-            if (!@$this->GetIDForIdent("MaxEntladen2")) {
+        /*
+        * Batterie 1 - Entladen max
+        */
+        if ($this->ReadPropertyBoolean('Entladen_Max')) {
+            if (!@$this->GetIDForIdent('MaxEntladen')) {
                 $this->RegisterVariableInteger(
-                    "MaxEntladen2",
-                    "BAT2 - Entladen Leistung max",
-                    "Goodwe.Watt",
-                    315
+                    'MaxEntladen',
+                    'BAT - Entladen Leistung max',
+                    'Goodwe.Watt',
+                    224
                 );
             }
 
-            $id = @$this->GetIDForIdent("MaxEntladen2");
-            if ($id !== false) {
-                IPS_SetPosition($id, 315);
+            $variableID = @$this->GetIDForIdent(
+                'MaxEntladen'
+            );
+
+            if ($variableID !== false) {
+                IPS_SetPosition(
+                    $variableID,
+                    224
+                );
             }
         } else {
-            if (@$this->GetIDForIdent("MaxEntladen2") !== false) {
-                $this->UnregisterVariable("MaxEntladen2");
+            if (
+                @$this->GetIDForIdent(
+                    'MaxEntladen'
+                ) !== false
+            ) {
+                $this->UnregisterVariable(
+                    'MaxEntladen'
+                );
             }
         }
 
-        if ($this->ReadPropertyBoolean("Laden_Max_2")) {
-            if (!@$this->GetIDForIdent("MaxLaden2")) {
+        /*
+        * Batterie 2 - Laden max
+        */
+        if ($this->ReadPropertyBoolean('Laden_Max_2')) {
+            if (!@$this->GetIDForIdent('MaxLaden2')) {
                 $this->RegisterVariableInteger(
-                    "MaxLaden2",
-                    "BAT2 - Laden Leistung max",
-                    "Goodwe.Watt",
+                    'MaxLaden2',
+                    'BAT2 - Laden Leistung max',
+                    'Goodwe.Watt',
                     314
                 );
             }
 
-            $id = @$this->GetIDForIdent("MaxLaden2");
-            if ($id !== false) {
-                IPS_SetPosition($id, 314);
+            $variableID = @$this->GetIDForIdent(
+                'MaxLaden2'
+            );
+
+            if ($variableID !== false) {
+                IPS_SetPosition(
+                    $variableID,
+                    314
+                );
             }
         } else {
-            if (@$this->GetIDForIdent("MaxLaden2") !== false) {
-                $this->UnregisterVariable("MaxLaden2");
+            if (
+                @$this->GetIDForIdent(
+                    'MaxLaden2'
+                ) !== false
+            ) {
+                $this->UnregisterVariable(
+                    'MaxLaden2'
+                );
             }
         }
 
-        // Timer erst am Ende wieder aktivieren.
+        /*
+        * Batterie 2 - Entladen max
+        */
+        if ($this->ReadPropertyBoolean('Entladen_Max_2')) {
+            if (!@$this->GetIDForIdent('MaxEntladen2')) {
+                $this->RegisterVariableInteger(
+                    'MaxEntladen2',
+                    'BAT2 - Entladen Leistung max',
+                    'Goodwe.Watt',
+                    315
+                );
+            }
+
+            $variableID = @$this->GetIDForIdent(
+                'MaxEntladen2'
+            );
+
+            if ($variableID !== false) {
+                IPS_SetPosition(
+                    $variableID,
+                    315
+                );
+            }
+        } else {
+            if (
+                @$this->GetIDForIdent(
+                    'MaxEntladen2'
+                ) !== false
+            ) {
+                $this->UnregisterVariable(
+                    'MaxEntladen2'
+                );
+            }
+        }
+
+        /*
+        * Timer ganz normal auf das konfigurierte Intervall setzen.
+        */
+        $pollInterval = max(
+            1,
+            $this->ReadPropertyInteger(
+                'PollIntervalWR'
+            )
+        );
+
         $this->SetTimerInterval(
             'TimerWR',
-            $this->ReadPropertyInteger('PollIntervalWR') * 1000
+            $pollInterval * 1000
         );
     }
 
@@ -415,144 +474,432 @@ class Goodwe extends IPSModuleStrict
         );
     }
 
-    public function FetchInverterData(): void
-    {
-        $lockName = 'GoodwePoll_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lockName, 1)) {
-            $started = $this->ReadAttributeInteger('LastPollStarted');
-            $age = $started > 0 ? time() - $started : 0;
-            $this->SendDebug('FetchInverterData', "Abfrage läuft bereits seit {$age} s – Timeraufruf übersprungen.", 0);
+public function FetchInverterData(): void
+{
+    $runID = sprintf(
+        '%d-%s',
+        $this->InstanceID,
+        uniqid('', true)
+    );
+
+    $lockName = 'GoodwePoll_' . $this->InstanceID;
+
+    $this->SendDebug(
+        'FetchInverterData',
+        'START Run=' . $runID,
+        0
+    );
+
+    if (!IPS_SemaphoreEnter($lockName, 1)) {
+        $started = $this->ReadAttributeInteger(
+            'LastPollStarted'
+        );
+
+        $age = $started > 0
+            ? time() - $started
+            : 0;
+
+        $this->SendDebug(
+            'FetchInverterData',
+            "BLOCKIERT Run={$runID}, andere Abfrage läuft seit {$age} s.",
+            0
+        );
+
+        return;
+    }
+
+    $startedAt = microtime(true);
+
+    $this->WriteAttributeInteger(
+        'LastPollStarted',
+        time()
+    );
+
+    try {
+        $selectedRegisters = json_decode(
+            $this->ReadPropertyString(
+                'SelectedRegisters'
+            ),
+            true
+        );
+
+        if (!is_array($selectedRegisters)) {
+            $this->SendDebug(
+                'FetchInverterData',
+                "Run={$runID}: SelectedRegisters ist keine gültige Liste.",
+                0
+            );
+
             return;
         }
 
-        $startedAt = microtime(true);
-        $this->WriteAttributeInteger('LastPollStarted', time());
+        $selectedMap = [];
 
-        try {
-            $selectedRegisters = json_decode($this->ReadPropertyString('SelectedRegisters'), true);
-            if (!is_array($selectedRegisters)) {
-                $this->SendDebug('FetchInverterData', 'SelectedRegisters ist keine gültige Liste', 0);
-                return;
+        foreach ($selectedRegisters as $r) {
+            if (
+                is_array($r)
+                &&
+                !empty($r['selected'])
+                &&
+                isset($r['addr'])
+            ) {
+                $selectedMap[
+                    (string)$r['addr']
+                ] = true;
+            }
+        }
+
+        if ($selectedMap === []) {
+            $this->SendDebug(
+                'FetchInverterData',
+                "Run={$runID}: Keine Register ausgewählt.",
+                0
+            );
+
+            return;
+        }
+
+        $instance = IPS_GetInstance(
+            $this->InstanceID
+        );
+
+        $parentID = $instance['ConnectionID'];
+
+        if (
+            $parentID === 0
+            ||
+            !IPS_InstanceExists($parentID)
+            ||
+            IPS_GetInstance(
+                $parentID
+            )['InstanceStatus'] !== IS_ACTIVE
+        ) {
+            $this->SendDebug(
+                'FetchInverterData',
+                "Run={$runID}: Keine aktive Parent-Instanz verbunden.",
+                0
+            );
+
+            return;
+        }
+
+        $registers = [];
+        $allRegisters = $this->GetRegisters();
+
+        foreach ($allRegisters as $register) {
+            if (
+                isset(
+                    $selectedMap[
+                        (string)$register['address']
+                    ]
+                )
+                &&
+                empty($register['writeOnly'])
+            ) {
+                $registers[] = $register;
+            }
+        }
+
+        /*
+         * Für Leistungsberechnungen benötigte BMS-Register ergänzen.
+         */
+        $dependencies = [];
+
+        if (
+            $this->ReadPropertyBoolean(
+                'Laden_Max'
+            )
+        ) {
+            $dependencies = array_merge(
+                $dependencies,
+                [47902, 47903]
+            );
+        }
+
+        if (
+            $this->ReadPropertyBoolean(
+                'Entladen_Max'
+            )
+        ) {
+            $dependencies = array_merge(
+                $dependencies,
+                [47904, 47905]
+            );
+        }
+
+        if (
+            $this->ReadPropertyBoolean(
+                'Laden_Max_2'
+            )
+        ) {
+            $dependencies = array_merge(
+                $dependencies,
+                [47920, 47921]
+            );
+        }
+
+        if (
+            $this->ReadPropertyBoolean(
+                'Entladen_Max_2'
+            )
+        ) {
+            $dependencies = array_merge(
+                $dependencies,
+                [47922, 47923]
+            );
+        }
+
+        $present = array_column(
+            $registers,
+            'address'
+        );
+
+        foreach (
+            array_unique($dependencies)
+            as $dependency
+        ) {
+            if (
+                in_array(
+                    $dependency,
+                    $present,
+                    true
+                )
+            ) {
+                continue;
             }
 
-            $selectedMap = [];
-            foreach ($selectedRegisters as $r) {
-                if (is_array($r) && !empty($r['selected']) && isset($r['addr'])) {
-                    $selectedMap[(string)$r['addr']] = true;
-                }
-            }
-            if ($selectedMap === []) {
-                $this->SendDebug('FetchInverterData', 'Keine Register ausgewählt.', 0);
-                return;
-            }
-
-            $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
-            if ($parentID === 0 || !IPS_InstanceExists($parentID) || IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
-                $this->SendDebug('FetchInverterData', 'Keine aktive Parent-Instanz verbunden.', 0);
-                return;
-            }
-
-            $registers = [];
-            $allRegisters = $this->GetRegisters();
-            foreach ($allRegisters as $register) {
-                if (isset($selectedMap[(string)$register['address']]) && empty($register['writeOnly'])) {
-                    $registers[] = $register;
-                }
-            }
-
-            // Für die Leistungsberechnungen benötigte BMS-Register immer im selben Block mitlesen.
-            $dependencies = [];
-            if ($this->ReadPropertyBoolean('Laden_Max'))      $dependencies = array_merge($dependencies, [47902, 47903]);
-            if ($this->ReadPropertyBoolean('Entladen_Max'))   $dependencies = array_merge($dependencies, [47904, 47905]);
-            if ($this->ReadPropertyBoolean('Laden_Max_2'))    $dependencies = array_merge($dependencies, [47920, 47921]);
-            if ($this->ReadPropertyBoolean('Entladen_Max_2')) $dependencies = array_merge($dependencies, [47922, 47923]);
-            $present = array_column($registers, 'address');
-            foreach (array_unique($dependencies) as $dependency) {
-                if (!in_array($dependency, $present, true)) {
-                    foreach ($allRegisters as $candidate) {
-                        if ((int)$candidate['address'] === $dependency) {
-                            $registers[] = $candidate;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            $blocks = $this->BuildReadBlocks($registers, 4, 100);
-            $rawRegisters = [];
-            $successfulBlocks = 0;
-
-            foreach ($blocks as $block) {
-                if (IPS_GetInstance($this->InstanceID)['InstanceStatus'] === IS_DELETING) {
+            foreach ($allRegisters as $candidate) {
+                if (
+                    (int)$candidate['address']
+                    === $dependency
+                ) {
+                    $registers[] = $candidate;
                     break;
                 }
-
-                $response = $this->ReadRegisterBlock($block['start'], $block['count']);
-                if ($response === null) {
-                    $this->SendDebug('FetchInverterData', "Block {$block['start']}–" . ($block['start'] + $block['count'] - 1) . ' konnte nicht gelesen werden.', 0);
-                    continue;
-                }
-
-                $successfulBlocks++;
-                foreach ($response as $offset => $word) {
-                    $rawRegisters[$block['start'] + $offset] = $word;
-                }
             }
-
-            $values = [];
-            foreach ($registers as $register) {
-                $address = (int)$register['address'];
-                $rawValue = $this->DecodeRegisterValue($register, $rawRegisters);
-                if ($rawValue === null) {
-                    continue;
-                }
-
-                $scaledValue = $rawValue * (float)$register['scale'];
-                $ident = 'Addr' . $address;
-                $varID = @$this->GetIDForIdent($ident);
-                if ($varID === false) {
-                    continue;
-                }
-
-                $var = IPS_GetVariable($varID);
-                if ($var['VariableType'] === VARIABLETYPE_FLOAT) {
-                    $scaleStr = rtrim(rtrim(number_format((float)$register['scale'], 10, '.', ''), '0'), '.');
-                    $dotPos = strpos($scaleStr, '.');
-                    $decimals = $dotPos === false ? 0 : strlen($scaleStr) - $dotPos - 1;
-                    $finalValue = round((float)$scaledValue, $decimals);
-                } elseif ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
-                    $finalValue = ((int)round($scaledValue)) !== 0;
-                } elseif ($var['VariableType'] === VARIABLETYPE_STRING) {
-                    $finalValue = (string)$scaledValue;
-                } else {
-                    $finalValue = (int)round($scaledValue);
-                }
-
-                $this->SetValueIfChanged($ident, $finalValue);
-                $values[$ident] = $finalValue;
-            }
-
-            $this->WriteAttributeString('LastRawRegisters', json_encode($rawRegisters));
-            $this->CalculateMaxPowerFromRaw($rawRegisters);
-
-            $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
-            $this->SendDebug('FetchInverterData', json_encode([
-                'source' => 'WR_Modbus_BlockRead',
-                'selectedRegisters' => count($registers),
-                'blocks' => count($blocks),
-                'successfulBlocks' => $successfulBlocks,
-                'durationMs' => $durationMs,
-                'values' => $values
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
-        } catch (Throwable $e) {
-            $this->SendDebug('FetchInverterData', 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe', 'Fehler bei Blockabfrage: ' . $e->getMessage());
-        } finally {
-            $this->WriteAttributeInteger('LastPollStarted', 0);
-            IPS_SemaphoreLeave($lockName);
         }
-    }
 
+        $blocks = $this->BuildReadBlocks(
+            $registers,
+            4,
+            100
+        );
+
+        $rawRegisters = [];
+        $successfulBlocks = 0;
+
+        foreach ($blocks as $block) {
+            if (
+                IPS_GetInstance(
+                    $this->InstanceID
+                )['InstanceStatus']
+                === IS_DELETING
+            ) {
+                $this->SendDebug(
+                    'FetchInverterData',
+                    "Run={$runID}: Instanz wird gelöscht, Abfrage beendet.",
+                    0
+                );
+
+                break;
+            }
+
+            $response = $this->ReadRegisterBlock(
+                $block['start'],
+                $block['count']
+            );
+
+            if ($response === null) {
+                $this->SendDebug(
+                    'FetchInverterData',
+                    "Run={$runID}: Block {$block['start']}–" .
+                    (
+                        $block['start']
+                        +
+                        $block['count']
+                        -
+                        1
+                    ) .
+                    ' konnte nicht gelesen werden.',
+                    0
+                );
+
+                continue;
+            }
+
+            $successfulBlocks++;
+
+            foreach (
+                $response
+                as $offset => $word
+            ) {
+                $rawRegisters[
+                    $block['start'] + $offset
+                ] = $word;
+            }
+        }
+
+        $values = [];
+
+        foreach ($registers as $register) {
+            $address = (int)$register['address'];
+
+            $rawValue = $this->DecodeRegisterValue(
+                $register,
+                $rawRegisters
+            );
+
+            if ($rawValue === null) {
+                continue;
+            }
+
+            $scaledValue =
+                $rawValue
+                *
+                (float)$register['scale'];
+
+            $ident = 'Addr' . $address;
+
+            $varID = @$this->GetIDForIdent(
+                $ident
+            );
+
+            if ($varID === false) {
+                continue;
+            }
+
+            $var = IPS_GetVariable($varID);
+
+            if (
+                $var['VariableType']
+                === VARIABLETYPE_FLOAT
+            ) {
+                $scaleStr = rtrim(
+                    rtrim(
+                        number_format(
+                            (float)$register['scale'],
+                            10,
+                            '.',
+                            ''
+                        ),
+                        '0'
+                    ),
+                    '.'
+                );
+
+                $dotPos = strpos(
+                    $scaleStr,
+                    '.'
+                );
+
+                $decimals = $dotPos === false
+                    ? 0
+                    : strlen($scaleStr)
+                        -
+                        $dotPos
+                        -
+                        1;
+
+                $finalValue = round(
+                    (float)$scaledValue,
+                    $decimals
+                );
+            } elseif (
+                $var['VariableType']
+                === VARIABLETYPE_BOOLEAN
+            ) {
+                $finalValue =
+                    ((int)round($scaledValue))
+                    !== 0;
+            } elseif (
+                $var['VariableType']
+                === VARIABLETYPE_STRING
+            ) {
+                $finalValue =
+                    (string)$scaledValue;
+            } else {
+                $finalValue =
+                    (int)round($scaledValue);
+            }
+
+            $this->SetValueIfChanged(
+                $ident,
+                $finalValue
+            );
+
+            $values[$ident] =
+                $finalValue;
+        }
+
+        $this->WriteAttributeString(
+            'LastRawRegisters',
+            json_encode($rawRegisters)
+        );
+
+        $this->CalculateMaxPowerFromRaw(
+            $rawRegisters
+        );
+
+        $durationMs = (int)round(
+            (
+                microtime(true)
+                -
+                $startedAt
+            )
+            *
+            1000
+        );
+
+        $this->SendDebug(
+            'FetchInverterData',
+            json_encode(
+                [
+                    'runID'             => $runID,
+                    'source'            => 'WR_Modbus_BlockRead',
+                    'selectedRegisters' => count($registers),
+                    'blocks'            => count($blocks),
+                    'successfulBlocks'  => $successfulBlocks,
+                    'durationMs'        => $durationMs,
+                    'values'            => $values
+                ],
+                JSON_UNESCAPED_SLASHES
+                |
+                JSON_UNESCAPED_UNICODE
+            ),
+            0
+        );
+    } catch (Throwable $e) {
+        $this->SendDebug(
+            'FetchInverterData',
+            "Run={$runID}: Fehler: "
+            .
+            $e->getMessage(),
+            0
+        );
+
+        $this->LogMessage(
+            'Goodwe',
+            "Run={$runID}: Fehler bei Blockabfrage: "
+            .
+            $e->getMessage()
+        );
+    } finally {
+        $this->WriteAttributeInteger(
+            'LastPollStarted',
+            0
+        );
+
+        IPS_SemaphoreLeave(
+            $lockName
+        );
+
+        $this->SendDebug(
+            'FetchInverterData',
+            'ENDE Run=' . $runID,
+            0
+        );
+    }
+}
     private function BuildReadBlocks(array $registers, int $maxGap = 4, int $maxCount = 100): array
     {
         $ranges = [];
