@@ -1241,24 +1241,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
             ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
             ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
-       
-            // Smartmeter
-            ["address" => 36019, "name" => "SM - Leistung PH1",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 100],
-            ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
-            ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
-            ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
-        
-       
-            ];
-
-
+        ];
 
         return $registers;
     }
