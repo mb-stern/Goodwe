@@ -792,6 +792,28 @@ class Goodwe extends IPSModuleStrict
             ];
         }, $all);
 
+        $emptyRows = 0;
+
+                    foreach ($values as $value) {
+                        if (
+                            empty($value['addr']) ||
+                            empty($value['address_display']) ||
+                            empty($value['name'])
+                        ) {
+                            $emptyRows++;
+                        }
+                    }
+
+                    IPS_LogMessage(
+                        'GoodWe GetConfigurationForm',
+                        sprintf(
+                            'Instanz %d: values=%d, unvollständige Zeilen=%d',
+                            $this->InstanceID,
+                            count($values),
+                            $emptyRows
+                        )
+                    );
+
         return json_encode([
             "elements" => [
                 [
@@ -830,27 +852,7 @@ class Goodwe extends IPSModuleStrict
                     ],
                     "values" => $values
 
-                    $emptyRows = 0;
-
-                    foreach ($values as $value) {
-                        if (
-                            empty($value['addr']) ||
-                            empty($value['address_display']) ||
-                            empty($value['name'])
-                        ) {
-                            $emptyRows++;
-                        }
-                    }
-
-                    IPS_LogMessage(
-                        'GoodWe GetConfigurationForm',
-                        sprintf(
-                            'Instanz %d: values=%d, unvollständige Zeilen=%d',
-                            $this->InstanceID,
-                            count($values),
-                            $emptyRows
-                        )
-                    );
+                    
 
 
                 ],
