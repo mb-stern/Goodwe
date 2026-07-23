@@ -15,13 +15,6 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterPropertyBoolean("Entladen_Max_2", false);
         $this->RegisterPropertyBoolean("Laden_Max_2", false);
 
-        // Optionale Diagnose-Auswertungen. Die dafür benötigten Register werden
-        // intern gelesen und NICHT in GetRegisters() aufgenommen.
-        $this->RegisterPropertyBoolean("BMS_Warnung_Text", false);
-        $this->RegisterPropertyBoolean("BMS_Alarm_Text", false);
-        $this->RegisterPropertyBoolean("WR_Warnung_Text", false);
-        $this->RegisterPropertyBoolean("WR_Fehler_Text", false);
-
         $this->RegisterAttributeString("LastRawRegisters", "{}");
         $this->RegisterAttributeInteger("LastPollStarted", 0);
 
@@ -216,8 +209,19 @@ class Goodwe extends IPSModuleStrict
             }
         }
 
-        // Optionale, aus mehreren Registern abgeleitete Diagnosevariablen verwalten.
-        $this->UpdateDiagnosticVariables();
+        // Lesbare Zusatzvariablen für die BMS-Bitmasken.
+        // Die bisherigen Raw-Variablen Addr47911 und Addr47913 bleiben unverändert.
+        if (isset($selectedMap['47911'])) {
+            $this->RegisterVariableString('BMSWarningText', 'BAT - BMS Warnung Text', '', 221);
+        } elseif (@$this->GetIDForIdent('BMSWarningText') !== false) {
+            $this->UnregisterVariable('BMSWarningText');
+        }
+
+        if (isset($selectedMap['47913'])) {
+            $this->RegisterVariableString('BMSAlarmText', 'BAT - BMS Alarm Text', '', 222);
+        } elseif (@$this->GetIDForIdent('BMSAlarmText') !== false) {
+            $this->UnregisterVariable('BMSAlarmText');
+        }
 
         // Aktionen für schreibbare Register aktivieren.
         foreach ($this->GetRegisters() as $r) {
@@ -433,6 +437,11 @@ class Goodwe extends IPSModuleStrict
                     $selectedMap[(string)$r['addr']] = true;
                 }
             }
+            if ($selectedMap === []) {
+                $this->SendDebug('FetchInverterData', 'Keine Register ausgewählt.', 0);
+                return;
+            }
+
             $parentID = IPS_GetInstance($this->InstanceID)['ConnectionID'];
             if ($parentID === 0 || !IPS_InstanceExists($parentID) || IPS_GetInstance($parentID)['InstanceStatus'] !== IS_ACTIVE) {
                 $this->SendDebug('FetchInverterData', 'Keine aktive Parent-Instanz verbunden.', 0);
@@ -463,28 +472,6 @@ class Goodwe extends IPSModuleStrict
                         }
                     }
                 }
-            }
-
-            // Diagnose-Register werden bewusst außerhalb von GetRegisters() definiert.
-            // Damit bleibt die obere Registerliste ausschließlich für echte,
-            // vom Benutzer auswählbare Register reserviert.
-            foreach ($this->GetInternalDiagnosticRegisters() as $diagnosticRegister) {
-                $alreadyPresent = false;
-                foreach ($registers as $existingRegister) {
-                    if ((int)$existingRegister['address'] === (int)$diagnosticRegister['address']) {
-                        $alreadyPresent = true;
-                        break;
-                    }
-                }
-
-                if (!$alreadyPresent) {
-                    $registers[] = $diagnosticRegister;
-                }
-            }
-
-            if ($registers === []) {
-                $this->SendDebug('FetchInverterData', 'Keine Register oder Zusatzwerte zur Abfrage aktiviert.', 0);
-                return;
             }
 
             $blocks = $this->BuildReadBlocks($registers, 4, 100);
@@ -540,11 +527,21 @@ class Goodwe extends IPSModuleStrict
                 $this->SetValueIfChanged($ident, $finalValue);
                 $values[$ident] = $finalValue;
 
+                if ($address === 47911 && @$this->GetIDForIdent('BMSWarningText') !== false) {
+                    $warningText = $this->DecodeBMSCode((int)$rawValue, false);
+                    $this->SetValueIfChanged('BMSWarningText', $warningText);
+                    $values['BMSWarningText'] = $warningText;
+                }
+
+                if ($address === 47913 && @$this->GetIDForIdent('BMSAlarmText') !== false) {
+                    $alarmText = $this->DecodeBMSCode((int)$rawValue, true);
+                    $this->SetValueIfChanged('BMSAlarmText', $alarmText);
+                    $values['BMSAlarmText'] = $alarmText;
+                }
             }
 
             $this->WriteAttributeString('LastRawRegisters', json_encode($rawRegisters));
             $this->CalculateMaxPowerFromRaw($rawRegisters);
-            $this->UpdateDiagnosticTextsFromRaw($rawRegisters);
 
             $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
             $this->SendDebug('FetchInverterData', json_encode([
@@ -837,21 +834,7 @@ class Goodwe extends IPSModuleStrict
                         ["type" => "CheckBox", "name" => "Entladen_Max",   "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 1 berechnen"],
                         ["type" => "CheckBox", "name" => "Laden_Max",      "caption" => "Maximal mögliche Leistung für das Laden des Speichers 1 berechnen"],
                         ["type" => "CheckBox", "name" => "Entladen_Max_2", "caption" => "Maximal mögliche Leistung für das Entladen des Speichers 2 berechnen"],
-                        ["type" => "CheckBox", "name" => "Laden_Max_2",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 2 berechnen"],
-                        [
-                            "type" => "RowLayout",
-                            "items" => [
-                                ["type" => "CheckBox", "name" => "BMS_Warnung_Text", "caption" => "BMS Warnungen als Text auswerten"],
-                                ["type" => "CheckBox", "name" => "BMS_Alarm_Text",   "caption" => "BMS Alarme als Text auswerten"]
-                            ]
-                        ],
-                        [
-                            "type" => "RowLayout",
-                            "items" => [
-                                ["type" => "CheckBox", "name" => "WR_Warnung_Text", "caption" => "WR Warnungen als Text auswerten"],
-                                ["type" => "CheckBox", "name" => "WR_Fehler_Text",  "caption" => "WR Fehler als Text auswerten"]
-                            ]
-                        ]
+                        ["type" => "CheckBox", "name" => "Laden_Max_2",    "caption" => "Maximal mögliche Leistung für das Laden des Speichers 2 berechnen"]
                     ]
                 ]
             ],
@@ -883,312 +866,49 @@ class Goodwe extends IPSModuleStrict
         ]);
     }
 
-    /**
-     * Legt die vier optionalen Diagnose-Stringvariablen an bzw. entfernt sie.
-     * Die Rohregister bleiben davon vollständig unabhängig.
-     */
-    private function UpdateDiagnosticVariables(): void
-    {
-        $variables = [
-            [
-                'property' => 'BMS_Warnung_Text',
-                'ident'    => 'BMSWarningText',
-                'name'     => 'BAT - BMS Warnung',
-                'pos'      => 225
-            ],
-            [
-                'property' => 'BMS_Alarm_Text',
-                'ident'    => 'BMSAlarmText',
-                'name'     => 'BAT - BMS Alarm',
-                'pos'      => 226
-            ],
-            [
-                'property' => 'WR_Warnung_Text',
-                'ident'    => 'WRWarningText',
-                'name'     => 'WR - Warnung',
-                'pos'      => 498
-            ],
-            [
-                'property' => 'WR_Fehler_Text',
-                'ident'    => 'WRErrorText',
-                'name'     => 'WR - Fehler',
-                'pos'      => 499
-            ]
-        ];
-
-        foreach ($variables as $variable) {
-            if ($this->ReadPropertyBoolean($variable['property'])) {
-                if (@$this->GetIDForIdent($variable['ident']) === false) {
-                    $this->RegisterVariableString(
-                        $variable['ident'],
-                        $variable['name'],
-                        '',
-                        $variable['pos']
-                    );
-                }
-
-                $id = @$this->GetIDForIdent($variable['ident']);
-                if ($id !== false) {
-                    IPS_SetPosition($id, $variable['pos']);
-                }
-            } elseif (@$this->GetIDForIdent($variable['ident']) !== false) {
-                $this->UnregisterVariable($variable['ident']);
-            }
-        }
-    }
-
-    /**
-     * Interne Register für Diagnoseauswertungen.
-     *
-     * Diese Liste ist absichtlich von GetRegisters() getrennt:
-     * - keine Anzeige in der normalen Registerauswahl
-     * - keine Veränderung der bestehenden GetRegisters()-Definition
-     * - nur lesen, wenn die zugehörige Zusatzfunktion aktiviert ist
-     */
-    private function GetInternalDiagnosticRegisters(): array
-    {
-        $registers = [];
-
-        if ($this->ReadPropertyBoolean('BMS_Warnung_Text')) {
-            $registers[] = ['address' => 47911, 'type' => 'U32'];
-        }
-
-        if ($this->ReadPropertyBoolean('BMS_Alarm_Text')) {
-            $registers[] = ['address' => 47913, 'type' => 'U32'];
-        }
-
-        if ($this->ReadPropertyBoolean('WR_Warnung_Text')) {
-            // 35185: Warning Code (U16)
-            // 35328: Warning Message (U32, modellspezifische Bitbelegung)
-            // 35335: Warning Message Extend (U32, modellspezifische Bitbelegung)
-            $registers[] = ['address' => 35185, 'type' => 'U16'];
-            $registers[] = ['address' => 35328, 'type' => 'U32'];
-            $registers[] = ['address' => 35335, 'type' => 'U32'];
-        }
-
-        if ($this->ReadPropertyBoolean('WR_Fehler_Text')) {
-            // 35189: Error Message (U32, Table 8-2)
-            // 35333: Error Message Extend (U32, modellspezifische Bitbelegung)
-            $registers[] = ['address' => 35189, 'type' => 'U32'];
-            $registers[] = ['address' => 35333, 'type' => 'U32'];
-        }
-
-        return $registers;
-    }
-
-    /**
-     * Aktualisiert alle aktivierten Diagnose-Stringvariablen aus den bereits
-     * gelesenen Rohregistern.
-     */
-    private function UpdateDiagnosticTextsFromRaw(array $raw): void
-    {
-        if (
-            $this->ReadPropertyBoolean('BMS_Warnung_Text') &&
-            @$this->GetIDForIdent('BMSWarningText') !== false
-        ) {
-            $code = $this->DecodeRawValue($raw, 47911, 'U32');
-            $this->SetValueIfChanged(
-                'BMSWarningText',
-                $code === null ? 'Keine Daten' : $this->DecodeBMSWarning($code)
-            );
-        }
-
-        if (
-            $this->ReadPropertyBoolean('BMS_Alarm_Text') &&
-            @$this->GetIDForIdent('BMSAlarmText') !== false
-        ) {
-            $code = $this->DecodeRawValue($raw, 47913, 'U32');
-            $this->SetValueIfChanged(
-                'BMSAlarmText',
-                $code === null ? 'Keine Daten' : $this->DecodeBMSAlarm($code)
-            );
-        }
-
-        if (
-            $this->ReadPropertyBoolean('WR_Warnung_Text') &&
-            @$this->GetIDForIdent('WRWarningText') !== false
-        ) {
-            $this->SetValueIfChanged(
-                'WRWarningText',
-                $this->DecodeWRWarnings($raw)
-            );
-        }
-
-        if (
-            $this->ReadPropertyBoolean('WR_Fehler_Text') &&
-            @$this->GetIDForIdent('WRErrorText') !== false
-        ) {
-            $this->SetValueIfChanged(
-                'WRErrorText',
-                $this->DecodeWRErrors($raw)
-            );
-        }
-    }
-
-    private function DecodeRawValue(array $raw, int $address, string $type): ?int
-    {
-        return $this->DecodeRegisterValue(
-            ['address' => $address, 'type' => $type],
-            $raw
-        );
-    }
-
-    /**
-     * GoodWe ARM Table 8-8: BMS Warning Code (47911-47912).
-     * Nur die im generischen ARM-Protokoll eindeutig beschriebenen Bits
-     * werden benannt; unbekannte gesetzte Bits bleiben als Bitnummer sichtbar.
-     */
-    private function DecodeBMSWarning(int $code): string
-    {
-        $map = [
-            14 => 'Systemtemperatur zu hoch',
-            7  => 'Systemneustart',
-            6  => 'Kommunikationswarnung',
-            5  => 'Entlade-Überstrom',
-            4  => 'Lade-Überstrom Stufe 1',
-            3  => 'Zelltemperatur zu niedrig Stufe 1'
-        ];
-
-        return $this->DecodeBitMask($code, $map, 'Warnbit');
-    }
-
-    /**
-     * GoodWe ARM Table 8-7: BMS Alarm Code (47913-47914).
-     */
-    private function DecodeBMSAlarm(int $code): string
-    {
-        $map = [
-            15 => 'Ladeüberspannung Stufe 3',
-            14 => 'Entladefehler',
-            13 => 'Zellfehler / Zellwert zu hoch',
-            12 => 'Kommunikationsfehler Stufe 2',
-            11 => 'Fehler im Ladekreis',
-            7  => 'DC-Bus-Fehler',
-            6  => 'Vorladefehler',
-            5  => 'Entladefehler',
-            4  => 'Lade-Überstrom Stufe 2',
-            3  => 'Zelltemperatur zu niedrig Stufe 2'
-        ];
-
-        return $this->DecodeBitMask($code, $map, 'Alarmbit');
-    }
-
-    /**
-     * WR-Warnungen:
-     * 35185 ist ein allgemeiner Warning Code.
-     * 35328/35335 sind Bitmasken, deren genaue Bitbelegung laut GoodWe
-     * vom Wechselrichtermodell abhängt. Deshalb werden unbekannte Codes
-     * bewusst als Hexwert ausgegeben statt falsch übersetzt.
-     */
-    private function DecodeWRWarnings(array $raw): string
-    {
-        $warningCode = $this->DecodeRawValue($raw, 35185, 'U16');
-        $warningMessage = $this->DecodeRawValue($raw, 35328, 'U32');
-        $warningExtend = $this->DecodeRawValue($raw, 35335, 'U32');
-
-        if ($warningCode === null && $warningMessage === null && $warningExtend === null) {
-            return 'Keine Daten';
-        }
-
-        $messages = [];
-
-        if (($warningCode ?? 0) !== 0) {
-            $messages[] = sprintf('Warncode 35185: 0x%04X', $warningCode);
-        }
-
-        if (($warningMessage ?? 0) !== 0) {
-            $messages[] = sprintf('Warnmeldung 35328: 0x%08X', $warningMessage);
-        }
-
-        if (($warningExtend ?? 0) !== 0) {
-            $messages[] = sprintf('Erweiterte Warnmeldung 35335: 0x%08X', $warningExtend);
-        }
-
-        return $messages === [] ? 'OK' : implode(' | ', $messages);
-    }
-
-    /**
-     * WR-Fehler:
-     * 35189 besitzt im generischen GoodWe-ARM-Protokoll eine feste
-     * Bitzuordnung (Table 8-2). 35333 ist dagegen modellspezifisch und
-     * wird deshalb bei Bedarf zusätzlich als Hexwert ausgegeben.
-     */
-    private function DecodeWRErrors(array $raw): string
-    {
-        $errorCode = $this->DecodeRawValue($raw, 35189, 'U32');
-        $errorExtend = $this->DecodeRawValue($raw, 35333, 'U32');
-
-        if ($errorCode === null && $errorExtend === null) {
-            return 'Keine Daten';
-        }
-
-        $map = [
-            31 => 'Interne Kommunikation gestört',
-            30 => 'EEPROM Lesen/Schreiben fehlgeschlagen',
-            29 => 'Netzfrequenz außerhalb Toleranz',
-            28 => 'Kommunikation ARM/DSP gestört',
-            27 => 'Phasenwinkel außerhalb Toleranz',
-            25 => 'Relaisprüfung fehlgeschlagen',
-            23 => 'Netzspannungswerte Master/Slave inkonsistent',
-            22 => 'Netzfrequenzwerte Master/Slave inkonsistent',
-            20 => 'Backup überlastet',
-            19 => 'DC-Einspeisung ins Netz zu hoch',
-            18 => 'Isolationswiderstand der PV-Anlage zu niedrig',
-            17 => 'Netzspannung außerhalb Toleranz',
-            16 => 'Externer Lüfter ausgefallen',
-            15 => 'PV-Eingangsspannung zu hoch',
-            14 => 'Netzphasenfehler',
-            13 => 'Übertemperatur',
-            12 => 'Interner Lüfter ausgefallen',
-            11 => 'DC-Bus-Spannung zu hoch',
-            10 => 'Erdstrom zu hoch',
-            9  => 'Netz ausgefallen',
-            8  => 'AC-Stromsensorprüfung mehrfach fehlgeschlagen',
-            7  => 'Relaisprüfung mehrfach fehlgeschlagen',
-            6  => 'GFCI-Prüfung mehrfach fehlgeschlagen',
-            4  => 'GFCI-Werte Master/Slave inkonsistent',
-            3  => 'DCI-Werte Master/Slave inkonsistent',
-            1  => 'Ausgangsstromsensor fehlerhaft',
-            0  => 'GFCI-Erkennungsschaltung fehlerhaft'
-        ];
-
-        $messages = [];
-
-        if (($errorCode ?? 0) !== 0) {
-            $decoded = $this->DecodeBitMask($errorCode, $map, 'Fehlerbit');
-            if ($decoded !== 'OK') {
-                $messages[] = $decoded;
-            }
-        }
-
-        if (($errorExtend ?? 0) !== 0) {
-            $messages[] = sprintf('Erweiterter Fehlercode 35333: 0x%08X', $errorExtend);
-        }
-
-        return $messages === [] ? 'OK' : implode(' | ', $messages);
-    }
-
-    private function DecodeBitMask(int $code, array $map, string $unknownPrefix): string
+    private function DecodeBMSCode(int $code, bool $alarm): string
     {
         if ($code === 0) {
             return 'OK';
         }
 
+        $code &= 0xFFFFFFFF;
+
+        $warningBits = [
+            0 => 'Systemtemperatur zu hoch',
+            1 => 'Systemneustart',
+            2 => 'Kommunikationswarnung',
+            3 => 'Entlade-Überstrom Stufe 1',
+            4 => 'Lade-Überstrom Stufe 1',
+            5 => 'Zelltemperatur zu niedrig Stufe 1'
+        ];
+
+        $alarmBits = [
+            0 => 'Ladeüberspannung Stufe 3',
+            1 => 'Entladefehler',
+            2 => 'Zelltemperatur zu hoch',
+            3 => 'Kommunikationsfehler Stufe 2',
+            4 => 'Fehler im Ladekreis',
+            5 => 'DC-Bus-Fehler',
+            6 => 'Vorladefehler',
+            7 => 'Fehler beim Entladen',
+            8 => 'Lade-Überstrom Stufe 2',
+            9 => 'Zelltemperatur zu niedrig Stufe 2'
+        ];
+
+        $map = $alarm ? $alarmBits : $warningBits;
         $messages = [];
 
-        // PHP-Integer ist auf IP-Symcon 64 Bit; damit lassen sich alle 32 Bits
-        // des U32-Codes sicher prüfen.
         for ($bit = 0; $bit < 32; $bit++) {
-            $mask = 1 << $bit;
-
-            if (($code & $mask) === 0) {
+            if (($code & (1 << $bit)) === 0) {
                 continue;
             }
-
-            $messages[] = $map[$bit] ?? ($unknownPrefix . ' ' . $bit);
+            $messages[] = $map[$bit] ?? ('Bit ' . $bit);
         }
 
-        return $messages === [] ? 'OK' : implode(' | ', $messages);
+        return $messages === []
+            ? ('Code ' . sprintf('0x%08X', $code))
+            : implode(' | ', $messages);
     }
 
     private function SetValueIfChanged(string $Ident, mixed $Value): void
@@ -1452,6 +1172,8 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
             ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
             ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
+            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
+            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
