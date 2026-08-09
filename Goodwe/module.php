@@ -1144,12 +1144,12 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
             ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
             ["address" => 36014, "name" => "SM - Netzfrequenz",            "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
-            ["address" => 36052, "name" => "SM - Spannung L1",              "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
+            ["address" => 36052, "name" => "SM - Spannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
+            ["address" => 36053, "name" => "SM - Spannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
+            ["address" => 36054, "name" => "SM - Spannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
+            ["address" => 36055, "name" => "SM - Strom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
+            ["address" => 36056, "name" => "SM - Strom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
+            ["address" => 36057, "name" => "SM - Strom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
         
             // Batterie 1
             ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
@@ -1171,7 +1171,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
             ["address" => 35208, "name" => "BAT - Laden Tag",              "type" => "U16", "unit" => "kWh",      "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
             ["address" => 35211, "name" => "BAT - Entladen Tag",           "type" => "U16", "unit" => "kWh",      "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
-            ["address" => 37002, "name" => "BAT - BMS Status",             "type" => "U16", "unit" => "raw",      "scale" => 1, "pos" => 219],
             ["address" => 47910, "name" => "BAT - BMS Temperatur",         "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 220],
             ["address" => 47911, "name" => "BAT - BMS Warnung",            "type" => "U32", "unit" => "raw",      "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
             ["address" => 47913, "name" => "BAT - BMS Alarm",              "type" => "U32", "unit" => "raw",      "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
