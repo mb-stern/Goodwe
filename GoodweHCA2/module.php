@@ -148,6 +148,15 @@ class GoodWeHCA2 extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        $this->SendDebug(
+            'RequestAction',
+            json_encode([
+                'ident' => $Ident,
+                'requestedValue' => $Value
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
         if (strpos($Ident, 'Addr') !== 0) {
             throw new Exception('Ungültiger Ident: ' . $Ident);
         }
@@ -165,6 +174,20 @@ class GoodWeHCA2 extends IPSModuleStrict
         }
 
         $rawValue = (int)round(((float)$Value) / $scale);
+
+        $this->SendDebug(
+            'RequestAction',
+            json_encode([
+                'address' => $address,
+                'name' => $register['name'],
+                'requestedValue' => $Value,
+                'scale' => $scale,
+                'rawValue' => $rawValue,
+                'rawMin' => $register['rawMin'] ?? null,
+                'rawMax' => $register['rawMax'] ?? null
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
 
         if (isset($register['rawMin']) && $rawValue < (int)$register['rawMin']) {
             throw new Exception("Wert für Register {$address} ist zu klein.");
@@ -234,32 +257,108 @@ class GoodWeHCA2 extends IPSModuleStrict
             }
 
             if ($registers === []) {
+                $this->SendDebug(
+                    'FetchWallboxData',
+                    'Keine Wallbox-Register ausgewählt.',
+                    0
+                );
                 return;
             }
 
+            $selectedAddresses = array_map(
+                fn($register) => (int)$register['address'],
+                $registers
+            );
+
             $blocks = $this->BuildReadBlocks($registers, 4, 100);
+
+            $this->SendDebug(
+                'FetchWallboxData',
+                json_encode([
+                    'selectedRegisterCount' => count($registers),
+                    'selectedAddresses' => $selectedAddresses,
+                    'blocks' => $blocks
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
+
             $rawRegisters = [];
+            $successfulBlocks = 0;
+            $failedBlocks = [];
 
             foreach ($blocks as $block) {
+                $blockStartedAt = microtime(true);
+
                 $response = $this->ReadRegisterBlock(
                     $block['start'],
                     $block['count']
                 );
 
+                $blockDurationMs = (int)round(
+                    (microtime(true) - $blockStartedAt) * 1000
+                );
+
                 if ($response === null) {
+                    $failedBlocks[] = [
+                        'start' => $block['start'],
+                        'count' => $block['count'],
+                        'durationMs' => $blockDurationMs
+                    ];
+
+                    $this->SendDebug(
+                        'FetchWallboxData',
+                        json_encode([
+                            'block' => $block,
+                            'status' => 'failed',
+                            'durationMs' => $blockDurationMs
+                        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        0
+                    );
                     continue;
                 }
 
+                $successfulBlocks++;
+                $blockRaw = [];
+
                 foreach ($response as $offset => $word) {
-                    $rawRegisters[$block['start'] + $offset] = $word;
+                    $address = $block['start'] + $offset;
+                    $rawRegisters[$address] = $word;
+                    $blockRaw[$address] = $word;
                 }
+
+                $this->SendDebug(
+                    'FetchWallboxData',
+                    json_encode([
+                        'block' => $block,
+                        'status' => 'ok',
+                        'durationMs' => $blockDurationMs,
+                        'raw' => $blockRaw
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    0
+                );
             }
+
+            $decodedValues = [];
+            $missingRegisters = [];
 
             foreach ($registers as $register) {
                 $address = (int)$register['address'];
                 $rawValue = $this->DecodeRegisterValue($register, $rawRegisters);
 
                 if ($rawValue === null) {
+                    $missingRegisters[] = $address;
+
+                    $this->SendDebug(
+                        'DecodeRegister',
+                        json_encode([
+                            'address' => $address,
+                            'name' => $register['name'],
+                            'type' => $register['type'],
+                            'scale' => $register['scale'],
+                            'error' => 'Rohwert nicht im gelesenen Registerblock vorhanden.'
+                        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        0
+                    );
                     continue;
                 }
 
@@ -268,6 +367,19 @@ class GoodWeHCA2 extends IPSModuleStrict
                 $variableID = @$this->GetIDForIdent($ident);
 
                 if ($variableID === false) {
+                    $this->SendDebug(
+                        'DecodeRegister',
+                        json_encode([
+                            'address' => $address,
+                            'name' => $register['name'],
+                            'raw' => $rawValue,
+                            'type' => $register['type'],
+                            'scale' => $register['scale'],
+                            'scaled' => $scaledValue,
+                            'error' => 'Zielvariable existiert nicht.'
+                        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        0
+                    );
                     continue;
                 }
 
@@ -281,7 +393,45 @@ class GoodWeHCA2 extends IPSModuleStrict
                 }
 
                 $this->SetValueIfChanged($ident, $value);
+
+                $decodedValues[$address] = [
+                    'name' => $register['name'],
+                    'raw' => $rawValue,
+                    'type' => $register['type'],
+                    'scale' => $register['scale'],
+                    'value' => $value
+                ];
+
+                $this->SendDebug(
+                    'DecodeRegister',
+                    json_encode([
+                        'address' => $address,
+                        'name' => $register['name'],
+                        'raw' => $rawValue,
+                        'type' => $register['type'],
+                        'scale' => $register['scale'],
+                        'value' => $value
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    0
+                );
             }
+
+            $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
+
+            $this->SendDebug(
+                'FetchWallboxData',
+                json_encode([
+                    'summary' => true,
+                    'selectedRegisters' => count($registers),
+                    'blocks' => count($blocks),
+                    'successfulBlocks' => $successfulBlocks,
+                    'failedBlocks' => $failedBlocks,
+                    'decodedRegisterCount' => count($decodedValues),
+                    'missingRegisters' => $missingRegisters,
+                    'durationMs' => $durationMs
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
         } catch (Throwable $e) {
             $this->SendDebug('FetchWallboxData', $e->getMessage(), 0);
             $this->LogMessage('GoodWeHCA2', $e->getMessage());
@@ -359,13 +509,21 @@ class GoodWeHCA2 extends IPSModuleStrict
             if ($validLength) {
                 $words = array_values(unpack('n*', substr($response, 2)) ?: []);
                 if (count($words) >= $count) {
-                    if ($attempt > 1) {
-                        $this->SendDebug(
-                            'ReadRegisterBlock',
-                            "Block {$start}–" . ($start + $count - 1) . " beim {$attempt}. Versuch erfolgreich ({$durationMs} ms).",
-                            0
-                        );
-                    }
+                    $this->SendDebug(
+                        'ReadRegisterBlock',
+                        json_encode([
+                            'start' => $start,
+                            'end' => $start + $count - 1,
+                            'count' => $count,
+                            'attempt' => $attempt,
+                            'maxAttempts' => $maxAttempts,
+                            'status' => 'ok',
+                            'durationMs' => $durationMs,
+                            'responseLength' => strlen($response),
+                            'rawWords' => array_slice($words, 0, $count)
+                        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        0
+                    );
 
                     return array_slice($words, 0, $count);
                 }
@@ -416,14 +574,48 @@ class GoodWeHCA2 extends IPSModuleStrict
             "Data"     => bin2hex(pack("n", $value)),
         ];
 
+        $this->SendDebug(
+            'WriteRegister',
+            json_encode([
+                'address' => $address,
+                'rawValue' => $value,
+                'function' => 6,
+                'dataHex' => $data['Data']
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        $startedAt = microtime(true);
         $response = $this->SendDataToParent(json_encode($data));
+        $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
 
         if ($response === false) {
-            $this->SendDebug("WriteRegister", "Fehler beim Schreiben in Register $address", 0);
+            $this->SendDebug(
+                'WriteRegister',
+                json_encode([
+                    'address' => $address,
+                    'status' => 'failed',
+                    'rawValue' => $value,
+                    'durationMs' => $durationMs
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
             return false;
         }
 
-        $this->SendDebug("WriteRegister", "Erfolgreich in Register $address geschrieben: $value", 0);
+        $this->SendDebug(
+            'WriteRegister',
+            json_encode([
+                'address' => $address,
+                'status' => 'ok',
+                'rawValue' => $value,
+                'durationMs' => $durationMs,
+                'responseLength' => strlen($response),
+                'responseHex' => strtoupper(implode(' ', str_split(bin2hex($response), 2)))
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
         return true;
     }
 
