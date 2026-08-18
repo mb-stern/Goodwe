@@ -1,0 +1,18 @@
+{
+    "id": "{0D11A2D5-2BC9-4EAF-BEA0-8B14F338BFE1}",
+    "name": "GoodWeHCA2",
+    "type": 3,
+    "vendor": "",
+    "aliases": [
+        "GoodWe HCA G2"
+    ],
+    "parentRequirements": [
+        "{E310B701-4AE7-458E-B618-EC13A1A6F6A8}"
+    ],
+    "childRequirements": [],
+    "implemented": [
+        "{77B31ABB-18FA-4B91-BB63-E5B2AB5588F4}"
+    ],
+    "prefix": "GoodWeHCA2",
+    "url": "https://github.com/mb-stern/Goodwe/tree/beta"
+}
