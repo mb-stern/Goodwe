@@ -888,7 +888,7 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'suffix'  => 's'
                 ],
                 [
-                    'type'    => 'Slider',
+                    'type'    => 'HorizontalSlider',
                     'name'    => 'SollleistungKorrekturProzent',
                     'caption' => 'Korrektur Sollleistung',
                     'minimum' => -10,
