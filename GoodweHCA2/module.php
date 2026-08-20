@@ -9,6 +9,14 @@ class GoodWeHCA2 extends IPSModuleStrict
         $this->RegisterPropertyString('SelectedRegisters', '[]');
         $this->RegisterPropertyInteger('PollInterval', 5);
 
+        // Korrektur der Sollleistung:
+        //  0 % = unverändert
+        // -5 % = 5 % weniger an die Wallbox übertragen
+        // +5 % = 5 % mehr an die Wallbox übertragen
+        // Beim Rücklesen wird die Korrektur invers gerechnet, damit in
+        // Symcon weiterhin der gewünschte Sollwert angezeigt wird.
+        $this->RegisterPropertyFloat('SollleistungKorrekturProzent', 0.0);
+
         $this->RegisterAttributeInteger('LastPollStarted', 0);
 
         $this->RegisterTimer(
@@ -173,7 +181,20 @@ class GoodWeHCA2 extends IPSModuleStrict
             throw new Exception("Ungültige Skalierung für Register {$address}.");
         }
 
-        $rawValue = (int)round(((float)$Value) / $scale);
+        $valueToWrite = (float)$Value;
+        $correctionPercent = 0.0;
+
+        if ($address === 10029) {
+            $correctionPercent = $this->ReadPropertyFloat(
+                'SollleistungKorrekturProzent'
+            );
+            $valueToWrite = $this->ApplySollleistungWriteCorrection(
+                (float)$Value,
+                $correctionPercent
+            );
+        }
+
+        $rawValue = (int)round($valueToWrite / $scale);
 
         $this->SendDebug(
             'RequestAction',
@@ -181,6 +202,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                 'address' => $address,
                 'name' => $register['name'],
                 'requestedValue' => $Value,
+                'correctionPercent' => $correctionPercent,
+                'correctedValueToWrite' => $valueToWrite,
                 'scale' => $scale,
                 'rawValue' => $rawValue,
                 'rawMin' => $register['rawMin'] ?? null,
@@ -209,6 +232,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                 'address' => $address,
                 'name' => $register['name'],
                 'requestedValue' => $Value,
+                'correctedValueToWrite' => $valueToWrite,
+                'correctionPercent' => $correctionPercent,
                 'rawValue' => $rawValue,
                 'immediateWriteAck' => $writeAck
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -233,6 +258,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'name' => $register['name'],
                     'status' => 'verification_failed',
                     'requestedValue' => $Value,
+                    'correctedValueToWrite' => $valueToWrite,
+                    'correctionPercent' => $correctionPercent,
                     'expectedRawValue' => $rawValue,
                     'immediateWriteAck' => $writeAck
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -254,6 +281,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                 'name' => $register['name'],
                 'status' => 'verified',
                 'requestedValue' => $Value,
+                'correctedValueToWrite' => $valueToWrite,
+                'correctionPercent' => $correctionPercent,
                 'rawValue' => $rawValue,
                 'immediateWriteAck' => $writeAck
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -427,6 +456,19 @@ class GoodWeHCA2 extends IPSModuleStrict
                 }
 
                 $scaledValue = $rawValue * (float)$register['scale'];
+                $deviceScaledValue = $scaledValue;
+                $correctionPercent = 0.0;
+
+                if ($address === 10029) {
+                    $correctionPercent = $this->ReadPropertyFloat(
+                        'SollleistungKorrekturProzent'
+                    );
+                    $scaledValue = $this->ApplySollleistungReadCorrection(
+                        (float)$deviceScaledValue,
+                        $correctionPercent
+                    );
+                }
+
                 $ident = 'Addr' . $address;
                 $variableID = @$this->GetIDForIdent($ident);
 
@@ -439,6 +481,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                             'raw' => $rawValue,
                             'type' => $register['type'],
                             'scale' => $register['scale'],
+                            'deviceScaledValue' => $deviceScaledValue,
+                            'correctionPercent' => $correctionPercent,
                             'scaled' => $scaledValue,
                             'error' => 'Zielvariable existiert nicht.'
                         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -463,6 +507,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'raw' => $rawValue,
                     'type' => $register['type'],
                     'scale' => $register['scale'],
+                    'deviceScaledValue' => $deviceScaledValue,
+                    'correctionPercent' => $correctionPercent,
                     'value' => $value
                 ];
 
@@ -474,6 +520,8 @@ class GoodWeHCA2 extends IPSModuleStrict
                         'raw' => $rawValue,
                         'type' => $register['type'],
                         'scale' => $register['scale'],
+                        'deviceScaledValue' => $deviceScaledValue,
+                        'correctionPercent' => $correctionPercent,
                         'value' => $value
                     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                     0
@@ -838,6 +886,19 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'name'    => 'PollInterval',
                     'caption' => 'Abfrageintervall',
                     'suffix'  => 's'
+                ],
+                [
+                    'type'    => 'Slider',
+                    'name'    => 'SollleistungKorrekturProzent',
+                    'caption' => 'Korrektur Sollleistung',
+                    'minimum' => -10,
+                    'maximum' => 10,
+                    'stepSize' => 0.1,
+                    'suffix'  => ' %'
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => '0 % = unverändert · Minus = weniger Leistung · Plus = mehr Leistung'
                 ]
             ],
             'actions' => [
@@ -1012,6 +1073,80 @@ class GoodWeHCA2 extends IPSModuleStrict
         if ($newValue !== $oldValue) {
             $this->SetValue($ident, $newValue);
         }
+    }
+
+    private function ApplySollleistungWriteCorrection(
+        float $requestedValue,
+        float $correctionPercent
+    ): float {
+        $factor = 1.0 + ($correctionPercent / 100.0);
+
+        if ($factor <= 0.0) {
+            $this->SendDebug(
+                'SollleistungCorrection',
+                json_encode([
+                    'direction' => 'write',
+                    'requestedValue' => $requestedValue,
+                    'correctionPercent' => $correctionPercent,
+                    'error' => 'Ungültiger Korrekturfaktor; Korrektur wird ignoriert.'
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
+            return $requestedValue;
+        }
+
+        $corrected = $requestedValue * $factor;
+
+        $this->SendDebug(
+            'SollleistungCorrection',
+            json_encode([
+                'direction' => 'write',
+                'requestedValue' => $requestedValue,
+                'correctionPercent' => $correctionPercent,
+                'factor' => $factor,
+                'correctedValueToDevice' => $corrected
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        return $corrected;
+    }
+
+    private function ApplySollleistungReadCorrection(
+        float $deviceValue,
+        float $correctionPercent
+    ): float {
+        $factor = 1.0 + ($correctionPercent / 100.0);
+
+        if ($factor <= 0.0) {
+            $this->SendDebug(
+                'SollleistungCorrection',
+                json_encode([
+                    'direction' => 'read',
+                    'deviceValue' => $deviceValue,
+                    'correctionPercent' => $correctionPercent,
+                    'error' => 'Ungültiger Korrekturfaktor; Korrektur wird ignoriert.'
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
+            return $deviceValue;
+        }
+
+        $corrected = $deviceValue / $factor;
+
+        $this->SendDebug(
+            'SollleistungCorrection',
+            json_encode([
+                'direction' => 'read',
+                'deviceValue' => $deviceValue,
+                'correctionPercent' => $correctionPercent,
+                'factor' => $factor,
+                'correctedDisplayedValue' => $corrected
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        return $corrected;
     }
 
     private function GetScaleDecimals(float $scale): int
