@@ -842,10 +842,6 @@ class GoodWeHCA2 extends IPSModuleStrict
         return json_encode([
             'elements' => [
                 [
-                    'type'    => 'Label',
-                    'caption' => 'GoodWe HCA G2 – Modbus TCP. Das verbundene Modbus-Gateway sollte mit Unit-ID 247 arbeiten.'
-                ],
-                [
                     'type'                        => 'List',
                     'name'                        => 'SelectedRegisters',
                     'caption'                     => 'Wallbox-Register auswählen',
