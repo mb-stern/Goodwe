@@ -893,7 +893,7 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'caption' => 'Korrektur Sollleistung',
                     'minimum' => -10,
                     'maximum' => 10,
-                    'stepSize' => 0.1,
+                    'stepSize' => 1,
                     'displayValue' => true,
                     'suffix'  => ' %'
                 ],
