@@ -197,25 +197,89 @@ class GoodWeHCA2 extends IPSModuleStrict
             throw new Exception("Wert für Register {$address} ist zu gross.");
         }
 
-        if (!$this->WriteRegister($address, $rawValue)) {
-            throw new Exception("Register {$address} konnte nicht geschrieben werden.");
+        // Schreiben auslösen. Die unmittelbare Modbus-Antwort allein wird
+        // nicht als endgültiges Erfolgskriterium verwendet, da die HCA G2
+        // den Wert übernehmen kann, obwohl Symcon keine verwertbare
+        // Write-Response zurückliefert.
+        $writeAck = $this->WriteRegister($address, $rawValue);
+
+        $this->SendDebug(
+            'RequestAction',
+            json_encode([
+                'address' => $address,
+                'name' => $register['name'],
+                'requestedValue' => $Value,
+                'rawValue' => $rawValue,
+                'immediateWriteAck' => $writeAck
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        // Den geschriebenen Rohwert durch Rücklesen bestätigen.
+        // Mehrere Versuche sind absichtlich vorgesehen, da einige
+        // Steuerwerte von der Wallbox leicht verzögert übernommen werden.
+        $verified = $this->VerifyRegisterWrite(
+            $address,
+            $rawValue,
+            4,
+            250
+        );
+
+        if (!$verified) {
+            $this->SendDebug(
+                'RequestAction',
+                json_encode([
+                    'address' => $address,
+                    'name' => $register['name'],
+                    'status' => 'verification_failed',
+                    'requestedValue' => $Value,
+                    'expectedRawValue' => $rawValue,
+                    'immediateWriteAck' => $writeAck
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
+
+            throw new Exception(
+                "Register {$address} wurde geschrieben, konnte aber nicht durch Rücklesen bestätigt werden."
+            );
         }
 
+        // Erst nach erfolgreicher Rücklese-Bestätigung die lokale Variable setzen.
         $this->SetValueIfChanged($Ident, $Value);
 
-        // Nach dem Schreiben den tatsächlichen Zustand zeitnah zurücklesen.
-        IPS_Sleep(150);
+        $this->SendDebug(
+            'RequestAction',
+            json_encode([
+                'address' => $address,
+                'name' => $register['name'],
+                'status' => 'verified',
+                'requestedValue' => $Value,
+                'rawValue' => $rawValue,
+                'immediateWriteAck' => $writeAck
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        // Anschließend alle ausgewählten Werte aktualisieren.
         $this->FetchWallboxData();
     }
 
     public function FetchWallboxData(): void
     {
-        $lockName = 'GoodweHCA2Poll_' . $this->InstanceID;
+        $lockName = 'GoodWeHCA2Poll_' . $this->InstanceID;
 
         if (!IPS_SemaphoreEnter($lockName, 1)) {
+            $started = $this->ReadAttributeInteger('LastPollStarted');
+            $age = $started > 0 ? time() - $started : 0;
+            $this->SendDebug(
+                'FetchWallboxData',
+                "Abfrage läuft bereits seit {$age} s – Timeraufruf übersprungen.",
+                0
+            );
             return;
         }
 
+        $startedAt = microtime(true);
         $this->WriteAttributeInteger('LastPollStarted', time());
 
         try {
@@ -562,6 +626,79 @@ class GoodWeHCA2 extends IPSModuleStrict
                 return $combined;
         }
         return null;
+    }
+
+    private function VerifyRegisterWrite(
+        int $address,
+        int $expectedRawValue,
+        int $attempts = 4,
+        int $delayMs = 250
+    ): bool {
+        $attempts = max(1, $attempts);
+        $delayMs = max(0, $delayMs);
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            if ($delayMs > 0) {
+                IPS_Sleep($delayMs);
+            }
+
+            $startedAt = microtime(true);
+            $response = $this->ReadRegisterBlock($address, 1);
+            $durationMs = (int)round(
+                (microtime(true) - $startedAt) * 1000
+            );
+
+            if ($response === null || !isset($response[0])) {
+                $this->SendDebug(
+                    'VerifyRegisterWrite',
+                    json_encode([
+                        'address' => $address,
+                        'attempt' => $attempt,
+                        'maxAttempts' => $attempts,
+                        'status' => 'read_failed',
+                        'expectedRawValue' => $expectedRawValue,
+                        'durationMs' => $durationMs
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    0
+                );
+                continue;
+            }
+
+            $actualRawValue = (int)$response[0];
+            $match = ($actualRawValue === $expectedRawValue);
+
+            $this->SendDebug(
+                'VerifyRegisterWrite',
+                json_encode([
+                    'address' => $address,
+                    'attempt' => $attempt,
+                    'maxAttempts' => $attempts,
+                    'status' => $match ? 'verified' : 'value_mismatch',
+                    'expectedRawValue' => $expectedRawValue,
+                    'actualRawValue' => $actualRawValue,
+                    'durationMs' => $durationMs
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                0
+            );
+
+            if ($match) {
+                return true;
+            }
+        }
+
+        $this->SendDebug(
+            'VerifyRegisterWrite',
+            json_encode([
+                'address' => $address,
+                'status' => 'failed',
+                'expectedRawValue' => $expectedRawValue,
+                'attempts' => $attempts,
+                'delayMs' => $delayMs
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
+        );
+
+        return false;
     }
 
     private function WriteRegister(int $address, int $value): bool
