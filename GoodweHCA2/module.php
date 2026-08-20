@@ -894,6 +894,7 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'minimum' => -10,
                     'maximum' => 10,
                     'stepSize' => 0.1,
+                    'displayValue' => true,
                     'suffix'  => ' %'
                 ],
                 [
