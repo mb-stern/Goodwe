@@ -8,6 +8,7 @@ class GoodWeHCA2 extends IPSModuleStrict
 
         $this->RegisterPropertyString('SelectedRegisters', '[]');
         $this->RegisterPropertyInteger('PollInterval', 5);
+        $this->RegisterPropertyString('WallboxModel', 'GW11K-HCA-20');
 
         // Korrektur der Sollleistung:
         //  0 % = unverändert
@@ -192,6 +193,28 @@ class GoodWeHCA2 extends IPSModuleStrict
                 (float)$Value,
                 $correctionPercent
             );
+        }
+
+        if ($address === 10029) {
+            $maxPower = $this->GetWallboxMaxPower();
+            if ($valueToWrite > $maxPower) {
+                $this->SendDebug(
+                    'RequestAction',
+                    json_encode([
+                        'address' => $address,
+                        'name' => $register['name'],
+                        'model' => $this->ReadPropertyString('WallboxModel'),
+                        'requestedValue' => $Value,
+                        'correctedValueToWrite' => $valueToWrite,
+                        'maxPower' => $maxPower,
+                        'status' => 'above_model_limit'
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    0
+                );
+                throw new Exception(
+                    "Sollleistung überschreitet die maximale Leistung des gewählten Wallbox-Modells ({$maxPower} W)."
+                );
+            }
         }
 
         $rawValue = (int)round($valueToWrite / $scale);
@@ -878,6 +901,16 @@ class GoodWeHCA2 extends IPSModuleStrict
                     'values' => $values
                 ],
                 [
+                    'type'    => 'Select',
+                    'name'    => 'WallboxModel',
+                    'caption' => 'Wallbox-Modell',
+                    'options' => [
+                        ['caption' => 'GW7K-HCA-20 (7 kW)',  'value' => 'GW7K-HCA-20'],
+                        ['caption' => 'GW11K-HCA-20 (11 kW)', 'value' => 'GW11K-HCA-20'],
+                        ['caption' => 'GW22K-HCA-20 (22 kW)', 'value' => 'GW22K-HCA-20']
+                    ]
+                ],
+                [
                     'type'    => 'IntervalBox',
                     'name'    => 'PollInterval',
                     'caption' => 'Abfrageintervall',
@@ -947,8 +980,6 @@ class GoodWeHCA2 extends IPSModuleStrict
             case 'wb_type':
                 return ['profile' => 'GoodWeHCA2.Type', 'type' => VARIABLETYPE_INTEGER];
 
-            case 'wb_source':
-                return ['profile' => 'GoodWeHCA2.EnergySource', 'type' => VARIABLETYPE_INTEGER];
         }
 
         return null;
@@ -1016,16 +1047,6 @@ class GoodWeHCA2 extends IPSModuleStrict
             [0 => 'Dreiphasig', 1 => 'Einphasig']
         );
 
-        $this->CreateAssociationProfile('GoodWeHCA2.EnergySource', [
-            0 => 'Keine',
-            1 => 'Netz',
-            2 => 'PV',
-            3 => 'Netz + PV',
-            4 => 'Batterie',
-            5 => 'Netz + Batterie',
-            6 => 'PV + Batterie',
-            7 => 'Netz + PV + Batterie'
-        ]);
     }
 
     private function CreateAssociationProfile(
@@ -1069,6 +1090,19 @@ class GoodWeHCA2 extends IPSModuleStrict
 
         if ($newValue !== $oldValue) {
             $this->SetValue($ident, $newValue);
+        }
+    }
+
+    private function GetWallboxMaxPower(): int
+    {
+        switch ($this->ReadPropertyString('WallboxModel')) {
+            case 'GW7K-HCA-20':
+                return 7000;
+            case 'GW22K-HCA-20':
+                return 22000;
+            case 'GW11K-HCA-20':
+            default:
+                return 11000;
         }
     }
 
@@ -1194,7 +1228,6 @@ class GoodWeHCA2 extends IPSModuleStrict
             ["address" => 10060, "name" => "WB - Laden Ein/Aus",                   "type" => "U16", "unit" => "wb_onoff",       "scale" => 1,     "pos" => 615, "writable" => true, "rawMin" => 1,  "rawMax" => 2],
             ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
             ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
-            ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
         ];
 
         return $registers;
