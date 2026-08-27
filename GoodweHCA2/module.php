@@ -130,6 +130,16 @@ class GoodWeHCA2 extends IPSModuleStrict
             $variableID = @$this->GetIDForIdent($ident);
             if ($variableID !== false) {
                 IPS_SetPosition($variableID, (int)$register['pos']);
+
+                // Bei bereits vorhandenen Variablen wird das Profil durch
+                // RegisterVariable* nicht automatisch ausgetauscht.
+                // Deshalb das aktuelle Profil explizit setzen.
+                if ($details['profile'] !== '') {
+                    IPS_SetVariableCustomProfile(
+                        $variableID,
+                        $details['profile']
+                    );
+                }
             }
 
             if (!empty($register['writable']) && $variableID !== false) {
@@ -972,7 +982,10 @@ class GoodWeHCA2 extends IPSModuleStrict
                 return ['profile' => 'GoodWeHCA2.Watt', 'type' => VARIABLETYPE_INTEGER];
 
             case 'wb_setpower':
-                return ['profile' => 'GoodWeHCA2.SetPower', 'type' => VARIABLETYPE_INTEGER];
+                return [
+                    'profile' => $this->GetSetPowerProfileName(),
+                    'type' => VARIABLETYPE_INTEGER
+                ];
 
             case 'kWh':
                 return ['profile' => '~Electricity', 'type' => VARIABLETYPE_FLOAT];
@@ -1016,16 +1029,33 @@ class GoodWeHCA2 extends IPSModuleStrict
         }
 
         $maxPower = $this->GetWallboxMaxPower();
-        if (!IPS_VariableProfileExists('GoodWeHCA2.SetPower')) {
-            IPS_CreateVariableProfile('GoodWeHCA2.SetPower', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileText('GoodWeHCA2.SetPower', '', ' W');
-            IPS_SetVariableProfileDigits('GoodWeHCA2.SetPower', 0);
+        $setPowerProfile = $this->GetSetPowerProfileName();
+
+        if (!IPS_VariableProfileExists($setPowerProfile)) {
+            IPS_CreateVariableProfile($setPowerProfile, VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText($setPowerProfile, '', ' W');
+            IPS_SetVariableProfileDigits($setPowerProfile, 0);
         }
+
+        // Maximalwert des Sollleistungsprofils bei jedem ApplyChanges
+        // aktiv an das ausgewählte Wallbox-Modell anpassen.
         IPS_SetVariableProfileValues(
-            'GoodWeHCA2.SetPower',
+            $setPowerProfile,
             1400,
             $maxPower,
             100
+        );
+
+        $this->SendDebug(
+            'CreateProfiles',
+            json_encode([
+                'setPowerProfile' => $setPowerProfile,
+                'wallboxModel' => $this->ReadPropertyString('WallboxModel'),
+                'minimum' => 1400,
+                'maximum' => $maxPower,
+                'step' => 100
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            0
         );
 
         if (!IPS_VariableProfileExists('GoodWeHCA2.Percent')) {
@@ -1125,6 +1155,11 @@ class GoodWeHCA2 extends IPSModuleStrict
         if ($newValue !== $oldValue) {
             $this->SetValue($ident, $newValue);
         }
+    }
+
+    private function GetSetPowerProfileName(): string
+    {
+        return 'GoodWeHCA2.SetPower.' . $this->InstanceID;
     }
 
     private function GetWallboxMaxPower(): int
