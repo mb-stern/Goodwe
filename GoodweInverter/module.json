@@ -1,15 +1,15 @@
 {
     "id": "{D1086D5A-8D52-4E19-AAAD-EFADC81633BD}",
-    "name": "Goodwe",
+    "name": "GoodWeInverter",
     "type": 3,
     "vendor": "",
     "aliases": [
-        "Goodwe"
+        "GoodWe Wechselrichter"
     ],
     "parentRequirements": ["{E310B701-4AE7-458E-B618-EC13A1A6F6A8}"],
     "childRequirements": [],
     "implemented": ["{77B31ABB-18FA-4B91-BB63-E5B2AB5588F4}"],
-    "prefix": "Goodwe",
+    "prefix": "GoodWeInverter",
     "url": "https://github.com/mb-stern/Goodwe/tree/beta"
   }
   
