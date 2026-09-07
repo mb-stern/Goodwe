@@ -1,6 +1,6 @@
 <?php
 
-class Goodwe extends IPSModuleStrict
+class GoodWeInverter extends IPSModuleStrict
 {
     public function Create(): void
     {
@@ -18,7 +18,7 @@ class Goodwe extends IPSModuleStrict
         $this->RegisterAttributeString("LastRawRegisters", "{}");
         $this->RegisterAttributeInteger("LastPollStarted", 0);
 
-        $this->RegisterTimer('TimerWR', 0, 'Goodwe_FetchInverterData($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('TimerWR', 0, 'GoodWeInverter_FetchInverterData($_IPS[\'TARGET\']);');
     }
 
     public function GetCompatibleParents(): string
@@ -554,7 +554,7 @@ class Goodwe extends IPSModuleStrict
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
         } catch (Throwable $e) {
             $this->SendDebug('FetchInverterData', 'Fehler: ' . $e->getMessage(), 0);
-            $this->LogMessage('Goodwe', 'Fehler bei Blockabfrage: ' . $e->getMessage());
+            $this->LogMessage('GoodWeInverter', 'Fehler bei Blockabfrage: ' . $e->getMessage());
         } finally {
             $this->WriteAttributeInteger('LastPollStarted', 0);
             IPS_SemaphoreLeave($lockName);
@@ -842,7 +842,7 @@ class Goodwe extends IPSModuleStrict
                 [
                     "type"    => "Button",
                     "caption" => "Werte lesen",
-                    "onClick" => 'Goodwe_FetchInverterData($id);'
+                    "onClick" => 'GoodWeInverter_FetchInverterData($id);'
                 ],
                 [
                     "type" => "Label",
@@ -985,22 +985,6 @@ class Goodwe extends IPSModuleStrict
                 return ["profile" => "Goodwe.WattEMS", "type" => VARIABLETYPE_INTEGER];
             case "mode":
                 return ["profile" => "Goodwe.Mode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_status":
-                return ["profile" => "Goodwe.WallboxStatus", "type" => VARIABLETYPE_INTEGER];
-            case "wb_phase":
-                return ["profile" => "Goodwe.WallboxPhaseSwitch", "type" => VARIABLETYPE_INTEGER];
-            case "wb_charge_mode":
-                return ["profile" => "Goodwe.WallboxChargeMode", "type" => VARIABLETYPE_INTEGER];
-            case "wb_onoff":
-                return ["profile" => "Goodwe.WallboxOnOff", "type" => VARIABLETYPE_INTEGER];
-            case "wb_connection":
-                return ["profile" => "Goodwe.WallboxConnection", "type" => VARIABLETYPE_INTEGER];
-            case "wb_power_spec":
-                return ["profile" => "Goodwe.WallboxPowerSpec", "type" => VARIABLETYPE_INTEGER];
-            case "wb_type":
-                return ["profile" => "Goodwe.WallboxType", "type" => VARIABLETYPE_INTEGER];
-            case "wb_source":
-                return ["profile" => "Goodwe.WallboxEnergySource", "type" => VARIABLETYPE_INTEGER];
             case "String":
                 return ["profile" => "~String", "type" => VARIABLETYPE_STRING];
             default:
@@ -1069,43 +1053,6 @@ class Goodwe extends IPSModuleStrict
         $this->CreateAssociationProfile('Goodwe.WorkMode', [0 => 'Selbstverbrauch', 1 => 'Inselbetrieb', 2 => 'Backup', 3 => 'Wirtschaftlich', 4 => 'Peak-Shaving', 5 => 'Erw. Selbstverbrauch']);
         $this->CreateAssociationProfile('Goodwe.GridMode', [0 => 'Warten', 1 => 'Einspeisung', 2 => 'Einspeisung begrenzt', 3 => 'Entsättigung', 4 => 'PV-Limit', 5 => 'Reaktiv', 6 => 'Blindleistung', 7 => 'Abgeschaltet', 8 => 'PV-Optimierung', 9 => 'ECO', 10 => 'HW-Schutz', 11 => 'Fehler', 17 => 'Bypass', 18 => 'Inselbetrieb']);
 
-        $this->CreateAssociationProfile('Goodwe.WallboxStatus', [
-            0 => 'Frei (nicht verbunden)',
-            1 => 'Frei (verbunden)',
-            2 => 'Fahrzeug-Handschlag',
-            3 => 'Lädt',
-            4 => 'Laden beendet',
-            5 => 'Störung',
-            6 => 'Zeitplan startet',
-            7 => 'Wartung',
-            8 => 'Start fehlgeschlagen',
-            9 => 'Systemupdate',
-            10 => 'Unterbrochen: zu wenig PV/Batterie'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxPhaseSwitch', [0 => 'Aus', 1 => 'Ein']);
-        $this->CreateAssociationProfile('Goodwe.WallboxChargeMode', [
-            0 => 'Sofortladen',
-            1 => 'PV-Überschussladen',
-            2 => 'PV + Batterie'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxOnOff', [1 => 'Laden aus', 2 => 'Laden ein']);
-        $this->CreateAssociationProfile('Goodwe.WallboxConnection', [
-            0 => 'Getrennt',
-            1 => 'Teilweise verbunden',
-            2 => 'Verbunden'
-        ]);
-        $this->CreateAssociationProfile('Goodwe.WallboxPowerSpec', [0 => '7 kW', 1 => '11 kW', 2 => '22 kW']);
-        $this->CreateAssociationProfile('Goodwe.WallboxType', [0 => 'Dreiphasig', 1 => 'Einphasig']);
-        $this->CreateAssociationProfile('Goodwe.WallboxEnergySource', [
-            0 => 'Keine',
-            1 => 'Netz',
-            2 => 'PV',
-            3 => 'Netz + PV',
-            4 => 'Batterie',
-            5 => 'Netz + Batterie',
-            6 => 'PV + Batterie',
-            7 => 'Netz + PV + Batterie'
-        ]);
     }
 
     private function CreateAssociationProfile(string $name, array $associations): void
@@ -1134,7 +1081,7 @@ class Goodwe extends IPSModuleStrict
 
         private function GetRegisters()
     {
-        // Gegen GoodWe ARM 745 (24.04.2024) und HCA G2 Modbus V1.0.15 geprüft.
+        // Gegen GoodWe ARM 745 (24.04.2024) geprüft.
         // Eindeutig bestätigte Änderungen sind mit "GEÄNDERT" markiert.
         // Unsichere BMS-Skalierungen 479xx bleiben unverändert.
         $registers = [
@@ -1143,13 +1090,13 @@ class Goodwe extends IPSModuleStrict
             ["address" => 36021, "name" => "SM - Leistung PH2",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 101],
             ["address" => 36023, "name" => "SM - Leistung PH3",            "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 102],
             ["address" => 36025, "name" => "SM - Leistung gesamt",         "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 103],
-            ["address" => 36014, "name" => "SM - Netzfrequenz",                 "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
-            ["address" => 36052, "name" => "SM - Spannung L1",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
-            ["address" => 36053, "name" => "SM - Spannung L2",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
-            ["address" => 36054, "name" => "SM - Spannung L3",                  "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
-            ["address" => 36055, "name" => "SM - Strom L1",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
-            ["address" => 36056, "name" => "SM - Strom L2",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
-            ["address" => 36057, "name" => "SM - Strom L3",                     "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
+            ["address" => 36014, "name" => "SM - Netzfrequenz",            "type" => "U16", "unit" => "Hz",        "scale" => 0.01, "pos" => 104],
+            ["address" => 36052, "name" => "SM - Spannung L1",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 105],
+            ["address" => 36053, "name" => "SM - Spannung L2",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 106],
+            ["address" => 36054, "name" => "SM - Spannung L3",             "type" => "U16", "unit" => "V",         "scale" => 0.1, "pos" => 107],
+            ["address" => 36055, "name" => "SM - Strom L1",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 108],
+            ["address" => 36056, "name" => "SM - Strom L2",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 109],
+            ["address" => 36057, "name" => "SM - Strom L3",                "type" => "U16", "unit" => "A",         "scale" => 0.1, "pos" => 110],
         
             // Batterie 1
             ["address" => 35182, "name" => "BAT - Leistung",               "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 200],
@@ -1169,11 +1116,11 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47907, "name" => "BAT - Strom",                  "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 214],
             ["address" => 47908, "name" => "BAT - SOC",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 215],
             ["address" => 47909, "name" => "BAT - SOH",                    "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 216],
-            ["address" => 35208, "name" => "BAT - Laden Tag",                   "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
-            ["address" => 35211, "name" => "BAT - Entladen Tag",                "type" => "U16", "unit" => "kWh",       "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
-            ["address" => 47910, "name" => "BAT - BMS Temperatur",               "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 220],
-            ["address" => 47911, "name" => "BAT - BMS Warnung",                 "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
-            ["address" => 47913, "name" => "BAT - BMS Alarm",                   "type" => "U32", "unit" => "raw",         "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
+            ["address" => 35208, "name" => "BAT - Laden Tag",              "type" => "U16", "unit" => "kWh",      "scale" => 0.1, "pos" => 217], // GEÄNDERT: GoodWe ARM: Energy-Charge-Day ist U16 (1 Register), SF 10.
+            ["address" => 35211, "name" => "BAT - Entladen Tag",           "type" => "U16", "unit" => "kWh",      "scale" => 0.1, "pos" => 218], // GEÄNDERT: GoodWe ARM: Energy-Discharge-Day ist U16 (1 Register), SF 10.
+            ["address" => 47910, "name" => "BAT - BMS Temperatur",         "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 220],
+            ["address" => 47911, "name" => "BAT - BMS Warnung",            "type" => "U32", "unit" => "raw",      "scale" => 1, "pos" => 221], // GEÄNDERT: GoodWe ARM: BMS Warning Code ist U32 (47911-47912).
+            ["address" => 47913, "name" => "BAT - BMS Alarm",              "type" => "U32", "unit" => "raw",      "scale" => 1, "pos" => 222], // GEÄNDERT: GoodWe ARM: BMS Alarm Code ist U32 (47913-47914).
 
             // Batterie 2
             ["address" => 35264, "name" => "BAT2 - Leistung",              "type" => "S32", "unit" => "W",        "scale" => 1,   "pos" => 300],
@@ -1189,7 +1136,7 @@ class Goodwe extends IPSModuleStrict
             ["address" => 47925, "name" => "BAT2 - Strom",                 "type" => "S16", "unit" => "A",        "scale" => 0.1, "pos" => 310],
             ["address" => 47926, "name" => "BAT2 - SOC",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 311],
             ["address" => 47927, "name" => "BAT2 - SOH",                   "type" => "S16", "unit" => "%",        "scale" => 1,   "pos" => 312],
-            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",              "type" => "S16", "unit" => "°C",        "scale" => 0.1, "pos" => 313],
+            ["address" => 47928, "name" => "BAT2 - BMS Temperatur",        "type" => "S16", "unit" => "°C",       "scale" => 0.1, "pos" => 313],
 
             // Wechselrichter
             ["address" => 35103, "name" => "WR - Spannung String 1",       "type" => "U16", "unit" => "V",        "scale" => 0.1, "pos" => 400],
@@ -1274,26 +1221,6 @@ class Goodwe extends IPSModuleStrict
             ["address" => 35169, "name" => "Backup - Gesamtleistung",           "type" => "S32", "unit" => "W",         "scale" => 1, "pos" => 512],
             ["address" => 45252, "name" => "Backup - Aktiv",                    "type" => "U16", "unit" => "bool",      "scale" => 1, "pos" => 513, "writable" => true, "rawMin" => 0, "rawMax" => 1], // GEÄNDERT: GoodWe ARM: BackUp Enable ist RW U16, Bereich 0..1.
 
-            // Wallbox
-            ["address" => 10009, "name" => "WB - Spannung L1",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 600],
-            ["address" => 10010, "name" => "WB - Spannung L2",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 601],
-            ["address" => 10011, "name" => "WB - Spannung L3",                    "type" => "U16", "unit" => "V",              "scale" => 0.1,   "pos" => 602],
-            ["address" => 10012, "name" => "WB - Strom L1",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 603],
-            ["address" => 10013, "name" => "WB - Strom L2",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 604],
-            ["address" => 10014, "name" => "WB - Strom L3",                       "type" => "U16", "unit" => "A",              "scale" => 0.1,   "pos" => 605],
-            ["address" => 10015, "name" => "WB - Ladeleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 606],
-            ["address" => 10016, "name" => "WB - Energie aktuelle Ladung",         "type" => "U16", "unit" => "kWh",            "scale" => 0.1,   "pos" => 607],
-            ["address" => 10017, "name" => "WB - Status",                         "type" => "U16", "unit" => "wb_status",      "scale" => 1,     "pos" => 608],
-            ["address" => 10023, "name" => "WB - Automatische Phasenumschaltung",  "type" => "U16", "unit" => "wb_phase",       "scale" => 1,     "pos" => 609,  "writable" => true, "rawMin" => 0,  "rawMax" => 1],
-            ["address" => 10029, "name" => "WB - Sollleistung",                   "type" => "U16", "unit" => "W",              "scale" => 100,   "pos" => 610, "writable" => true, "rawMin" => 14, "rawMax" => 220],
-            ["address" => 10030, "name" => "WB - Batterie Entladegrenze",          "type" => "U16", "unit" => "%",              "scale" => 1,     "pos" => 611, "writable" => true, "rawMin" => 0,  "rawMax" => 100],
-            ["address" => 10032, "name" => "WB - Lademodus",                      "type" => "U16", "unit" => "wb_charge_mode", "scale" => 1,     "pos" => 612, "writable" => true, "rawMin" => 0,  "rawMax" => 2],
-            ["address" => 10058, "name" => "WB - Leistungsklasse",                 "type" => "U16", "unit" => "wb_power_spec",  "scale" => 1,     "pos" => 613],
-            ["address" => 10059, "name" => "WB - Ausführung",                     "type" => "U16", "unit" => "wb_type",        "scale" => 1,     "pos" => 614],
-            ["address" => 10060, "name" => "WB - Laden Ein/Aus",                   "type" => "U16", "unit" => "wb_onoff",       "scale" => 1,     "pos" => 615, "writable" => true, "rawMin" => 1,  "rawMax" => 2],
-            ["address" => 10065, "name" => "WB - Energie gesamt",                  "type" => "U32", "unit" => "kWh",            "scale" => 0.1,   "pos" => 616],
-            ["address" => 10075, "name" => "WB - Fahrzeugverbindung",              "type" => "U16", "unit" => "wb_connection",  "scale" => 1,     "pos" => 617],
-            ["address" => 10108, "name" => "WB - Energiequelle",                   "type" => "U16", "unit" => "wb_source",      "scale" => 1,     "pos" => 618],
         ];
 
         return $registers;
